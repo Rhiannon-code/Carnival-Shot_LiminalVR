@@ -8,6 +8,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Renderer[] renderers;
 
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+
+        [Header("More than one at once (data)")]
+        [SerializeField] private Color stackedColour = new Color(1f, 0.15f, 0.55f);
         private MaterialPropertyBlock _block;
 
         private void Awake()
@@ -32,7 +35,7 @@ namespace IntuitiveDesigns.ShootingRange
             powerUps.Expired -= OnExpired;
         }
 
-        private void OnGranted(PowerUpKind kind, float seconds)
+        private void OnGranted(PowerUpKind kind, float seconds, bool stacked)
         {
             Refresh();
         }
@@ -54,7 +57,8 @@ namespace IntuitiveDesigns.ShootingRange
                 if (renderers[i] == null) continue;
 
                 _block.Clear();
-                if (tinted) _block.SetColor(ColorId, powerUps.Colour(latest));
+                if (tinted)
+                    _block.SetColor(ColorId, powerUps.Stacked ? stackedColour : powerUps.Colour(latest));
                 renderers[i].SetPropertyBlock(_block);
             }
         }

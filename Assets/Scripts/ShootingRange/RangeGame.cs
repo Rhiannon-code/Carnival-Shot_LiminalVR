@@ -183,6 +183,10 @@ namespace IntuitiveDesigns.ShootingRange
             TimeRemaining = Mathf.Max(0f, TimeRemaining);
 
             if (cleared && RoundCleared != null) RoundCleared(RoundNumber);
+            // A combo must not survive the break. Carried over, its next link could land on a
+            // milestone and hand out a power-up before the player has fired a shot
+            if (combo != null) combo.Reset(true);
+
             if (RoundEnded != null) RoundEnded(RoundNumber, RoundScore);
         }
 

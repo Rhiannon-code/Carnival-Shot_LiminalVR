@@ -72,7 +72,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (slowMotion != null) slowMotion.Changed -= OnSlowMotion;
         }
 
-        private void OnGranted(PowerUpKind kind, float seconds)
+        private void OnGranted(PowerUpKind kind, float seconds, bool stacked)
         {
             Play(Pick(ClipsFor(kind)));
 
