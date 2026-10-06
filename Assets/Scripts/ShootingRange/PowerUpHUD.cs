@@ -40,11 +40,19 @@ namespace IntuitiveDesigns.ShootingRange
             if (calloutText != null) calloutText.text = string.Empty;
         }
 
-        private void OnGranted(PowerUpKind kind, float seconds)
+        [Header("More than one at once (data)")]
+        [SerializeField] private Color stackedColour = new Color(1f, 0.15f, 0.55f);
+
+        private void OnGranted(PowerUpKind kind, float seconds, bool stacked)
         {
             if (calloutText == null) return;
 
-            calloutText.text = "<color=#" + _hex[(int)kind] + ">" + PowerUps.Label(kind) + "!</color>";
+            string hex = stacked ? ColorUtility.ToHtmlStringRGB(stackedColour) : _hex[(int)kind];
+            string line = stacked
+                        ? PowerUps.Label(kind) + " STACKED!"
+                        : PowerUps.Label(kind) + "!";
+
+            calloutText.text = "<color=#" + hex + ">" + line + "</color>";
             _calloutUntil = Time.unscaledTime + calloutSeconds;
         }
 

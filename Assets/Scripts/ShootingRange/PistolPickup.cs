@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Liminal.SDK.VR.Avatars;
 using Liminal.SDK.VR.Input;
@@ -12,6 +13,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Pistol pistol;
 
         [Header("Grab (data)")]
+        [SerializeField] private bool onlyItsOwnHand = true;
         [SerializeField] private float grabRadius = 0.35f;
         [SerializeField] private bool requireProximity = true;
         [SerializeField] private float proximityGraceSeconds = 12f;
@@ -22,6 +24,22 @@ namespace IntuitiveDesigns.ShootingRange
 
         public bool Taken { get; private set; }
         public VRAvatarLimbType HeldBy { get; private set; }
+
+        private static readonly List<PistolPickup> Registry = new List<PistolPickup>();
+
+        /// Every gun on the table is in hand. One pistol down is not a start
+        public static bool AllTaken
+        {
+            get
+            {
+                for (int i = 0; i < Registry.Count; i++)
+                {
+                    if (!Registry[i].Taken) return false;
+                }
+
+                return Registry.Count > 0;
+            }
+        }
 
         private static readonly string[] GrabButtons =
         {
@@ -38,6 +56,15 @@ namespace IntuitiveDesigns.ShootingRange
         private void Awake()
         {
             if (pistol == null) pistol = GetComponent<Pistol>();
+
+            // Registered for life, not while enabled: Take() disables this and the count still has to
+            // know about a gun that has already gone
+            Registry.Add(this);
+        }
+
+        private void OnDestroy()
+        {
+            Registry.Remove(this);
         }
 
         private void Start()
@@ -71,6 +98,7 @@ namespace IntuitiveDesigns.ShootingRange
         private bool TryHand(IVRAvatarHand rig)
         {
             if (rig == null || rig.Transform == null) return false;
+            if (onlyItsOwnHand && pistol != null && rig.LimbType != pistol.Hand) return false;
 
             bool near = !requireProximity ||
                         Vector3.Distance(rig.Transform.position, transform.position) <= grabRadius;
@@ -106,10 +134,12 @@ namespace IntuitiveDesigns.ShootingRange
                 pistol.SetHeld(true);
             }
 
-            if (game != null) game.BeginFromPickup();
+            bool ready = AllTaken;
+            if (game != null && ready) game.BeginFromPickup();
 
-            Debug.Log("[PistolPickup] Taken in the " + limb + " by " + how +
-                      " after " + _waited.ToString("0.0") + " s.");
+            Debug.Log("[PistolPickup] " + name + " taken in the " + limb + " by " + how + " after " +
+                      _waited.ToString("0.0") + " s. " +
+                      (ready ? "Both guns are up, starting." : "Waiting on the other gun."));
 
             enabled = false;
         }

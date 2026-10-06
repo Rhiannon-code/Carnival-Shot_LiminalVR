@@ -102,9 +102,8 @@ namespace IntuitiveDesigns.ShootingRange
             bat.Stop();
         }
 
-        public void Popped(Bat bat, Vector3 direction)
+        public void Popped(Bat bat, Vector3 at, Vector3 direction)
         {
-            Vector3 at = bat.transform.position;
             bat.Stop();
 
             if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse);
@@ -123,13 +122,13 @@ namespace IntuitiveDesigns.ShootingRange
             for (int i = 0; i < movers.Length; i++)
             {
                 var mover = movers[(start + i) % movers.Length];
-                if (!mover.Running || (mover.transform.position - head.position).sqrMagnitude < minSqr) continue;
+                if (!mover.Exposed || (mover.TargetPoint - head.position).sqrMagnitude < minSqr) continue;
 
                 var bat = TakeIdle();
                 if (bat == null) return;
 
-                bat.Launch(this, mover.transform.position, head, _speed);
-                PlayAt(launchClips, mover.transform.position);
+                bat.Launch(this, mover.TargetPoint, head, _speed);
+                PlayAt(launchClips, mover.TargetPoint);
                 return;
             }
         }

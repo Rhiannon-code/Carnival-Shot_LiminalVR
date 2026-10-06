@@ -27,8 +27,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Pace (data, round 1)")]
         [SerializeField] private float waveInterval = 2.2f;
-        [SerializeField] private float minSpeed = 1.3f;
-        [SerializeField] private float maxSpeed = 2.6f;
+        [SerializeField] private float minSpeed = 0.7f;
+        [SerializeField] private float maxSpeed = 1.3f;
         [SerializeField] private int concurrentTargets = 4;
 
         [Header("Escalation per round (data)")]
@@ -36,6 +36,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float speedScalePerRound = 1.12f;
         [SerializeField] private int extraConcurrentPerRound = 2;
         [SerializeField] private float minWaveInterval = 0.6f;
+
+        [Header("How many stand still instead of travelling (data, 0-1)")]
+        [SerializeField, Range(0f, 1f)] private float stationaryShare = 0.4f;
 
         [Header("Refusals (data)")]
         [SerializeField] private float retrySeconds = 0.75f;
@@ -73,6 +76,7 @@ namespace IntuitiveDesigns.ShootingRange
         private readonly List<TrackPattern.Launch> _launches = new List<TrackPattern.Launch>();
         private readonly List<Pending> _pending = new List<Pending>();
         private readonly List<TrackPatternKind> _unlocked = new List<TrackPatternKind>();
+        private readonly List<TrackRail> _available = new List<TrackRail>();
 
         private TrackMover[] _pool;
         private float _nextWave;
@@ -135,6 +139,7 @@ namespace IntuitiveDesigns.ShootingRange
             _concurrency = Mathf.Min(poolSize, concurrentTargets + extraConcurrentPerRound * steps);
 
             RebuildUnlocked(round);
+            RebuildAvailable(Stage());
 
             _pending.Clear();
             _nextWave = Time.time;
@@ -142,7 +147,8 @@ namespace IntuitiveDesigns.ShootingRange
 
             Debug.Log("[TrackDirector] Round " + round + ": " + _waveSize + " targets, wave every " +
                       _waveInterval.ToString("0.00") + " s, speed x" + _speedScale.ToString("0.00") +
-                      ", up to " + _concurrency + " at once, " + _unlocked.Count + " patterns in play.");
+                      ", up to " + _concurrency + " at once, " + _unlocked.Count + " patterns over " +
+                      _available.Count + " of " + grid.Rails.Length + " rails.");
         }
 
         private void OnRoundEnded(int round, int roundScore)
@@ -151,6 +157,31 @@ namespace IntuitiveDesigns.ShootingRange
             if (grid != null) grid.ClearTraffic();
 
             for (int i = 0; i < _pool.Length; i++) _pool[i].Stop();
+        }
+
+        /// How far into the session we are, as a number like 2.5 for halfway through round two. A rail
+        /// can join partway through a round, so this is asked again before every wave
+        private float Stage()
+        {
+            if (game == null) return 1f;
+
+            float through = game.RoundSeconds > 0f
+                          ? Mathf.Clamp01(1f - game.TimeRemaining / game.RoundSeconds)
+                          : 0f;
+
+            return game.RoundNumber + through;
+        }
+
+        private void RebuildAvailable(float stage)
+        {
+            _available.Clear();
+            var rails = grid != null ? grid.Rails : null;
+            if (rails == null) return;
+
+            for (int i = 0; i < rails.Length; i++)
+            {
+                if (rails[i] != null && stage >= rails[i].FromRound) _available.Add(rails[i]);
+            }
         }
 
         private void RebuildUnlocked(int round)
@@ -181,10 +212,14 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void StartWave()
         {
+            RebuildAvailable(Stage());
             if (_unlocked.Count == 0) RebuildUnlocked(1);
 
             var kind = _unlocked[UnityEngine.Random.Range(0, _unlocked.Count)];
-            TrackPattern.Build(kind, grid.Rails, _launches);
+            TrackPattern.Build(kind, _available, _launches);
+
+            // A pattern can come up empty when the rails it wants are not in play yet
+            if (_launches.Count == 0) TrackPattern.Build(TrackPatternKind.Single, _available, _launches);
 
             // The last pattern of a wave is cut short rather than overfilling it
             int count = Mathf.Min(_launches.Count, _waveSize - _launched - _pending.Count);
@@ -222,11 +257,18 @@ namespace IntuitiveDesigns.ShootingRange
 
                 var mover = TakeIdle();
                 if (mover == null) continue;
-                if (!grid.TryDispatch(due.Rail, due.Speed, mover.MoverLength)) continue;
+
+                // Whether it travels is settled before the booking, not after: one that stands still
+                // holds the rail's origin the whole time it is up, and the booking has to know that
+                float hold = UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
+                var pass = due.Rail.Book(now, due.Speed, mover.SettleSeconds,
+                                         hold > 0f ? mover.StandSeconds(hold) : 0f);
+
+                if (!grid.TryDispatch(due.Rail, pass, mover.MoverLength)) continue;
 
                 _pending.RemoveAt(i);
                 _launched++;
-                mover.Launch(due.Rail, due.Speed);
+                mover.Launch(due.Rail, due.Speed, hold);
             }
         }
 
