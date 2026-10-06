@@ -11,6 +11,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Rigidbody fragmentPrefab;
         [SerializeField] private int poolSize = 60;
 
+        [Header("Broken sign sets (data)")]
+        [SerializeField] private GameObject[] shardSets;
+        [SerializeField] private int copiesPerSet = 2;
+
         [Header("Burst (data)")]
         [SerializeField] private float lifetime = 2.5f;
         [SerializeField] private float scatter = 0.14f;
@@ -25,6 +29,17 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Audio")]
         [SerializeField] private AudioClip[] shatterClips;
         [SerializeField, Range(0f, 1f)] private float shatterVolume = 0.7f;
+
+        private class Pieces
+        {
+            public GameObject Root;
+            public Rigidbody[] Bodies;
+            public Vector3[] Home;
+            public Quaternion[] Facing;
+        }
+
+        private readonly Dictionary<GameObject, Queue<Pieces>> _sets =
+            new Dictionary<GameObject, Queue<Pieces>>();
 
         private readonly Queue<Rigidbody> _idle = new Queue<Rigidbody>();
         private readonly Queue<ParticleSystem> _pops = new Queue<ParticleSystem>();
@@ -43,6 +58,8 @@ namespace IntuitiveDesigns.ShootingRange
                 }
             }
 
+            BuildSets();
+
             if (fragmentPrefab == null)
             {
                 Debug.LogWarning("[ShatterPool] No fragment prefab assigned. Targets will vanish without debris.");
@@ -60,6 +77,49 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+        }
+
+        /// The broken pieces of the sign that was actually hit. They arrive where the sign was, so they
+        /// line up with what vanished, and are thrown from the hole the round made
+        public void Burst(GameObject set, Transform sign, Vector3 at, Vector3 direction, float impulse)
+        {
+            Queue<Pieces> spare;
+            if (set == null || sign == null || !_sets.TryGetValue(set, out spare) || spare.Count == 0)
+            {
+                Burst(at, 8, direction, impulse);
+                return;
+            }
+
+            var pieces = spare.Dequeue();
+
+            pieces.Root.transform.position = sign.position;
+            pieces.Root.transform.rotation = sign.rotation;
+            pieces.Root.transform.localScale = sign.lossyScale;
+            pieces.Root.SetActive(true);
+
+            for (int i = 0; i < pieces.Bodies.Length; i++)
+            {
+                var body = pieces.Bodies[i];
+                if (body == null) continue;
+
+                body.transform.localPosition = pieces.Home[i];
+                body.transform.localRotation = pieces.Facing[i];
+                body.velocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+
+                Vector3 away = body.worldCenterOfMass - at;
+                if (away.sqrMagnitude < 1e-4f) away = direction;
+
+                body.AddForce((away.normalized + direction * 0.5f).normalized * impulse, ForceMode.Impulse);
+                body.AddTorque(Random.insideUnitSphere * spin, ForceMode.Impulse);
+            }
+
+            PlayPop(at);
+
+            if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
+                ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
+
+            StartCoroutine(ReclaimSet(set, pieces));
         }
 
         public void Burst(Vector3 at, int count, Vector3 direction, float impulse)
@@ -88,6 +148,60 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
                 ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
+        }
+
+        /// Built once at Awake. Instantiating eight rigidbodies the moment a sign is shot would hitch
+        private void BuildSets()
+        {
+            if (shardSets == null) return;
+
+            for (int i = 0; i < shardSets.Length; i++)
+            {
+                var set = shardSets[i];
+                if (set == null || _sets.ContainsKey(set)) continue;
+
+                var spare = new Queue<Pieces>();
+                for (int copy = 0; copy < Mathf.Max(1, copiesPerSet); copy++)
+                {
+                    var root = Instantiate(set, transform);
+                    var bodies = root.GetComponentsInChildren<Rigidbody>(true);
+
+                    var pieces = new Pieces
+                    {
+                        Root = root,
+                        Bodies = bodies,
+                        Home = new Vector3[bodies.Length],
+                        Facing = new Quaternion[bodies.Length],
+                    };
+
+                    for (int b = 0; b < bodies.Length; b++)
+                    {
+                        pieces.Home[b] = bodies[b].transform.localPosition;
+                        pieces.Facing[b] = bodies[b].transform.localRotation;
+                    }
+
+                    root.SetActive(false);
+                    spare.Enqueue(pieces);
+                }
+
+                _sets.Add(set, spare);
+            }
+        }
+
+        private IEnumerator ReclaimSet(GameObject set, Pieces pieces)
+        {
+            yield return new WaitForSeconds(lifetime);
+
+            for (int i = 0; i < pieces.Bodies.Length; i++)
+            {
+                if (pieces.Bodies[i] == null) continue;
+
+                pieces.Bodies[i].velocity = Vector3.zero;
+                pieces.Bodies[i].angularVelocity = Vector3.zero;
+            }
+
+            pieces.Root.SetActive(false);
+            _sets[set].Enqueue(pieces);
         }
 
         private void PlayPop(Vector3 at)

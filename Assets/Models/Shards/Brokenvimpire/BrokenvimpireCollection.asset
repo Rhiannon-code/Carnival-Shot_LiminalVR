@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: abc36625e9091d74aad06d99ce8a4832, type: 3}
+  m_Name: BrokenvimpireCollection
+  m_EditorClassIdentifier: Assembly-CSharp::CyberRevolution.BreakableObjectsSystem.Scripts.Breakable.BrokenObjectCollection
+  _breakableObjectPrefabs:
+  - {fileID: 6350327841701099027, guid: ceaa86f8f6b5f9fce92f83746434c8ce, type: 3}
+  _poolCapacity: 0

@@ -31,6 +31,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private RangeGame game;
         [SerializeField] private ComboTracker combo;
         [SerializeField] private SlowMotion slowMotion;
+        [SerializeField] private TrackDirector director;
 
         [Header("Durations, odds and colours (data)")]
         [SerializeField]
@@ -50,9 +51,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float pelletSpreadDegrees = 6f;
 
         [Header("Slow motion (data)")]
+        [SerializeField] private int minTargetsForSlowMotion = 5;
         [SerializeField, Range(0.05f, 1f)] private float slowScale = 0.3f;
 
-        public event Action<PowerUpKind, float> Granted;
+        public event Action<PowerUpKind, float, bool> Granted;
         public event Action<PowerUpKind> Expired;
 
         public bool FullAuto { get { return IsActive(PowerUpKind.FullAuto); } }
@@ -125,6 +127,23 @@ namespace IntuitiveDesigns.ShootingRange
             return Mathf.Max(0f, _remaining[(int)kind]);
         }
 
+        /// How many are running at once. Two or more is a stack, which is worth telling the player
+        public int ActiveCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < KindCount; i++)
+                {
+                    if (_remaining[i] > 0f) count++;
+                }
+
+                return count;
+            }
+        }
+
+        public bool Stacked { get { return ActiveCount > 1; } }
+
         public Color Colour(PowerUpKind kind)
         {
             var entry = Find(kind);
@@ -158,7 +177,9 @@ namespace IntuitiveDesigns.ShootingRange
             _grantedAt[(int)kind] = Time.unscaledTime;
 
             if (!wasActive) Apply(kind, true);
-            if (Granted != null) Granted(kind, seconds);
+
+            bool stacked = ActiveCount > 1;
+            if (Granted != null) Granted(kind, seconds, stacked);
         }
 
         public void ClearAll()
@@ -186,6 +207,20 @@ namespace IntuitiveDesigns.ShootingRange
             _remaining[(int)kind] = 0f;
             Apply(kind, false);
             if (Expired != null) Expired(kind);
+        }
+
+        private int LiveTargets()
+        {
+            if (director == null || director.Movers == null) return 0;
+
+            int count = 0;
+            var movers = director.Movers;
+            for (int i = 0; i < movers.Length; i++)
+            {
+                if (movers[i] != null && movers[i].Exposed) count++;
+            }
+
+            return count;
         }
 
         private void OnMilestone(int chain)
@@ -235,9 +270,24 @@ namespace IntuitiveDesigns.ShootingRange
             for (int i = 0; i < tuning.Length; i++) total += Mathf.Max(0, tuning[i].weight);
             if (total <= 0) return PowerUpKind.FullAuto;
 
+            // Slow motion on an empty range is a wasted grant, so it only enters the draw when there
+            // is enough on the rails for it to buy the player something
+            bool allowSlow = LiveTargets() >= minTargetsForSlowMotion;
+            if (!allowSlow)
+            {
+                for (int i = 0; i < tuning.Length; i++)
+                {
+                    if (tuning[i].kind == PowerUpKind.SlowMotion) total -= Mathf.Max(0, tuning[i].weight);
+                }
+
+                if (total <= 0) return PowerUpKind.FullAuto;
+            }
+
             int pick = UnityEngine.Random.Range(0, total);
             for (int i = 0; i < tuning.Length; i++)
             {
+                if (!allowSlow && tuning[i].kind == PowerUpKind.SlowMotion) continue;
+
                 pick -= Mathf.Max(0, tuning[i].weight);
                 if (pick < 0) return tuning[i].kind;
             }

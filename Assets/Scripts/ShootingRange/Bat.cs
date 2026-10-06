@@ -105,7 +105,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             _flying = false;
             if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false);
-            _swarm.Popped(this, direction);
+            _swarm.Popped(this, point, direction);
         }
 
         private static float DistanceToSegment(Vector3 point, Vector3 a, Vector3 b)

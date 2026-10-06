@@ -20,6 +20,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private bool startHeld;
         [SerializeField] private Vector3 gripLocalPosition = Vector3.zero;
         [SerializeField] private Vector3 gripLocalEuler = Vector3.zero;
+        [SerializeField] private bool holsterToHead = true;
         [SerializeField] private Vector3 holsterLocalPosition = new Vector3(0.3f, 1.05f, 0.35f);
         [SerializeField] private Vector3 holsterLocalEuler = new Vector3(-20f, 0f, 0f);
 
@@ -104,7 +105,7 @@ namespace IntuitiveDesigns.ShootingRange
         // The player is never slowed by slow motion, only the world is
         private void Update()
         {
-            if (!IsHeld) { HolsterPose(); return; }
+            if (!IsHeld) { Rest(); return; }
 
             if (followHandTransform && !ExternallyDriven) FollowHand();
 
@@ -136,10 +137,17 @@ namespace IntuitiveDesigns.ShootingRange
         private void FollowHand()
         {
             var rig = HandRig();
-            if (rig == null || rig.Transform == null) { HolsterPose(); return; }
+            if (rig == null || rig.Transform == null) { Rest(); return; }
 
             transform.position = rig.Transform.TransformPoint(gripLocalPosition);
             transform.rotation = rig.Transform.rotation * Quaternion.Euler(gripLocalEuler);
+        }
+
+        /// Where it sits when nobody is holding it. With the holster off it simply stays where the
+        /// scene put it, which is how a gun waits on the table to be picked up
+        private void Rest()
+        {
+            if (holsterToHead) HolsterPose();
         }
 
         private void HolsterPose()

@@ -25,10 +25,10 @@ namespace IntuitiveDesigns.ShootingRange
 
         private static readonly List<TrackRail> Buffer = new List<TrackRail>();
 
-        public static void Build(TrackPatternKind kind, TrackRail[] rails, List<Launch> into)
+        public static void Build(TrackPatternKind kind, IList<TrackRail> rails, List<Launch> into)
         {
             into.Clear();
-            if (rails == null || rails.Length == 0) return;
+            if (rails == null || rails.Count == 0) return;
 
             switch (kind)
             {
@@ -42,26 +42,29 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        private static void Single(TrackRail[] rails, List<Launch> into)
+        private static void Single(IList<TrackRail> rails, List<Launch> into)
         {
-            Add(into, rails[Random.Range(0, rails.Length)], 0f, 1f);
+            Add(into, rails[Random.Range(0, rails.Count)], 0f, 1f);
         }
 
-        private static void Gauntlet(TrackRail[] rails, List<Launch> into)
+        private static void Gauntlet(IList<TrackRail> rails, List<Launch> into)
         {
-            var rail = rails[Random.Range(0, rails.Length)];
+            var rail = rails[Random.Range(0, rails.Count)];
             for (int i = 0; i < 3; i++) Add(into, rail, i * 0.9f, 1f);
         }
 
-        private static void Sweep(TrackRail[] rails, List<Launch> into)
+        private static void Sweep(IList<TrackRail> rails, List<Launch> into)
         {
             var group = Random.value < 0.5f ? TrackGroup.FloorAcross : TrackGroup.RoofAcross;
             Collect(rails, group);
 
+            // The roof is held back for the late rounds, and an empty sweep would waste the beat
+            if (Buffer.Count == 0) Collect(rails, TrackGroup.FloorAcross);
+
             for (int i = 0; i < Buffer.Count; i++) Add(into, Buffer[i], i * 0.35f, 1f);
         }
 
-        private static void RoofRush(TrackRail[] rails, List<Launch> into)
+        private static void RoofRush(IList<TrackRail> rails, List<Launch> into)
         {
             Collect(rails, TrackGroup.RoofAcross);
             for (int i = 0; i < Buffer.Count; i++) Add(into, Buffer[i], i * 0.18f, 1.1f);
@@ -70,7 +73,7 @@ namespace IntuitiveDesigns.ShootingRange
             for (int i = 0; i < Buffer.Count; i++) Add(into, Buffer[i], 0.5f + i * 0.18f, 1.1f);
         }
 
-        private static void Volley(TrackRail[] rails, List<Launch> into)
+        private static void Volley(IList<TrackRail> rails, List<Launch> into)
         {
             Collect(rails, TrackGroup.Riser);
             for (int i = 0; i < Buffer.Count; i++) Add(into, Buffer[i], i * 0.22f, 1f);
@@ -78,7 +81,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// Both axes of the floor grid at once. Every one of these crosses three junctions, so this
         /// is the pattern the booking system exists for, it reads as near misses, not collisions
-        private static void Crossfire(TrackRail[] rails, List<Launch> into)
+        private static void Crossfire(IList<TrackRail> rails, List<Launch> into)
         {
             Collect(rails, TrackGroup.FloorAcross);
             for (int i = 0; i < Buffer.Count; i++) Add(into, Buffer[i], i * 0.12f, 1f);
@@ -87,7 +90,7 @@ namespace IntuitiveDesigns.ShootingRange
             for (int i = 0; i < Buffer.Count; i++) Add(into, Buffer[i], 0.25f + i * 0.12f, 1f);
         }
 
-        private static void Cascade(TrackRail[] rails, List<Launch> into)
+        private static void Cascade(IList<TrackRail> rails, List<Launch> into)
         {
             for (int wave = 0; wave < 3; wave++)
             {
@@ -98,7 +101,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        private static void AddOneFrom(TrackRail[] rails, TrackGroup group, List<Launch> into,
+        private static void AddOneFrom(IList<TrackRail> rails, TrackGroup group, List<Launch> into,
                                        float delay, float speed)
         {
             Collect(rails, group);
@@ -113,10 +116,10 @@ namespace IntuitiveDesigns.ShootingRange
             into.Add(new Launch { Rail = rail, Delay = delay, SpeedMultiplier = speed });
         }
 
-        private static void Collect(TrackRail[] rails, TrackGroup group)
+        private static void Collect(IList<TrackRail> rails, TrackGroup group)
         {
             Buffer.Clear();
-            for (int i = 0; i < rails.Length; i++)
+            for (int i = 0; i < rails.Count; i++)
             {
                 if (rails[i] != null && rails[i].Group == group) Buffer.Add(rails[i]);
             }

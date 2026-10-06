@@ -46,12 +46,10 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// Books the rail and every junction on it, or books nothing at all
-        public bool TryDispatch(TrackRail rail, float speed, float moverLength)
+        public bool TryDispatch(TrackRail rail, TrackRail.Pass pass, float moverLength)
         {
-            if (rail == null || speed <= 0f) return false;
-
-            float now = Time.time;
-            if (!rail.CanAccept(now, speed)) return false;
+            if (rail == null) return false;
+            if (!rail.CanAccept(pass)) return false;
 
             List<Junction> onRoute;
             if (_byRail.TryGetValue(rail, out onRoute))
@@ -60,16 +58,18 @@ namespace IntuitiveDesigns.ShootingRange
 
                 for (int i = 0; i < onRoute.Count; i++)
                 {
-                    if (Conflicts(onRoute[i], rail, now, speed, half)) return false;
+                    if (Conflicts(onRoute[i], rail, pass, half)) return false;
                 }
 
                 for (int i = 0; i < onRoute.Count; i++)
                 {
-                    onRoute[i].Windows.Add(WindowFor(onRoute[i], rail, now, speed, half));
+                    Window window;
+                    if (WindowFor(onRoute[i], rail, pass, half, out window))
+                        onRoute[i].Windows.Add(window);
                 }
             }
 
-            rail.Accept(now, speed);
+            rail.Accept(pass);
             return true;
         }
 
@@ -84,23 +84,38 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        private Window WindowFor(Junction junction, TrackRail rail, float now, float speed, float half)
+        /// When this pass is inside the junction. One that never travels only ever occupies a junction
+        /// it happens to be standing on, and holds that one for as long as it stands there
+        private bool WindowFor(Junction junction, TrackRail rail, TrackRail.Pass pass, float half,
+                               out Window window)
         {
             float distance = junction.A == rail ? junction.DistanceOnA : junction.DistanceOnB;
-            return new Window
+
+            if (pass.Speed <= 0f)
             {
-                Enter = now + (distance - half) / speed,
-                Exit = now + (distance + half) / speed,
+                window = new Window { Enter = pass.Depart, Exit = pass.Clear };
+                return distance <= half;
+            }
+
+            window = new Window
+            {
+                // It is standing on the origin before it sets off, so a junction that close is taken
+                // from the moment it appears rather than from the moment it would have reached it
+                Enter = Mathf.Max(pass.Depart, pass.Moving + (distance - half) / pass.Speed),
+                Exit = pass.Moving + (distance + half) / pass.Speed,
             };
+
+            return true;
         }
 
-        private bool Conflicts(Junction junction, TrackRail rail, float now, float speed, float half)
+        private bool Conflicts(Junction junction, TrackRail rail, TrackRail.Pass pass, float half)
         {
-            var candidate = WindowFor(junction, rail, now, speed, half);
+            Window candidate;
+            if (!WindowFor(junction, rail, pass, half, out candidate)) return false;
 
             for (int i = junction.Windows.Count - 1; i >= 0; i--)
             {
-                if (junction.Windows[i].Exit < now) { junction.Windows.RemoveAt(i); continue; }
+                if (junction.Windows[i].Exit < pass.Depart) { junction.Windows.RemoveAt(i); continue; }
 
                 var existing = junction.Windows[i];
                 if (candidate.Enter < existing.Exit && existing.Enter < candidate.Exit) return true;
