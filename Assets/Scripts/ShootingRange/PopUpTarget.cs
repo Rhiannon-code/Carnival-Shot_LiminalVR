@@ -17,6 +17,10 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Signs (one is picked per launch; each brings its own collider)")]
         [SerializeField] private Transform[] variants;
 
+        [Header("Stand (optional; a sibling of the Figure, never under it, or the setup tool takes it for a sign)")]
+        [SerializeField] private Transform stand;
+        [SerializeField] private float standShows = 0.04f;
+
         [Header("Shape (data)")]
         [SerializeField] private bool sidewaysFlip;
         [SerializeField] private Vector3 hitCentreOffset = new Vector3(0f, 0.35f, 0f);
@@ -51,9 +55,11 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Audio (optional)")]
         [SerializeField] private AudioClip[] riseClips;
         [SerializeField] private AudioClip[] fallClips;
+        [SerializeField] private AudioClip[] hitClips;
         [SerializeField, Range(0f, 1f)] private float clipVolume = 0.6f;
+        [SerializeField, Range(0f, 1f)] private float voiceVolume = 0.55f;
 
-        /// Shootable: swinging into view, settling, or up
+        /// Shootable, swinging into view, settling, or up
         public bool Live
         {
             get { return _phase == Phase.Rising || _phase == Phase.Settling || _phase == Phase.Up; }
@@ -94,10 +100,14 @@ namespace IntuitiveDesigns.ShootingRange
         private HingeShape _shape = new HingeShape { Axis = Vector3.right };
         private float _side = 1f;
         private GameObject _shards;
+        private AudioClip[] _voice;
         private Transform _sign;
         private Vector3 _signMiddle;
         private float _signTop;
         private bool _measured;
+        private Vector3 _standAt;
+        private Quaternion _standTurn = Quaternion.identity;
+        private float _standTop;
 
         private void Awake()
         {
@@ -107,10 +117,12 @@ namespace IntuitiveDesigns.ShootingRange
 
             _restLocal = figure.localPosition;
             _facing = figure.rotation;
+
+            if (stand != null) _standTop = TopOf(stand);
         }
 
         /// shown is how far above the carriage the sign's hinge edge sits. The hinge decides which
-        /// edge that is: a floor sign tips up off its feet, a roof sign hangs upside down by its feet,
+        /// edge that is, a floor sign tips up off its feet, a roof sign hangs upside down by its feet,
         /// a wall sign swings out on its side like a door
         public void Present(float shown, Vector3 signOffset, Hinge hinge, Renderer cover)
         {
@@ -149,18 +161,21 @@ namespace IntuitiveDesigns.ShootingRange
         public void Hit(Vector3 point, Vector3 direction)
         {
             SetHitBox(false);
+            Play(hitClips);
+            Play(_voice, voiceVolume);
 
             if (_hinge == Hinge.None) { Burst(point, direction); Finish(); return; }
 
             float odds = Mathf.Max(0.0001f, spinAndFallOdds + fallOdds + shatterOdds);
             float roll = UnityEngine.Random.value * odds;
 
-            if (roll < spinAndFallOdds) Begin(Phase.Spinning);
-            else if (roll < spinAndFallOdds + fallOdds) Begin(Phase.Falling);
-            else { Burst(point, direction); Finish(); }
+            if (roll >= spinAndFallOdds + fallOdds) { Burst(point, direction); Finish(); return; }
+
+            Begin(roll < spinAndFallOdds ? Phase.Spinning : Phase.Falling);
+            if (ShatterPool.Instance != null) ShatterPool.Instance.PlayPop(HitCentre, direction);
         }
 
-        /// Done with, but not shot: swings back the way it came, no spin and no shatter
+        /// Done with, but not shot, swings back the way it came, no spin and no shatter
         public void Lower()
         {
             SetHitBox(false);
@@ -270,6 +285,11 @@ namespace IntuitiveDesigns.ShootingRange
             if (figure == null) return;
 
             PlaceFigure(figure, RestWorld() + Vector3.up * _shown + _signOffset, _facing, _shape, swing, spin);
+
+            if (stand == null) return;
+
+            stand.rotation = figure.rotation * _standTurn;
+            stand.position = figure.TransformPoint(_standAt) - stand.TransformVector(0f, _standTop, 0f);
         }
 
         /// Puts the sign's hinge edge on home and swings the sign about it. Rotating a transform only
@@ -311,6 +331,9 @@ namespace IntuitiveDesigns.ShootingRange
             var broken = _sign != null ? _sign.GetComponentInChildren<SignShards>(true) : null;
             _shards = broken != null ? broken.BrokenSet : null;
 
+            var voice = _sign != null ? _sign.GetComponentInChildren<SignVoice>(true) : null;
+            _voice = voice != null ? voice.Clips : null;
+
             Vector3 low, high;
             _measured = Measure(variants[pick], out low, out high);
             SetHingeShape(low, high);
@@ -319,6 +342,58 @@ namespace IntuitiveDesigns.ShootingRange
             // above it does not
             _signMiddle = (low + high) * 0.5f;
             _signTop = (high.y - low.y) * figure.localScale.y;
+
+            MountStand(low.y);
+            LiftOffTheRail();
+        }
+
+        /// The stand sits in the middle of the hinge edge with its top against it and its up pointing
+        /// into the sign, so it swings, spins and folds away with the sign
+        private void MountStand(float feet)
+        {
+            if (_hinge != Hinge.Sideways)
+            {
+                _standAt = new Vector3(_signMiddle.x, feet, _signMiddle.z);
+                _standTurn = Quaternion.identity;
+                return;
+            }
+
+            _standAt = new Vector3(_shape.Pivot.x, _signMiddle.y, _signMiddle.z);
+            _standTurn = Quaternion.FromToRotation(Vector3.up, _signMiddle.x > _shape.Pivot.x ? Vector3.right : Vector3.left);
+        }
+
+        /// The hinge drops into the stand, so the sign stands that far off its rail and the top of the
+        /// stand shows. Metres, so the Figure's scale is divided back out
+        private void LiftOffTheRail()
+        {
+            if (stand == null || standShows <= 0f) return;
+
+            Vector3 up = _standTurn * Vector3.up;
+            Vector3 scale = figure.localScale;
+            _shape.Pivot -= new Vector3(up.x * standShows / scale.x, up.y * standShows / scale.y, 0f);
+        }
+
+        private static float TopOf(Transform root)
+        {
+            float top = float.NegativeInfinity;
+
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null) continue;
+
+                var box = filter.sharedMesh.bounds;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var point = new Vector3(
+                        (corner & 1) == 0 ? box.min.x : box.max.x,
+                        (corner & 2) == 0 ? box.min.y : box.max.y,
+                        (corner & 4) == 0 ? box.min.z : box.max.z);
+
+                    top = Mathf.Max(top, root.InverseTransformPoint(filter.transform.TransformPoint(point)).y);
+                }
+            }
+
+            return float.IsNegativeInfinity(top) ? 0f : top;
         }
 
         /// The sign stays behind its cover and shows only its top edge. Every sign is a different
@@ -502,11 +577,13 @@ namespace IntuitiveDesigns.ShootingRange
             if (_live != null) _live.enabled = on;
         }
 
-        private void Play(AudioClip[] clips)
+        private void Play(AudioClip[] clips) { Play(clips, clipVolume); }
+
+        private void Play(AudioClip[] clips, float volume)
         {
             if (clips == null || clips.Length == 0 || ImpactFX.Instance == null) return;
 
-            ImpactFX.Instance.PlayClip(clips[UnityEngine.Random.Range(0, clips.Length)], HitCentre, clipVolume);
+            ImpactFX.Instance.PlayClip(clips[UnityEngine.Random.Range(0, clips.Length)], HitCentre, volume);
         }
 
         private static Transform Head()

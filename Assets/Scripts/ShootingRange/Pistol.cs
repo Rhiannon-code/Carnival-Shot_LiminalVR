@@ -13,6 +13,19 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Transform visual;
         [SerializeField] private ParticleSystem muzzleFlash;
 
+        [Header("Slide (optional, set by setup step 15)")]
+        [SerializeField] private Transform slide;
+        [SerializeField] private float slideKickTravel = 0.03f;
+        [SerializeField] private float slideLockTravel = 0.045f;
+        [SerializeField] private float slideSeconds = 0.1f;
+
+        [Header("Reload you can see (data)")]
+        [SerializeField] private Vector2 reloadTilt = new Vector2(20f, 35f);
+        [SerializeField] private float reloadTiltSeconds = 0.18f;
+        [SerializeField] private float slideSlamKick = 0.5f;
+        [SerializeField] private ParticleSystem[] tintedByPowerUp;
+        [SerializeField] private Color gunfireColour = new Color(1f, 0.82f, 0.45f);
+
         [Header("Hold")]
         [SerializeField] private VRAvatarLimbType hand = VRAvatarLimbType.RightHand;
         [SerializeField] private bool followHandTransform = true;
@@ -65,11 +78,15 @@ namespace IntuitiveDesigns.ShootingRange
 
         private AudioSource _audio;
         private AimSight _sight;
+        private PowerUpTint _tint;
         private Quaternion _visualRest = Quaternion.identity;
         private float _cooldown;
         private float _recoil;
         private float _recoilVelocity;
         private float _reloadRemaining;
+        private Vector3 _slideRest;
+        private Vector3 _slideBack;
+        private float _slideKick;
         private int _rounds;
 
         private void Awake()
@@ -78,7 +95,14 @@ namespace IntuitiveDesigns.ShootingRange
             _rounds = magazineSize;
 
             if (visual != null) _visualRest = visual.localRotation;
+
+            if (slide != null)
+            {
+                _slideRest = slide.localPosition;
+                _slideBack = slide.parent.InverseTransformVector(-transform.forward);
+            }
             _sight = GetComponent<AimSight>();
+            _tint = GetComponent<PowerUpTint>();
 
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
@@ -117,11 +141,40 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void LateUpdate()
         {
+            MoveTheSlide();
+
             if (visual == null) return;
 
             _recoil = Mathf.SmoothDamp(_recoil, 0f, ref _recoilVelocity, 1f / Mathf.Max(0.01f, recoilRecovery),
                                        Mathf.Infinity, Time.unscaledDeltaTime);
-            visual.localRotation = _visualRest * Quaternion.Euler(-_recoil, 0f, 0f);
+            float tilt = ReloadBlend;
+            float inward = hand == VRAvatarLimbType.LeftHand ? 1f : -1f;
+            visual.localRotation = _visualRest *
+                                   Quaternion.Euler(-_recoil - reloadTilt.x * tilt, 0f, inward * reloadTilt.y * tilt);
+        }
+
+        /// 0 to 1 and back over the reload, eased at both ends so the gun swings up and settles back.
+        /// The glove reads it too, so the hand loosens in step with the gun
+        public float ReloadBlend
+        {
+            get
+            {
+                if (!IsReloading) return 0f;
+
+                float into = (reloadSeconds - _reloadRemaining) / Mathf.Max(0.01f, reloadTiltSeconds);
+                float outOf = _reloadRemaining / Mathf.Max(0.01f, reloadTiltSeconds);
+                return Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, into, outOf));
+            }
+        }
+
+        /// Kicks back on every shot and stays locked back for the whole reload, as an empty pistol does
+        private void MoveTheSlide()
+        {
+            if (slide == null) return;
+
+            _slideKick = Mathf.MoveTowards(_slideKick, 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, slideSeconds));
+            float back = IsReloading ? slideLockTravel : slideKickTravel * _slideKick;
+            slide.localPosition = _slideRest + _slideBack * back;
         }
 
         private IVRAvatarHand HandRig()
@@ -187,6 +240,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             _reloadRemaining = 0f;
             _rounds = magazineSize;
+            _recoil += recoilKick * slideSlamKick;
             RaiseAmmo();
         }
 
@@ -208,10 +262,11 @@ namespace IntuitiveDesigns.ShootingRange
                         ? _sight.FireDirection(from.position, from.forward, pool.RoundSpeed, pool.RoundGravityScale)
                         : from.forward;
             int fired = 0;
+            Color colour = _tint != null ? _tint.Current(gunfireColour) : gunfireColour;
 
             for (int i = 0; i < pellets; i++)
             {
-                if (pool != null && pool.Fire(from.position, Scatter(aim, spread), 1f)) fired++;
+                if (pool != null && pool.Fire(from.position, Scatter(aim, spread), 1f, colour)) fired++;
             }
 
             _cooldown = fireInterval;
@@ -225,7 +280,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (magazineSize > 0 && !bottomless) _rounds--;
             _recoil += recoilKick * (pellets > 1 ? 1.6f : 1f);
 
-            if (muzzleFlash != null) muzzleFlash.Play(true);
+            Flash(colour);
+            _slideKick = 1f;
             Play(Pick(fireClips), fireVolume);
 
             if (HapticPulse.Instance != null) HapticPulse.Instance.Hit(hand, pellets > 1 ? scatterHaptic : fireHaptic);
@@ -234,6 +290,24 @@ namespace IntuitiveDesigns.ShootingRange
             if (Fired != null) Fired();
 
             if (magazineSize > 0 && _rounds <= 0 && !bottomless) BeginReload();
+        }
+
+        private void Flash(Color colour)
+        {
+            if (muzzleFlash == null) return;
+
+            if (tintedByPowerUp != null)
+            {
+                for (int i = 0; i < tintedByPowerUp.Length; i++)
+                {
+                    if (tintedByPowerUp[i] == null) continue;
+
+                    var main = tintedByPowerUp[i].main;
+                    main.startColor = colour;
+                }
+            }
+
+            muzzleFlash.Play(true);
         }
 
         private void BeginReload()

@@ -56,7 +56,6 @@ namespace IntuitiveDesigns.ShootingRange
             new PatternUnlock { pattern = TrackPatternKind.Cascade,     fromRound = 5 },
         };
 
-        public event Action<TrackPatternKind> PatternStarted;
         public event Action<int> TargetsLeftChanged;
 
         public int ConcurrencyCap { get { return _concurrency; } }
@@ -238,8 +237,6 @@ namespace IntuitiveDesigns.ShootingRange
                     Speed = baseSpeed * launch.SpeedMultiplier,
                 });
             }
-
-            if (PatternStarted != null) PatternStarted(kind);
         }
 
         private void ReleaseDue()
@@ -258,7 +255,7 @@ namespace IntuitiveDesigns.ShootingRange
                 var mover = TakeIdle();
                 if (mover == null) continue;
 
-                // Whether it travels is settled before the booking, not after: one that stands still
+                // Whether it travels is settled before the booking, not after, one that stands still
                 // holds the rail's origin the whole time it is up, and the booking has to know that
                 float hold = UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
                 var pass = due.Rail.Book(now, due.Speed, mover.SettleSeconds,

@@ -6,6 +6,7 @@ namespace IntuitiveDesigns.ShootingRange
     {
         [SerializeField] private PowerUps powerUps;
         [SerializeField] private Renderer[] renderers;
+        [SerializeField] private Renderer[] glowShells;
 
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
@@ -45,21 +46,40 @@ namespace IntuitiveDesigns.ShootingRange
             Refresh();
         }
 
+        /// The colour the gun wears right now, or the fallback when no power up is running
+        public Color Current(Color fallback)
+        {
+            PowerUpKind latest;
+            if (powerUps == null || !powerUps.TryLatest(out latest)) return fallback;
+
+            return powerUps.Stacked ? stackedColour : powerUps.Colour(latest);
+        }
+
         private void Refresh()
         {
-            if (renderers == null) return;
-
             PowerUpKind latest;
             bool tinted = powerUps.TryLatest(out latest);
+            Color colour = Current(Color.white);
 
-            for (int i = 0; i < renderers.Length; i++)
+            for (int i = 0; renderers != null && i < renderers.Length; i++)
             {
                 if (renderers[i] == null) continue;
 
                 _block.Clear();
-                if (tinted)
-                    _block.SetColor(ColorId, powerUps.Stacked ? stackedColour : powerUps.Colour(latest));
+                if (tinted) _block.SetColor(ColorId, colour);
                 renderers[i].SetPropertyBlock(_block);
+            }
+
+            if (glowShells == null) return;
+
+            _block.Clear();
+            _block.SetColor(ColorId, colour);
+            for (int i = 0; i < glowShells.Length; i++)
+            {
+                if (glowShells[i] == null) continue;
+
+                glowShells[i].enabled = tinted;
+                glowShells[i].SetPropertyBlock(_block);
             }
         }
     }
