@@ -76,6 +76,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             return null;
         }
 
+        /// Not "GetComponent() ?? AddComponent()": in the editor a missing component comes back as a
+        /// fake null that ?? does not see, so nothing would ever be added
+        public static T Ensure<T>(GameObject target) where T : Component
+        {
+            var existing = target.GetComponent<T>();
+            return existing != null ? existing : target.AddComponent<T>();
+        }
+
         public static T Load<T>(string path) where T : Object
         {
             return AssetDatabase.LoadAssetAtPath<T>(path);

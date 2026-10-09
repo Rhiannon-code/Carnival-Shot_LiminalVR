@@ -13,7 +13,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Texts")]
         [SerializeField] private TMP_Text centerText;
-        [SerializeField] private TMP_Text patternText;
 
         [Header("Copy (data)")]
         [SerializeField] private string pickupPrompt = "TAKE THE PISTOL";
@@ -22,10 +21,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private string timeUpMessage = "TIME UP";
         [SerializeField] private string slainLabel = "SLAIN";
         [SerializeField] private float messageSeconds = 1.6f;
-        [SerializeField] private float patternSeconds = 1.4f;
 
         private Coroutine _message;
-        private Coroutine _pattern;
         private bool _cleared;
 
         private void OnEnable()
@@ -40,8 +37,6 @@ namespace IntuitiveDesigns.ShootingRange
                 game.RoundEnded += OnRoundEnded;
                 game.FinalScore += OnFinalScore;
             }
-
-            if (director != null) director.PatternStarted += OnPatternStarted;
         }
 
         private void OnDisable()
@@ -56,8 +51,6 @@ namespace IntuitiveDesigns.ShootingRange
                 game.RoundEnded -= OnRoundEnded;
                 game.FinalScore -= OnFinalScore;
             }
-
-            if (director != null) director.PatternStarted -= OnPatternStarted;
         }
 
         private void Start()
@@ -107,35 +100,6 @@ namespace IntuitiveDesigns.ShootingRange
             bool everyOne = director.Killed >= director.WaveSize;
             string headline = !_cleared ? timeUpMessage : everyOne ? clearedMessage : waveOverMessage;
             return headline + "\n" + director.Killed + " / " + director.WaveSize + " " + slainLabel;
-        }
-
-        private void OnPatternStarted(TrackPatternKind kind)
-        {
-            if (patternText == null) return;
-
-            // Announcing every ordinary wave turns the callout into wallpaper
-            if (kind == TrackPatternKind.Single) return;
-
-            if (_pattern != null) StopCoroutine(_pattern);
-            _pattern = StartCoroutine(ShowPattern(Readable(kind)));
-        }
-
-        private IEnumerator ShowPattern(string label)
-        {
-            patternText.text = label;
-            yield return new WaitForSecondsRealtime(patternSeconds);
-            patternText.text = string.Empty;
-            _pattern = null;
-        }
-
-        private static string Readable(TrackPatternKind kind)
-        {
-            switch (kind)
-            {
-                case TrackPatternKind.RoofRush: return "ROOF RUSH";
-                case TrackPatternKind.RiserVolley: return "RISER VOLLEY";
-                default: return kind.ToString().ToUpperInvariant();
-            }
         }
 
         private void Show(string text)

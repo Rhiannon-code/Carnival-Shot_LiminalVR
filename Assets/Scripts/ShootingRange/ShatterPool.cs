@@ -25,6 +25,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private ParticleSystem popPrefab;
         [SerializeField] private int popCopies = 6;
         [SerializeField] private float popLifetime = 1.2f;
+        [SerializeField] private float popLead = 0.15f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] shatterClips;
@@ -114,7 +115,7 @@ namespace IntuitiveDesigns.ShootingRange
                 body.AddTorque(Random.insideUnitSphere * spin, ForceMode.Impulse);
             }
 
-            PlayPop(at);
+            PlayPop(at, direction);
 
             if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
                 ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
@@ -144,7 +145,7 @@ namespace IntuitiveDesigns.ShootingRange
                 StartCoroutine(Reclaim(piece));
             }
 
-            PlayPop(at);
+            PlayPop(at, direction);
 
             if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
                 ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
@@ -204,12 +205,18 @@ namespace IntuitiveDesigns.ShootingRange
             _sets[set].Enqueue(pieces);
         }
 
-        private void PlayPop(Vector3 at)
+        /// Opens back toward the shooter, in front of what was hit. Left facing its own way it puffed
+        /// upward from behind the sign, which hid half of it until the sign spun or fell out of the way
+        public void PlayPop(Vector3 at, Vector3 direction)
         {
             if (_pops.Count == 0) return;
 
             var pop = _pops.Dequeue();
-            pop.transform.position = at;
+            Vector3 towardShooter = direction.sqrMagnitude > 1e-6f ? -direction.normalized : Vector3.up;
+            Vector3 opens = Quaternion.Euler(pop.shape.rotation) * Vector3.forward;
+
+            pop.transform.rotation = Quaternion.FromToRotation(opens, towardShooter);
+            pop.transform.position = at + towardShooter * popLead;
             pop.gameObject.SetActive(true);
             pop.Play(true);
             StartCoroutine(ReclaimPop(pop));

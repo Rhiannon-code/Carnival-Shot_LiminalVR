@@ -28,13 +28,13 @@ namespace IntuitiveDesigns.ShootingRange
         /// How long one that is not going to travel would stand there
         public float RollHold() { return UnityEngine.Random.Range(minHold, maxHold); }
 
-        /// What that costs the rail: the standing about, and the sign dropping again afterwards
+        /// What that costs the rail, the standing about, and the sign dropping again afterwards
         public float StandSeconds(float hold)
         {
             return hold + (target != null ? target.TimeToFall : 0f);
         }
 
-        /// Riding a rail with its figure in view: shootable, and worth launching a bat from
+        /// Riding a rail with its figure in view, shootable, and worth launching a bat from
         public bool Exposed { get { return _running && (target == null || target.Live); } }
 
         /// Where the figure is, which is not where the carriage is once it has popped up
@@ -102,7 +102,7 @@ namespace IntuitiveDesigns.ShootingRange
             // Nothing moves until its sign is up, and every sign takes the same time to get there
             if (target != null && !target.Presented) return;
 
-            // Some of them never travel at all: up, a few seconds in the open, then back down
+            // Some of them never travel at all, up, a few seconds in the open, then back down
             if (_stationary)
             {
                 _held += Time.fixedDeltaTime;
@@ -121,7 +121,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (!Exposed) return;
 
-            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false);
+            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, true);
 
             // Counted the moment it is hit, so the HUD and the combo never wait for the figure to
             // finish spinning or falling

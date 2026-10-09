@@ -90,11 +90,13 @@ namespace IntuitiveDesigns.ShootingRange
             StartCoroutine(RunSession());
         }
 
-        public void Scored(int points, Vector3 where, bool chained)
+        /// Only sign hits link the combo. A toppling prop stack scores a link per prop, which hands
+        /// out milestones nobody aimed for
+        public void Scored(int points, Vector3 where, bool chained, bool linksCombo)
         {
             if (Current != State.Playing) return;
 
-            if (combo != null) combo.Register(chained);
+            if (combo != null && linksCombo) combo.Register(chained);
             float multiplier = combo != null ? combo.Multiplier : 1f;
 
             AddScore(Mathf.RoundToInt(points * multiplier));
@@ -184,7 +186,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (cleared && RoundCleared != null) RoundCleared(RoundNumber);
             // A combo must not survive the break. Carried over, its next link could land on a
-            // milestone and hand out a power-up before the player has fired a shot
+            // milestone and hand out a power up before the player has fired a shot
             if (combo != null) combo.Reset(true);
 
             if (RoundEnded != null) RoundEnded(RoundNumber, RoundScore);

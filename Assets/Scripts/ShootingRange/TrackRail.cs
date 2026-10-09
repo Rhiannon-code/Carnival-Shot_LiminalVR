@@ -133,7 +133,7 @@ namespace IntuitiveDesigns.ShootingRange
             float gapAtStart = Offset(a, from) - Offset(b, from);
             float gapAtEnd = Offset(a, to) - Offset(b, to);
 
-            // The sign flipped, so somewhere in between the gap was zero: one overtook the other
+            // The sign flipped, so somewhere in between the gap was zero, one overtook the other
             if (gapAtStart * gapAtEnd < 0f) return false;
 
             return Mathf.Min(Mathf.Abs(gapAtStart), Mathf.Abs(gapAtEnd)) >= minGap;

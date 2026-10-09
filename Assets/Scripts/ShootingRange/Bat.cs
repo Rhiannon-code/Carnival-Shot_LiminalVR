@@ -104,7 +104,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_flying) return;
 
             _flying = false;
-            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false);
+            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, false);
             _swarm.Popped(this, point, direction);
         }
 

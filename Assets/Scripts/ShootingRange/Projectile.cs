@@ -32,7 +32,7 @@ namespace IntuitiveDesigns.ShootingRange
             _trail = GetComponent<TrailRenderer>();
         }
 
-        public void Fire(Vector3 origin, Vector3 direction, float speedScale)
+        public void Fire(Vector3 origin, Vector3 direction, float speedScale, Color tracer)
         {
             transform.position = origin;
             _velocity = direction.normalized * speed * Mathf.Max(0.05f, speedScale);
@@ -42,8 +42,12 @@ namespace IntuitiveDesigns.ShootingRange
             AimAlongVelocity();
             gameObject.SetActive(true);
 
+            if (_trail == null) return;
+
             // Or it draws a streak from wherever this round last died
-            if (_trail != null) _trail.Clear();
+            _trail.Clear();
+            _trail.startColor = tracer;
+            _trail.endColor = new Color(tracer.r, tracer.g, tracer.b, 0f);
         }
 
         private void FixedUpdate()
@@ -51,7 +55,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_live) return;
 
             _age += Time.fixedDeltaTime;
-            if (_age >= maxLifetime || _distance >= maxRange) { Finish(false, Vector3.zero, Vector3.up); return; }
+            if (_age >= maxLifetime || _distance >= maxRange) { Finish(); return; }
 
             _velocity += Physics.gravity * gravityScale * Time.fixedDeltaTime;
 
@@ -88,15 +92,18 @@ namespace IntuitiveDesigns.ShootingRange
             var shootable = hit.collider.GetComponentInParent<IShootable>();
             if (shootable != null) shootable.OnShot(hit.point, direction, impulse);
 
-            Finish(true, hit.point, hit.normal);
+            // Signs and bats bring their own puff and their own sound, the dust and the thud are for the room
+            bool target = shootable is TrackMover || shootable is Bat;
+            if (!target && ImpactFX.Instance != null) ImpactFX.Instance.PlayImpact(hit.point, hit.normal, hit.collider);
+
+            Finish();
         }
 
-        private void Finish(bool struck, Vector3 point, Vector3 normal)
+        private void Finish()
         {
             _live = false;
             gameObject.SetActive(false);
 
-            if (struck && ImpactFX.Instance != null) ImpactFX.Instance.PlayImpact(point, normal);
             if (ProjectilePool.Instance != null) ProjectilePool.Instance.Return(this);
         }
 
