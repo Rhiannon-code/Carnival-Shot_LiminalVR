@@ -31,17 +31,19 @@ namespace IntuitiveDesigns.ShootingRange
             if (dot != null) dot.gameObject.SetActive(false);
         }
 
-        private void LateUpdate()
+        /// Called by the pistol once it has posed its model this frame. Off while reloading, when the
+        /// gun is pointed anywhere but at the range
+        public void Draw()
         {
-            if (_pistol == null || !_pistol.IsHeld) { OnDisable(); return; }
+            if (_pistol == null || !_pistol.IsHeld || _pistol.IsReloading) { OnDisable(); return; }
 
-            Transform muzzle = _pistol.Muzzle;
-            Vector3 origin = muzzle.position;
+            Vector3 origin = _pistol.SightOrigin;
+            Vector3 forward = _pistol.SightForward;
 
             RaycastHit hit;
-            bool landed = Physics.Raycast(origin, muzzle.forward, out hit, maxDistance, aimMask,
+            bool landed = Physics.Raycast(origin, forward, out hit, maxDistance, aimMask,
                                           QueryTriggerInteraction.Ignore);
-            Vector3 end = landed ? hit.point : origin + muzzle.forward * maxDistance;
+            Vector3 end = landed ? hit.point : origin + forward * maxDistance;
 
             if (beam != null)
             {

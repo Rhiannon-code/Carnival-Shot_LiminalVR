@@ -51,6 +51,7 @@ namespace IntuitiveDesigns.ShootingRange
         private float _hold;
         private bool _stationary;
         private bool _running;
+        private PowerUpKind? _special;
 
         private void Awake()
         {
@@ -71,8 +72,10 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// holdSeconds above zero is one that stands still instead of travelling, for that long. The
         /// booking is made from the same number, so it cannot be told one thing and the mover another
-        public void Launch(TrackRail rail, float speed, float holdSeconds)
+        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one
+        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special)
         {
+            _special = special;
             _rail = rail;
             _speed = speed;
             _distance = 0f;
@@ -92,7 +95,11 @@ namespace IntuitiveDesigns.ShootingRange
 
             gameObject.SetActive(true);
 
-            if (target != null) target.Present(rail.ShownOffset, rail.SignOffset, rail.Hinge, rail.Cover);
+            if (target == null) return;
+
+            target.Present(rail.ShownOffset, rail.SignOffset, rail.Hinge, rail.Cover);
+            var powerUps = PowerUps.Instance;
+            target.Glow(special.HasValue && powerUps != null ? powerUps.Colour(special.Value) : (Color?)null);
         }
 
         private void FixedUpdate()
@@ -122,12 +129,15 @@ namespace IntuitiveDesigns.ShootingRange
             if (!Exposed) return;
 
             if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, true);
+            if (_special.HasValue && PowerUps.Instance != null) PowerUps.Instance.Grant(_special.Value);
+            bool special = _special.HasValue;
 
             // Counted the moment it is hit, so the HUD and the combo never wait for the figure to
             // finish spinning or falling
             Resolve(true);
 
-            if (target != null) target.Hit(point, direction);
+            // A special always shatters, the biggest reaction there is for the hardest shot
+            if (target != null) target.Hit(point, direction, special);
             else Retire();
         }
 
@@ -154,6 +164,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Resolve(bool shot)
         {
             _running = false;
+            _special = null;
             _rail = null;
 
             if (Resolved != null) Resolved(this, shot);

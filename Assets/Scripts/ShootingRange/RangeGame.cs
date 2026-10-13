@@ -16,14 +16,17 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Arena arena;
         [SerializeField] private ComboTracker combo;
         [SerializeField] private TrackDirector director;
+        [SerializeField] private CarnyVoice barker;
 
         [Header("Session (data)")]
         [SerializeField] private float roundSeconds = 60f;
         [SerializeField] private int maxRounds = 5;
         [SerializeField] private int countdownFrom = 3;
+        [SerializeField] private int betweenRoundsCountdownFrom = 3;
         [SerializeField] private float countdownStep = 1f;
         [SerializeField] private float roundTallySeconds = 3f;
         [SerializeField] private float endHoldSeconds = 3f;
+        [SerializeField] private float longestPauseSeconds = 12f;
         [SerializeField] private float endFadeSeconds = 2f;
 
         [Header("Start")]
@@ -70,6 +73,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Start()
         {
             TimeRemaining = roundSeconds;
+            if (barker == null) barker = FindObjectOfType<CarnyVoice>();
 
             if (requirePickupToStart && FindObjectOfType<PistolPickup>() == null)
             {
@@ -123,7 +127,8 @@ namespace IntuitiveDesigns.ShootingRange
         private IEnumerator RunSession()
         {
             SetState(State.Intro);
-            yield return StartCoroutine(Countdown());
+            yield return StartCoroutine(Pause(0f));
+            yield return StartCoroutine(Countdown(countdownFrom));
 
             for (RoundNumber = 1; RoundNumber <= maxRounds; RoundNumber++)
             {
@@ -132,16 +137,28 @@ namespace IntuitiveDesigns.ShootingRange
                 if (RoundNumber >= maxRounds) break;
 
                 SetState(State.RoundEnd);
-                yield return new WaitForSecondsRealtime(roundTallySeconds);
-                yield return StartCoroutine(Countdown());
+                yield return StartCoroutine(Pause(roundTallySeconds));
+                yield return StartCoroutine(Countdown(betweenRoundsCountdownFrom));
             }
 
             yield return StartCoroutine(EndExperience());
         }
 
-        private IEnumerator Countdown()
+        /// At least this long, and longer while the barker is still talking, up to longestPauseSeconds
+        private IEnumerator Pause(float least)
         {
-            for (int n = countdownFrom; n >= 1; n--)
+            float waited = 0f;
+            float most = Mathf.Max(least, longestPauseSeconds);
+            while (waited < least || (barker != null && barker.Talking && waited < most))
+            {
+                waited += Time.unscaledDeltaTime;
+                yield return null;
+            }
+        }
+
+        private IEnumerator Countdown(int from)
+        {
+            for (int n = from; n >= 1; n--)
             {
                 if (CountdownTick != null) CountdownTick(n);
                 yield return new WaitForSecondsRealtime(countdownStep);
@@ -205,7 +222,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (SlowMotion.Instance != null) SlowMotion.Instance.Restore();
             if (FinalScore != null) FinalScore(TotalScore);
 
-            yield return new WaitForSecondsRealtime(endHoldSeconds);
+            yield return StartCoroutine(Pause(endHoldSeconds));
 
             if (ScreenFader.Instance != null) ScreenFader.Instance.FadeTo(Color.black, endFadeSeconds);
             yield return new WaitForSecondsRealtime(endFadeSeconds);

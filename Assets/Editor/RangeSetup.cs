@@ -21,8 +21,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float SignPeek = 0.12f;
         private const float NearestCover = 0.5f;
 
-        private const float CrossMinSpeed = 0.7f;
-        private const float CrossMaxSpeed = 1.3f;
+        private const float CrossMinSpeed = 0.9f;
+        private const float CrossMaxSpeed = 1.5f;
         private const float RiseDelay = 0.15f;
         private const float RiseSeconds = 0.35f;
         private const float FallSeconds = 0.3f;
@@ -31,8 +31,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float RiserFromRound = 2.5f;
         private const float EffectSizeMin = 0.10f;
         private const float EffectSizeMax = 0.22f;
-        private const float PuffSizeMin = 1.2f;
-        private const float PuffSizeMax = 1.9f;
+        private const float PuffSizeMin = 1.7f;
+        private const float PuffSizeMax = 2.6f;
         private const float PuffSpeedMin = 1.5f;
         private const float PuffSpeedMax = 3f;
         private const float PuffRadius = 0.25f;
@@ -40,17 +40,21 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float PuffFullAt = 0.12f;
         private const float PuffFadeIn = 0.04f;
 
-        private const int MilestoneChain = 12;
         private const float ComboWindow = 2f;
         private const float SecondsPerHit = 0.25f;
         private const float MaxLengthMultiple = 1.5f;
-        private const int MinTargetsForSlow = 5;
+        private const int MinTargetsForSlow = 3;
 
         // If the fingers splay instead of curling, this is the axis to change
 
         private const string ShardSourceDir = "Assets/Models/Shards/FBX";
         private const string ShardPrefabDir = "Assets/Prefabs/ShootingRange/Shards";
         private const float ShardMass = 0.2f;
+        private const float GloveRake = 0.5f;
+
+        // Knuckle, middle and end joint of the index: a trigger finger hooks at the middle, so the very tip
+        // can reach a blade only 2 cm out without the whole finger balling up
+        private static readonly float[] TriggerFingerShape = { 0.35f, 1.5f, 1.15f };
 
         private static readonly Vector3 WallPosition = new Vector3(0f, 0.65f, 5.2f);
         private static readonly Vector3 WallScale = new Vector3(9.2f, 1.3f, 0.2f);
@@ -74,7 +78,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             SetThePace();
             TrimTheHitEffects();
             TuneThePowerUps();
-            FitTheGloves();
+            FitTheGloves(false);
             BuildTheShards();
             End();
         }
@@ -134,8 +138,23 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         [MenuItem("Shooting Range/Setup/15 - Fit The Pistol Model", false, 33)]
         public static void PistolModelMenu() { Begin("Pistol model"); FitThePistolModel(); End(); }
 
+        [MenuItem("Shooting Range/Setup/15b - Size The Pistol", false, 33)]
+        public static void PistolSizeMenu() { Begin("Pistol size"); SizeThePistol(); End(); }
+
         [MenuItem("Shooting Range/Setup/16 - Fit The Gloves", false, 34)]
-        public static void GlovesMenu() { Begin("Gloves"); FitTheGloves(); End(); }
+        public static void GlovesMenu() { Begin("Gloves"); FitTheGloves(false); End(); }
+
+        [MenuItem("Shooting Range/Setup/16b - Refit The Gloves From Scratch", false, 35)]
+        public static void GlovesRefitMenu() { Begin("Gloves, refit"); FitTheGloves(true); End(); }
+
+        [MenuItem("Shooting Range/Setup/17 - Build The Spider", false, 36)]
+        public static void SpiderMenu() { Begin("Spider"); BuildTheSpider(); End(); }
+
+        [MenuItem("Shooting Range/Setup/18 - Lay The Ground Fog", false, 37)]
+        public static void FogMenu() { Begin("Ground fog"); LayTheGroundFog(); End(); }
+
+        [MenuItem("Shooting Range/Setup/19 - Pace The 30 Second Rounds", false, 38)]
+        public static void ThirtySecondMenu() { Begin("30 second rounds"); PaceTheThirtySecondRounds(); End(); }
 
         [MenuItem("Shooting Range/Setup/Measure And Check", false, 40)]
         public static void MeasureAndCheck()
@@ -899,7 +918,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 main.loop = false;
                 main.startLifetime = new ParticleSystem.MinMaxCurve(0.05f, 0.12f);
                 main.startSpeed = new ParticleSystem.MinMaxCurve(4f, 8f);
-                main.startSize = new ParticleSystem.MinMaxCurve(0.012f, 0.025f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.024f, 0.05f);
                 main.startColor = Color.white;
                 main.maxParticles = 10;
                 var emission = sparks.emission;
@@ -913,9 +932,9 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 var flash = FxChild(contents.transform, "Flash", flashMat, ParticleSystemSimulationSpace.Local);
                 main = flash.main;
                 main.duration = 0.1f;
-                main.startLifetime = 0.06f;
+                main.startLifetime = 0.08f;
                 main.startSpeed = 0f;
-                main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.24f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.76f);
                 main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
                 main.startColor = Color.white;
                 main.maxParticles = 1;
@@ -929,14 +948,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 var wisp = FxChild(contents.transform, "Wisp", smokeMat, ParticleSystemSimulationSpace.World);
                 main = wisp.main;
                 main.duration = 0.6f;
-                main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.55f);
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.7f);
                 main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.5f);
-                main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.12f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.16f, 0.24f);
                 main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
                 main.startColor = new Color(0.85f, 0.85f, 0.85f, 0.5f);
-                main.maxParticles = 4;
+                main.maxParticles = 5;
                 emission = wisp.emission;
-                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 2, 3) });
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 3, 4) });
                 shape = wisp.shape;
                 shape.enabled = true;
                 shape.shapeType = ParticleSystemShapeType.Cone;
@@ -952,8 +971,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 sheet.frameOverTime = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0f, 1f, 1f));
 
                 PrefabUtility.SaveAsPrefabAsset(contents, MuzzlePath);
-                Did("FX_MuzzleFlash: sparks (5-8, 0.05-0.12 s) on the root, a Flash pow (1, 0.06 s, 15-24 cm) and a " +
-                    "grey Wisp (2-3 cartoon puffs, 8-12 cm, 0.35-0.55 s) under it. No light, on purpose");
+                Did("FX_MuzzleFlash: sparks (5-8, 0.05-0.12 s) on the root, a Flash pow (1, 0.08 s, 50-76 cm) and a " +
+                    "grey Wisp (3-4 cartoon puffs, 16-24 cm, 0.45-0.7 s) under it. No light, on purpose");
                 return true;
             }
             finally { PrefabUtility.UnloadPrefabContents(contents); }
@@ -1322,7 +1341,9 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string PistolFolder = "Assets/Models/pistol/";
         private const string PistolModelPath = PistolFolder + "pistol_low.fbx";
         private const string PistolPivotName = "PistolModel";
-        private const float PistolLength = 0.19f;
+        // Nose to tail, used by the first fit (15) and the resize (15b). A Glock 17 is 20.2 cm and a 1911 21.6; at
+        // 19 cm the model was only 2.6 cm wide (real ~3.2), so the glove over-wrapped it and the trigger sat on the knuckle
+        private const float PistolLength = 0.215f;
 
         /// Fits the artist's pistol once, then leaves its placement alone: re-running only refreshes the
         /// material, the slide and the glow, so nudging it by hand afterwards is safe
@@ -1557,6 +1578,16 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 Did(pistol.name + ": " + shells.Count + " glow shells (gun + glove); the tint now only colours " +
                     kept.Count + " laser parts");
             }
+
+            var root = OpenPrefab();
+            if (root == null) return;
+
+            var popUp = root.GetComponent<PopUpTarget>();
+            if (popUp == null) { Fail("The prefab has no Pop Up Target yet. Run step 3"); return; }
+
+            new Fields(popUp).Set("specialGlow", material).Apply();
+            Did("TrackMover: special power-up signs glow with " + material.name);
+            ClosePrefab(true);
         }
 
         private static Renderer Shell(Renderer source, Material material)
@@ -1674,7 +1705,331 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         /// Replaces 7b, whose curl axis was a guess. Measures each joint's real hinge from the rig, curls
         /// each finger until it meets the grip, and places the palm on the grip the first time only.
         /// Ghost hands get the same rig at a relaxed curl and idle on their own
-        private static void FitTheGloves()
+        /// Overwrites, on purpose: the balanced curve for 30 s rounds (ADR 0050). Round 1 is a warm-up at
+        /// about 0.6 signs a second, round 5 frantic at 1.8, and speed climbs 10% a round rather than 12%,
+        /// because a shorter round leaves less time to adapt. Bats and spiders thin out so they stay a spice
+        private static void PaceTheThirtySecondRounds()
+        {
+            var game = Object.FindObjectOfType<RangeGame>();
+            if (game != null)
+            {
+                new Fields(game).Set("roundSeconds", 30f).Apply();
+                Did("Range Game: 30 s rounds");
+            }
+            else Fail("No RangeGame in the scene");
+
+            var director = Object.FindObjectOfType<TrackDirector>();
+            if (director != null)
+            {
+                new Fields(director).Set("waveSizeFirstRound", 16).Set("waveSizeGrowthPerRound", 8)
+                                    .Set("waveInterval", 1.6f).Set("waveScalePerRound", 0.85f)
+                                    .Set("minSpeed", CrossMinSpeed).Set("maxSpeed", CrossMaxSpeed)
+                                    .Set("speedScalePerRound", 1.1f)
+                                    .Set("concurrentTargets", 5).Set("extraConcurrentPerRound", 2)
+                                    .Set("lastLaunchSecondsLeft", 4f).Apply();
+                Did("Track Director: 16 / 24 / 32 / 40 / 48 signs, 5 up at once +2 a round, speed x1.10 a round, " +
+                    "waves every 1.6 s x0.85 a round, all out with 4 s to go");
+            }
+            else Fail("No TrackDirector in the scene");
+
+            var bats = Object.FindObjectOfType<BatSwarm>();
+            if (bats != null)
+            {
+                new Fields(bats).Set("firstRound", 2).Set("releaseInterval", 5f).Set("maxInFlight", 1)
+                                .Set("extraInFlightPerRound", 1).Set("intervalScalePerRound", 0.85f).Apply();
+                Did("Bats: from round 2, one at a time +1 a round, every 5 s x0.85 a round");
+            }
+
+            var nest = Object.FindObjectOfType<SpiderNest>();
+            if (nest != null)
+            {
+                new Fields(nest).Set("releaseInterval", 8f).Set("maxActive", 1).Set("extraActivePerRound", 1)
+                                .Set("poolSize", 3).Set("intervalScalePerRound", 0.85f).Apply();
+                Did("Spiders: every 8 s x0.85 a round, one at a time +1 a round, never more than 3");
+            }
+            else Say("No SpiderNest yet; run step 17 first, then this again");
+
+            Dirty();
+        }
+
+        private const string FogName = "GroundFog";
+        private const string FogNoise = "Assets/Textures/ShootingRange/T_SR_FogNoise.png";
+        private const float FogWidth = 7f;
+        private const float FogEndZ = 6f;
+
+        /// Two fog layers over the range floor, from just past the bench out to the first tier. The planes
+        /// are rebuilt every run; the two materials are made once and then left alone, so tune the look on
+        /// the materials, never on the planes
+        private static void LayTheGroundFog()
+        {
+            var shader = Shader.Find("CrystalCatch/Ground Fog");
+            if (shader == null) { Fail("The Ground Fog shader has not compiled. Check the console for shader errors"); return; }
+
+            var importer = AssetImporter.GetAtPath(FogNoise) as TextureImporter;
+            if (importer == null) { Fail(FogNoise + " is missing"); return; }
+            importer.wrapMode = TextureWrapMode.Repeat;
+            importer.maxTextureSize = 256;
+            importer.sRGBTexture = false;
+            importer.SaveAndReimport();
+            var noise = RangeSetupUtil.Load<Texture2D>(FogNoise);
+
+            var low = FogMaterial("Assets/Materials/SR_GroundFogLow.mat", shader, noise, 0.5f, 0.3f, 0.55f,
+                                  new Vector4(0.06f, 0.025f), new Vector4(-0.035f, 0.045f));
+            var high = FogMaterial("Assets/Materials/SR_GroundFogHigh.mat", shader, noise, 0.3f, 0.2f, 0.42f,
+                                   new Vector4(-0.05f, 0.02f), new Vector4(0.03f, -0.04f));
+
+            var bench = RangeSetupUtil.FindInScene("ShootingBench");
+            float start = (bench != null ? bench.transform.position.z : 0.55f) + 0.5f;
+            float floor = FloorUnder(new Vector3(0f, 2f, (start + FogEndZ) * 0.5f));
+
+            var root = RangeSetupUtil.FindInScene(FogName);
+            if (root == null) root = new GameObject(FogName);
+            for (int i = root.transform.childCount - 1; i >= 0; i--) Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+
+            FogLayer(root.transform, "Low", low, floor + 0.05f, start);
+            FogLayer(root.transform, "High", high, floor + 0.16f, start);
+            Dirty();
+            Did("Ground fog: two layers, " + FogWidth + " m wide from z " + start.ToString("0.00") + " to " + FogEndZ +
+                ", 5 and 16 cm over the floor at y " + floor.ToString("0.00") + ". Tune SR_GroundFogLow / High");
+        }
+
+        private static Material FogMaterial(string path, Shader shader, Texture noise, float density, float scaleA,
+                                            float scaleB, Vector4 driftA, Vector4 driftB)
+        {
+            var material = RangeSetupUtil.Load<Material>(path);
+            if (material != null)
+            {
+                material.shader = shader;
+                material.SetTexture("_Noise", noise);
+                EditorUtility.SetDirty(material);
+                return material;
+            }
+
+            material = new Material(shader);
+            material.SetTexture("_Noise", noise);
+            material.SetFloat("_Density", density);
+            material.SetFloat("_ScaleA", scaleA);
+            material.SetFloat("_ScaleB", scaleB);
+            material.SetVector("_DriftA", driftA);
+            material.SetVector("_DriftB", driftB);
+            AssetDatabase.CreateAsset(material, path);
+            Did("Made " + System.IO.Path.GetFileName(path));
+            return material;
+        }
+
+        private static void FogLayer(Transform root, string name, Material material, float height, float start)
+        {
+            var plane = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            Object.DestroyImmediate(plane.GetComponent<Collider>());
+            plane.name = name;
+            plane.transform.SetParent(root, false);
+            plane.transform.position = new Vector3(0f, height, (start + FogEndZ) * 0.5f);
+            plane.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            plane.transform.localScale = new Vector3(FogWidth, FogEndZ - start, 1f);
+
+            var renderer = plane.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        /// The first thing below that is part of the room, not a sign, prop or gun; 0 when nothing is there
+        private static float FloorUnder(Vector3 from)
+        {
+            float nearest = float.MaxValue;
+            float floor = 0f;
+            foreach (var hit in Physics.RaycastAll(from, Vector3.down, 10f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var c = hit.collider;
+                if (hit.distance >= nearest || c.GetComponentInParent<TrackMover>() != null ||
+                    c.GetComponentInParent<Knockable>() != null || c.GetComponentInParent<Pistol>() != null) continue;
+
+                nearest = hit.distance;
+                floor = hit.point.y;
+            }
+
+            return floor;
+        }
+
+        private const string SpiderPath = "Assets/Prefabs/ShootingRange/Spider.prefab";
+
+        /// A cartoon stand-in until the artist's spider arrives: fuzzy black ball, big yellow eyes, a
+        /// fanged grin and eight bent legs, plus its thread and web. Unlit colour materials saved as
+        /// assets, so the shader ships in the build. Overwrites the prefab; the nest is added once
+        private static void BuildTheSpider()
+        {
+            var black = UnlitColour("Assets/Materials/SR_SpiderBody.mat", new Color(0.06f, 0.05f, 0.07f));
+            var eye = UnlitColour("Assets/Materials/SR_SpiderEye.mat", new Color(1f, 0.85f, 0.1f));
+            var pupil = UnlitColour("Assets/Materials/SR_SpiderPupil.mat", new Color(0.55f, 0.03f, 0.03f));
+            var fang = UnlitColour("Assets/Materials/SR_SpiderFang.mat", new Color(0.95f, 0.95f, 0.92f));
+            var silk = UnlitColour("Assets/Materials/SR_SpiderSilk.mat", new Color(0.85f, 0.85f, 0.88f));
+
+            var root = new GameObject("Spider");
+            root.layer = RangeSetupUtil.Layer("Prop");
+            root.AddComponent<Rigidbody>().isKinematic = true;
+            var hit = root.AddComponent<SphereCollider>();
+            hit.radius = 0.13f;
+
+            var model = new GameObject("Model").transform;
+            model.SetParent(root.transform, false);
+
+            Part(PrimitiveType.Sphere, model, "Body", new Vector3(0f, 0f, 0f), Quaternion.identity, new Vector3(0.17f, 0.15f, 0.16f), black);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Part(PrimitiveType.Sphere, model, "Eye", new Vector3(side * 0.036f, 0.02f, 0.066f), Quaternion.identity, Vector3.one * 0.052f, eye);
+                Part(PrimitiveType.Sphere, model, "Pupil", new Vector3(side * 0.036f, 0.022f, 0.091f), Quaternion.identity, Vector3.one * 0.018f, pupil);
+                Part(PrimitiveType.Cube, model, "Fang", new Vector3(side * 0.02f, -0.045f, 0.068f), Quaternion.Euler(0f, 0f, side * 12f), new Vector3(0.012f, 0.03f, 0.01f), fang);
+            }
+            Part(PrimitiveType.Cube, model, "Grin", new Vector3(0f, -0.032f, 0.072f), Quaternion.identity, new Vector3(0.07f, 0.012f, 0.01f), fang);
+
+            var legs = new List<Object>();
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    float angle = (60f - i * 40f) * Mathf.Deg2Rad;
+                    var outward = new Vector3(side * Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                    var leg = new GameObject("Leg").transform;
+                    leg.SetParent(model, false);
+                    leg.localRotation = Quaternion.LookRotation(outward);
+                    var knee = new Vector3(0f, 0.09f, 0.2f);
+                    Bone(leg, new Vector3(0f, 0f, 0.06f), knee, black);
+                    Bone(leg, knee, new Vector3(0f, -0.13f, 0.29f), black);
+                    legs.Add(leg);
+                }
+            }
+
+            foreach (var collider in model.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(collider);
+
+            var thread = Line(root.transform, "Thread", silk, 1f);
+            var web = Line(root.transform, "Web", silk, 0.004f);
+
+            var spider = root.AddComponent<Spider>();
+            new Fields(spider).Set("model", model).Set("thread", thread).Set("web", web).SetArray("legs", legs).Apply();
+
+            PrefabUtility.SaveAsPrefabAsset(root, SpiderPath);
+            Object.DestroyImmediate(root);
+            Did("Spider.prefab: placeholder body, eyes, fangs, 8 legs, thread and web (" + SpiderPath + ")");
+
+            var game = Object.FindObjectOfType<RangeGame>();
+            var nest = Object.FindObjectOfType<SpiderNest>();
+            if (nest == null)
+            {
+                var holder = new GameObject("SpiderNest");
+                holder.transform.position = new Vector3(0f, 0f, 6f);
+                nest = holder.AddComponent<SpiderNest>();
+                Did("SpiderNest added at (0, 0, 6): spiders drop over the 5 x 3 m in front of the first tier");
+            }
+
+            new Fields(nest).Set("game", game).Set("spiderPrefab", RangeSetupUtil.Load<Spider>(SpiderPath)).Apply();
+            Dirty();
+            Did("SpiderNest wired to " + (game != null ? game.name : "NO RangeGame") + " and the spider prefab");
+        }
+
+        private static Material UnlitColour(string path, Color colour)
+        {
+            var material = RangeSetupUtil.Load<Material>(path);
+            if (material == null)
+            {
+                material = new Material(Shader.Find("Unlit/Color"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            material.shader = Shader.Find("Unlit/Color");
+            material.color = colour;
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        private static void Part(PrimitiveType type, Transform parent, string name, Vector3 at, Quaternion turn, Vector3 size, Material material)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = at;
+            part.transform.localRotation = turn;
+            part.transform.localScale = size;
+            part.GetComponent<Renderer>().sharedMaterial = material;
+        }
+
+        /// A thin cylinder from one point to another. Unity's cylinder is 2 units tall
+        private static void Bone(Transform parent, Vector3 from, Vector3 to, Material material)
+        {
+            var along = to - from;
+            Part(PrimitiveType.Cylinder, parent, "Bone", (from + to) * 0.5f, Quaternion.FromToRotation(Vector3.up, along),
+                 new Vector3(0.012f, along.magnitude * 0.5f, 0.012f), material);
+        }
+
+        private static LineRenderer Line(Transform parent, string name, Material material, float width)
+        {
+            var holder = new GameObject(name);
+            holder.transform.SetParent(parent, false);
+            var line = holder.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.sharedMaterial = material;
+            line.widthMultiplier = width;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            return line;
+        }
+
+        /// Scales the fitted model (never the glove riding the same pivot) to PistolLength, about the middle
+        /// of its grip so it stays in the hand. Sized to a length, not by a factor, so a re-run changes
+        /// nothing. Run 16b after it: the glove's grip was fitted to the old size
+        private static void SizeThePistol()
+        {
+            foreach (var pistol in Object.FindObjectsOfType<Pistol>())
+            {
+                var visual = new Fields(pistol).Ref("visual") as Transform;
+                Transform model = null;
+                if (visual != null)
+                {
+                    for (int i = 0; i < visual.childCount; i++)
+                    {
+                        var child = visual.GetChild(i);
+                        if (child.name.ToLowerInvariant().Contains("glove") || child.GetComponentInChildren<MeshFilter>(true) == null) continue;
+                        model = child;
+                        break;
+                    }
+                }
+                if (model == null) { Fail(pistol.name + ": no fitted pistol model under its visual. Run step 15 first"); continue; }
+
+                Transform magazine = FindPart(visual, "magazine");
+                Bounds grip;
+                if (magazine == null || !GripBox(pistol, magazine, out grip)) { Fail(pistol.name + ": no magazine to size about"); continue; }
+
+                var axes = GripAxes(pistol);
+                var middle = FromGripSpace(grip.center, axes);
+
+                float near = float.MaxValue, far = float.MinValue;
+                foreach (var filter in model.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (filter.sharedMesh == null || filter.name == GlowName) continue;
+                    foreach (var vertex in filter.sharedMesh.vertices)
+                    {
+                        float along = Vector3.Dot(filter.transform.TransformPoint(vertex), pistol.transform.forward);
+                        near = Mathf.Min(near, along);
+                        far = Mathf.Max(far, along);
+                    }
+                }
+
+                float length = far - near;
+                if (length <= 0.01f) { Fail(pistol.name + ": could not measure the model"); continue; }
+
+                float factor = PistolLength / length;
+                if (Mathf.Abs(factor - 1f) < 0.005f) { Say(pistol.name + ": already " + (length * 100f).ToString("0.0") + " cm, left alone"); continue; }
+
+                model.localScale *= factor;
+                model.position = middle + (model.position - middle) * factor;
+                EditorUtility.SetDirty(model);
+                Dirty();
+                Did(pistol.name + ": " + (length * 100f).ToString("0.0") + " cm -> " + (PistolLength * 100f).ToString("0.0") +
+                    " cm (x" + factor.ToString("0.000") + ") about the grip. Now run 16b");
+            }
+        }
+
+        /// refit throws away the placement and the grip angles and measures both again
+        private static void FitTheGloves(bool refit)
         {
             foreach (var pistol in Object.FindObjectsOfType<Pistol>())
             {
@@ -1705,7 +2060,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 rig.ToRest();
 
                 var fingers = glove.GetComponent<GloveFingers>();
-                bool fresh = fingers == null;
+                bool fresh = fingers == null || refit;
                 bool rightHand = HandOf(pistolFields) == "RightHand";
                 bool lost = OffTheGrip(pistol, rig, grip);
                 if (fresh || lost) PalmOnTheGrip(pistol, glove, rig, grip, rightHand);
@@ -1780,15 +2135,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var filter = magazine.GetComponent<MeshFilter>();
             if (filter == null || filter.sharedMesh == null) return false;
 
-            var local = filter.sharedMesh.bounds;
+            // The vertices, not the mesh bounds: those are an upright box round a raked magazine, and
+            // turned onto the rake they grow fatter still
             var axes = GripAxes(pistol);
             bool first = true;
-            for (int corner = 0; corner < 8; corner++)
+            foreach (var vertex in filter.sharedMesh.vertices)
             {
-                var world = magazine.TransformPoint(new Vector3(
-                    (corner & 1) == 0 ? local.min.x : local.max.x,
-                    (corner & 2) == 0 ? local.min.y : local.max.y,
-                    (corner & 4) == 0 ? local.min.z : local.max.z));
+                var world = magazine.TransformPoint(vertex);
                 var onAxes = new Vector3(Vector3.Dot(world, axes[0]), Vector3.Dot(world, axes[1]), Vector3.Dot(world, axes[2]));
                 if (first) { box = new Bounds(onAxes, Vector3.zero); first = false; }
                 else box.Encapsulate(onAxes);
@@ -1798,12 +2151,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             return true;
         }
 
-        /// The gun's own axes. Not the magazine's longest side: this magazine is 7.8 cm tall and 8.0 cm
-        /// deep, so "longest" picked the depth, and every glove was fitted to the world origin
+        /// Across the grip, out of its front strap, and up it along its rake. The rake matters: boxed on
+        /// the gun's upright axes the 26.5 degree magazine measured twice its real depth, so the palm sat
+        /// off the grip and the fingers stopped curling halfway round
         private static Vector3[] GripAxes(Pistol pistol)
         {
             var gun = pistol.transform;
-            return new[] { gun.right, gun.forward, gun.up };
+            var up = gun.TransformDirection(pistol.GripUp);
+            return new[] { gun.right, Vector3.Cross(gun.right, up).normalized, up };
         }
 
         private static Vector3 FromGripSpace(Vector3 point, Vector3[] axes)
@@ -1819,57 +2174,66 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             float side = rightHand ? 1f : -1f;
 
             var palmTarget = -axes[0] * side;
-            var fingersTarget = axes[1];
+
+            // Fully square to the raked grip tips the hand down too far (build test, 2026-10-13); halfway
+            // between the rake and the gun's own level sits right
+            var fingersTarget = Vector3.Slerp(pistol.transform.forward, axes[1], GloveRake).normalized;
             var turn = Quaternion.LookRotation(fingersTarget, palmTarget) * Quaternion.Inverse(Quaternion.LookRotation(rig.Along, rig.Palm));
             glove.rotation = turn * glove.rotation;
 
+            // Levelling the hand (GloveRake) lifts the wrist end toward the back of the slide, which cut into the
+            // web of the thumb at 2.4 cm down (build test, 2026-10-13); 3.2 cm down and 3 mm off the panel clears it
             var knuckles = new Vector3(
-                grip.center.x + side * (grip.extents.x + 0.012f),
+                grip.center.x + side * (grip.extents.x + 0.015f),
                 grip.center.y + grip.extents.y,
-                grip.max.z - 0.03f);
+                grip.max.z - 0.032f);
             glove.position += FromGripSpace(knuckles, axes) - rig.Knuckles;
 
             Did(glove.name + ": palm on the " + (rightHand ? "right" : "left") + " of the grip, knuckles at the front strap");
         }
 
-        /// Each finger closes until its tip reaches the grip. The index aims for the trigger, just ahead
-        /// of the grip and up under the guard
+        /// Each finger closes until its tip is as near as it gets to its own spot on the far side panel,
+        /// level with its knuckle, so it wraps round the front strap rather than stopping on it. The
+        /// thumb aims high on that panel, just under the slide, and the index at the trigger. A test
+        /// of "crossed the middle" stopped every finger at the same angle whatever the grip measured
         private static float[] FitCurls(Pistol pistol, GloveRig rig, GloveFingers.Joint[] joints, Bounds grip, bool rightHand)
         {
             var axes = GripAxes(pistol);
-            var trigger = FromGripSpace(new Vector3(grip.center.x, grip.max.y + 0.02f, grip.max.z - 0.012f), axes);
+            float side = rightHand ? 1f : -1f;
+            float far = grip.center.x - side * grip.extents.x;
+            // Measured off the artist's frame: the trigger blade hangs about 2 cm ahead of the grip's front and
+            // 1.5 cm above the magazine's top, inside the guard whose bottom bar is level with that top
+            var trigger = FromGripSpace(new Vector3(grip.center.x, grip.max.y + 0.02f, grip.max.z + 0.015f), axes);
 
             var curls = new float[5];
             for (int f = 0; f < 5; f++)
             {
                 var finger = (GloveFingers.Finger)f;
                 var tip = rig.Tip(f);
-                if (tip == null) { curls[f] = GhostGrip[f]; continue; }
+                if (tip == null || rig.Chains[f].Length == 0) { curls[f] = GhostGrip[f]; continue; }
 
-                // A thumb past ~45° hooks under the gun and an index past ~60° balls into the fist
-                float limit = finger == GloveFingers.Finger.Thumb ? 45f : finger == GloveFingers.Finger.Index ? 60f : 90f;
-                float best = finger == GloveFingers.Finger.Thumb ? 30f : finger == GloveFingers.Finger.Index ? 35f : 70f;
+                var reach = tip;
+
+                Vector3 goal;
+                if (finger == GloveFingers.Finger.Index) goal = trigger;
+                else if (finger == GloveFingers.Finger.Thumb)
+                    goal = FromGripSpace(new Vector3(far, grip.center.y + grip.extents.y * 0.3f, grip.max.z - 0.01f), axes);
+                else
+                {
+                    float knuckle = Vector3.Dot(rig.Chains[f][0].position, axes[2]);
+                    goal = FromGripSpace(new Vector3(far, grip.center.y, knuckle), axes);
+                }
+
+                float limit = finger == GloveFingers.Finger.Thumb ? 60f : 90f;
+                float best = 0f;
                 float bestDistance = float.MaxValue;
                 for (float angle = 0f; angle <= limit; angle += 2f)
                 {
                     foreach (var joint in joints)
-                        if (joint.finger == finger) joint.bone.localRotation = joint.rest * Quaternion.AngleAxis(angle, joint.axis);
+                        if (joint.finger == finger) joint.bone.localRotation = joint.rest * Quaternion.AngleAxis(angle * joint.weight, joint.axis);
 
-                    var at = tip.position;
-                    if (finger == GloveFingers.Finger.Index)
-                    {
-                        float distance = Vector3.Distance(at, trigger);
-                        if (distance < bestDistance) { bestDistance = distance; best = angle; }
-                        continue;
-                    }
-
-                    // Wrapped, not just touching: the tip has come round the front strap to the far half of
-                    // the grip. Stopping at first contact left every fingertip sticking out of the far side
-                    var inGrip = new Vector3(Vector3.Dot(at, axes[0]), Vector3.Dot(at, axes[1]), Vector3.Dot(at, axes[2]));
-                    var reach = grip;
-                    reach.Expand(0.016f);
-                    bool farHalf = (rightHand ? 1f : -1f) * (inGrip.x - grip.center.x) < 0f;
-                    if (reach.Contains(inGrip) && farHalf) { best = angle; break; }
+                    float distance = Vector3.Distance(reach.position, goal);
+                    if (distance < bestDistance) { bestDistance = distance; best = angle; }
                 }
 
                 curls[f] = best;
@@ -1950,11 +2314,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 }
             }
 
-            /// Each joint hinges across its own bone and the palm; the sign is whichever way brings the
-            /// fingertip toward the palm, tested by actually turning the joint
+            /// Each finger joint hinges across its own bone and the palm. The thumb does not close onto the
+            /// palm like a finger, it swings across it, so it hinges toward a point out in front of the
+            /// middle knuckle instead. The sign is whichever way brings the tip toward its goal, tested
+            /// by actually turning the joint
             public GloveFingers.Joint[] Hinges()
             {
                 var palm = Palm;
+                var across = Chains[2].Length > 0 ? Chains[2][0].position + palm * 0.03f : Knuckles + palm * 0.03f;
                 var joints = new List<GloveFingers.Joint>();
                 for (int f = 0; f < 5; f++)
                 {
@@ -1964,14 +2331,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                         var next = j + 1 < Chains[f].Length ? Chains[f][j + 1] : Ends[f];
                         if (next == null) continue;
 
-                        var world = Vector3.Cross(next.position - bone.position, palm).normalized;
                         var tip = Ends[f] != null ? Ends[f] : next;
                         var before = tip.position;
+                        var toward = f == 0 ? across - before : palm;
+                        var world = Vector3.Cross(next.position - bone.position, f == 0 ? across - bone.position : palm).normalized;
                         var rest = bone.rotation;
                         bone.rotation = Quaternion.AngleAxis(10f, world) * rest;
-                        bool towardPalm = Vector3.Dot(tip.position - before, palm) > 0f;
+                        bool closing = Vector3.Dot(tip.position - before, toward) > 0f;
                         bone.rotation = rest;
-                        if (!towardPalm) world = -world;
+                        if (!closing) world = -world;
 
                         joints.Add(new GloveFingers.Joint
                         {
@@ -1979,6 +2347,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                             finger = (GloveFingers.Finger)f,
                             rest = Rest[f][j],
                             axis = Quaternion.Inverse(rest) * world,
+                            weight = f == 1 && j < TriggerFingerShape.Length ? TriggerFingerShape[j] : 1f,
                         });
                     }
                 }
@@ -1995,9 +2364,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             if (combo == null) Fail("No ComboTracker in the scene");
             else
             {
-                new Fields(combo).Set("chainPerMilestone", MilestoneChain)
-                                 .Set("windowSeconds", ComboWindow).Apply();
-                Did("Combo: a power-up every " + MilestoneChain + " links, window " + ComboWindow + " s");
+                new Fields(combo).Set("windowSeconds", ComboWindow).Apply();
+                Did("Combo: window " + ComboWindow + " s. It builds the score multiplier only; power-ups come from special signs");
             }
 
             var powerUps = Object.FindObjectOfType<PowerUps>();

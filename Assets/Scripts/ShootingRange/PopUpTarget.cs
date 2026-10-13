@@ -52,6 +52,12 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private int fragments = 8;
         [SerializeField] private float fragmentImpulse = 1.4f;
 
+        [Header("Special power-up sign glow (data)")]
+        [SerializeField] private Material specialGlow;
+        [Tooltip("How far the outline stands out past the sign's edge, metres")]
+        [SerializeField] private float specialBorder = 0.035f;
+        [SerializeField] private float specialStrength = 1.8f;
+
         [Header("Audio (optional)")]
         [SerializeField] private AudioClip[] riseClips;
         [SerializeField] private AudioClip[] fallClips;
@@ -108,6 +114,9 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _standAt;
         private Quaternion _standTurn = Quaternion.identity;
         private float _standTop;
+        private MeshRenderer _glow;
+        private MeshFilter _glowMesh;
+        private MaterialPropertyBlock _glowBlock;
 
         private void Awake()
         {
@@ -158,13 +167,14 @@ namespace IntuitiveDesigns.ShootingRange
             _phase = Phase.Waiting;
         }
 
-        public void Hit(Vector3 point, Vector3 direction)
+        public void Hit(Vector3 point, Vector3 direction, bool shatter)
         {
             SetHitBox(false);
+            Glow(null);
             Play(hitClips);
             Play(_voice, voiceVolume);
 
-            if (_hinge == Hinge.None) { Burst(point, direction); Finish(); return; }
+            if (_hinge == Hinge.None || shatter) { Burst(point, direction); Finish(); return; }
 
             float odds = Mathf.Max(0.0001f, spinAndFallOdds + fallOdds + shatterOdds);
             float roll = UnityEngine.Random.value * odds;
@@ -175,9 +185,83 @@ namespace IntuitiveDesigns.ShootingRange
             if (ShatterPool.Instance != null) ShatterPool.Instance.PlayPop(HitCentre, direction);
         }
 
+        /// An outline round the sign that was picked, in the power-up's colour, or off for null. It is
+        /// the sign's own shape, grown in its flat plane and set just behind it, so only the border
+        /// that sticks out past the edge shows. One per carriage, moved onto whichever sign is up
+        public void Glow(Color? colour)
+        {
+            if (!colour.HasValue || specialGlow == null || _sign == null)
+            {
+                if (_glow != null) _glow.enabled = false;
+                return;
+            }
+
+            var source = _sign.GetComponentInChildren<MeshFilter>();
+            if (source == null || source.sharedMesh == null) return;
+
+            if (_glow == null)
+            {
+                var outline = new GameObject("SpecialGlow");
+                _glowMesh = outline.AddComponent<MeshFilter>();
+                _glow = outline.AddComponent<MeshRenderer>();
+                _glow.sharedMaterial = specialGlow;
+                _glow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _glow.receiveShadows = false;
+                _glowBlock = new MaterialPropertyBlock();
+            }
+
+            _glow.transform.SetParent(source.transform, false);
+            _glowMesh.sharedMesh = source.sharedMesh;
+            FitOutline(source.transform, source.sharedMesh.bounds);
+
+            // Edge 0 lights the whole face of the copy; the sign in front hides all but its rim
+            _glowBlock.Clear();
+            _glowBlock.SetColor("_Color", colour.Value);
+            _glowBlock.SetFloat("_Inflate", 0f);
+            _glowBlock.SetFloat("_Edge", 0f);
+            _glowBlock.SetFloat("_Strength", specialStrength);
+            _glow.SetPropertyBlock(_glowBlock);
+            _glow.enabled = true;
+        }
+
+        /// The mesh's thinnest axis is the way the sign faces. The other two grow by the border, about
+        /// the mesh's middle, and the copy steps back along the thin one to sit behind the sign
+        private void FitOutline(Transform mesh, Bounds box)
+        {
+            Vector3 size = box.size;
+            int thin = size.x <= size.y && size.x <= size.z ? 0 : size.y <= size.z ? 1 : 2;
+            Vector3 lossy = mesh.lossyScale;
+
+            var scale = Vector3.one;
+            for (int axis = 0; axis < 3; axis++)
+            {
+                if (axis == thin || size[axis] <= 1e-5f) continue;
+                float border = specialBorder / Mathf.Max(1e-5f, Mathf.Abs(lossy[axis]));
+                scale[axis] = (size[axis] + 2f * border) / size[axis];
+            }
+
+            // Which side faces the player is judged in the upright pose, not the folded one it starts in
+            var upright = _facing * Quaternion.Euler(0f, 0f, _shape.Upturned ? 180f : 0f) *
+                          (Quaternion.Inverse(figure.rotation) * mesh.rotation);
+            var head = Head();
+            Vector3 toPlayer = head != null ? head.position - RestWorld() : _facing * Vector3.forward;
+            Vector3 axisVector = Vector3.zero;
+            axisVector[thin] = 1f;
+            float away = Vector3.Dot(upright * axisVector, toPlayer) >= 0f ? -1f : 1f;
+
+            var back = Vector3.zero;
+            back[thin] = away * (size[thin] * 0.5f + 0.006f / Mathf.Max(1e-5f, Mathf.Abs(lossy[thin])));
+
+            var t = _glow.transform;
+            t.localRotation = Quaternion.identity;
+            t.localScale = scale;
+            t.localPosition = box.center - Vector3.Scale(scale, box.center) + back;
+        }
+
         /// Done with, but not shot, swings back the way it came, no spin and no shatter
         public void Lower()
         {
+            Glow(null);
             SetHitBox(false);
 
             if (_hinge == Hinge.None) { Finish(); return; }
