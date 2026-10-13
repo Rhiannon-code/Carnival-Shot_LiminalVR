@@ -40,6 +40,13 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("How many stand still instead of travelling (data, 0-1)")]
         [SerializeField, Range(0f, 1f)] private float stationaryShare = 0.4f;
 
+        [Header("Special power-up signs (data)")]
+        [SerializeField, Range(0f, 1f)] private float specialShare = 0.1f;
+        [SerializeField] private float specialSpeed = 1.6f;
+
+        [Header("Paced to the clock (data)")]
+        [SerializeField] private float lastLaunchSecondsLeft = 6f;
+
         [Header("Refusals (data)")]
         [SerializeField] private float retrySeconds = 0.75f;
 
@@ -57,6 +64,7 @@ namespace IntuitiveDesigns.ShootingRange
         };
 
         public event Action<int> TargetsLeftChanged;
+        public event Action<bool> TargetResolved;
 
         public int ConcurrencyCap { get { return _concurrency; } }
         public TrackMover[] Movers { get { return _pool; } }
@@ -205,7 +213,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (Time.time < _nextWave || _launched + _pending.Count >= _waveSize) return;
 
-            _nextWave = Time.time + _waveInterval;
+            _nextWave = Time.time + (Behind() > 0 ? minWaveInterval : _waveInterval);
             StartWave();
         }
 
@@ -242,6 +250,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void ReleaseDue()
         {
             float now = Time.time;
+            int cap = Mathf.Min(poolSize, _concurrency + Behind());
 
             for (int i = _pending.Count - 1; i >= 0; i--)
             {
@@ -250,23 +259,43 @@ namespace IntuitiveDesigns.ShootingRange
 
                 if (now > due.Due + retrySeconds) { _pending.RemoveAt(i); continue; }
 
-                if (ActiveCount() >= _concurrency) continue;
+                if (ActiveCount() >= cap) continue;
 
                 var mover = TakeIdle();
                 if (mover == null) continue;
 
                 // Whether it travels is settled before the booking, not after, one that stands still
-                // holds the rail's origin the whole time it is up, and the booking has to know that
-                float hold = UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
-                var pass = due.Rail.Book(now, due.Speed, mover.SettleSeconds,
+                // holds the rail's origin the whole time it is up, and the booking has to know that.
+                // A special always travels, and faster, so it is the hard shot that pays
+                var powerUps = PowerUps.Instance;
+                PowerUpKind? special = null;
+                if (powerUps != null && UnityEngine.Random.value < specialShare) special = powerUps.RollSpecial();
+
+                float speed = special.HasValue ? due.Speed * specialSpeed : due.Speed;
+                float hold = !special.HasValue && UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
+                var pass = due.Rail.Book(now, speed, mover.SettleSeconds,
                                          hold > 0f ? mover.StandSeconds(hold) : 0f);
 
                 if (!grid.TryDispatch(due.Rail, pass, mover.MoverLength)) continue;
 
                 _pending.RemoveAt(i);
                 _launched++;
-                mover.Launch(due.Rail, due.Speed, hold);
+                mover.Launch(due.Rail, speed, hold, special);
             }
+        }
+
+        /// How many launches short of the clock this round is. The whole wave has to be out with
+        /// lastLaunchSecondsLeft to spare, so behind that line waves come at the shortest gap and the
+        /// cap on targets up at once lifts by the shortfall until it catches up
+        private int Behind()
+        {
+            if (game == null) return 0;
+
+            float window = game.RoundSeconds - lastLaunchSecondsLeft;
+            if (window <= 0f) return 0;
+
+            float through = Mathf.Clamp01((game.RoundSeconds - game.TimeRemaining) / window);
+            return Mathf.Max(0, Mathf.CeilToInt(through * _waveSize) - _launched);
         }
 
         private void OnResolved(TrackMover mover, bool shot)
@@ -274,6 +303,7 @@ namespace IntuitiveDesigns.ShootingRange
             _resolved++;
             if (shot) _killed++;
             RaiseTargetsLeft();
+            if (TargetResolved != null) TargetResolved(shot);
         }
 
         private void RaiseTargetsLeft()

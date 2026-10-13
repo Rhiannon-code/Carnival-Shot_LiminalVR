@@ -13,17 +13,12 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float perChain = 0.25f;
         [SerializeField] private float maxMultiplier = 5f;
 
-        [Header("Milestones (data)")]
-        [SerializeField] private int chainPerMilestone = 8;
-
         public float Multiplier { get; private set; }
         public int Chain { get; private set; }
         public float WindowRemaining { get { return Mathf.Max(0f, _expiresAt - Time.unscaledTime); } }
         public float WindowSeconds { get { return windowSeconds; } }
-        public int ChainPerMilestone { get { return chainPerMilestone; } }
 
         public event Action<float, int> Changed;
-        public event Action<int> MilestoneReached;
 
         private float _expiresAt;
 
@@ -41,9 +36,6 @@ namespace IntuitiveDesigns.ShootingRange
             _expiresAt = Time.unscaledTime + windowSeconds;
 
             Raise();
-
-            if (chainPerMilestone > 0 && Chain % chainPerMilestone == 0 && MilestoneReached != null)
-                MilestoneReached(Chain);
         }
 
         public void Reset(bool raise)

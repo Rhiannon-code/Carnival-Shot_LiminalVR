@@ -1,4 +1,6 @@
 using UnityEngine;
+using Liminal.SDK.VR.Avatars;
+using IntuitiveDesigns.CrystalCatch;
 
 namespace IntuitiveDesigns.ShootingRange
 {
@@ -17,6 +19,11 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip slowEnterClip;
         [SerializeField] private AudioClip slowExitClip;
         [SerializeField, Range(0f, 1f)] private float volume = 1f;
+
+        [Header("Haptics, both hands (data)")]
+        [SerializeField, Range(0f, 1f)] private float grantHaptic = 0.8f;
+        [SerializeField] private float grantHapticSeconds = 0.15f;
+        [SerializeField] private float stackHapticSeconds = 0.35f;
 
         [Header("VFX")]
         [SerializeField] private ParticleSystem grantBurstPrefab;
@@ -75,6 +82,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnGranted(PowerUpKind kind, float seconds, bool stacked)
         {
             Play(Pick(ClipsFor(kind)));
+            Buzz(stacked);
 
             Color colour = powerUps.Colour(kind);
             for (int i = 0; i < _bursts.Length; i++)
@@ -87,6 +95,18 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             RefreshAuras();
+        }
+
+        /// A stack is the bigger moment, so it buzzes harder and longer than a single grant
+        private void Buzz(bool stacked)
+        {
+            var haptics = HapticPulse.Instance;
+            if (haptics == null) return;
+
+            float amplitude = stacked ? 1f : grantHaptic;
+            float seconds = stacked ? stackHapticSeconds : grantHapticSeconds;
+            haptics.Pulse(VRAvatarLimbType.LeftHand, amplitude, seconds);
+            haptics.Pulse(VRAvatarLimbType.RightHand, amplitude, seconds);
         }
 
         private void OnExpired(PowerUpKind kind)
