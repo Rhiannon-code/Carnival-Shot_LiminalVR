@@ -142,6 +142,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 "\n  Stereo path:       " + PlayerSettings.stereoRenderingPath +
                 "\n  Texture format:    " + EditorUserBuildSettings.androidBuildSubtarget +
                 "\n  Development build: " + EditorUserBuildSettings.development +
+                "\n  Perf readout:      " + (Object.FindObjectOfType<IntuitiveDesigns.CrystalCatch.PerfReadout>() != null
+                                             ? "in the open scene (fine for an APK; remove before a .limapp)" : "none") +
                 "\n  Product name:      " + PlayerSettings.productName +
                 "\n  Bundle id:         " + PlayerSettings.applicationIdentifier);
         }

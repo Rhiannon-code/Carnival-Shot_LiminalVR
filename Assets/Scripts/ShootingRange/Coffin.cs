@@ -3,9 +3,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A coffin that opens and shuts by itself at random: a full creaking open, a quick peek, or a
-    /// rattle as if something inside is knocking. The lid swings on the long edge it was modelled
-    /// leaning against. Game time, so slow motion slows it with the rest of the world
     public class Coffin : MonoBehaviour
     {
         [Header("Measured by Fit The Lid (right-click the component; runs when it is added)")]
@@ -40,6 +37,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float maxAudioDistance = 20f;
 
         private AudioSource _audio;
+        private Coroutine _haunt;
         private float _angle;
 
         private void Awake()
@@ -56,7 +54,14 @@ namespace IntuitiveDesigns.ShootingRange
             if (lid == null) return;
 
             Pose(0f);
-            StartCoroutine(Haunt());
+            _haunt = StartCoroutine(Haunt());
+        }
+
+        /// Coroutines only stop on their own when the object goes inactive, not when this is disabled
+        private void OnDisable()
+        {
+            if (_haunt != null) StopCoroutine(_haunt);
+            _haunt = null;
         }
 
         private IEnumerator Haunt()

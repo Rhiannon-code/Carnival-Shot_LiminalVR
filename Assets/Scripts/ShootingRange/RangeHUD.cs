@@ -16,6 +16,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private TMP_Text timerText;
         [SerializeField] private TMP_Text targetsText;
         [SerializeField] private TMP_Text comboText;
+        [SerializeField] private TMP_Text scoreText;
 
         private int _lastSecondShown = -1;
 
@@ -26,6 +27,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.StateChanged += OnStateChanged;
                 game.TimeChanged += OnTimeChanged;
                 game.RoundStarted += OnRoundStarted;
+                game.ScoreChanged += OnScoreChanged;
             }
 
             if (combo != null) combo.Changed += OnComboChanged;
@@ -39,6 +41,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.StateChanged -= OnStateChanged;
                 game.TimeChanged -= OnTimeChanged;
                 game.RoundStarted -= OnRoundStarted;
+                game.ScoreChanged -= OnScoreChanged;
             }
 
             if (combo != null) combo.Changed -= OnComboChanged;
@@ -49,6 +52,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             ShowPlayPanel(false);
             OnComboChanged(1f, 0);
+            OnScoreChanged(game != null ? game.TotalScore : 0);
             if (game != null) OnStateChanged(game.Current);
         }
 
@@ -78,6 +82,11 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnTargetsLeftChanged(int left)
         {
             if (targetsText != null) targetsText.text = left.ToString();
+        }
+
+        private void OnScoreChanged(int total)
+        {
+            if (scoreText != null) scoreText.text = total.ToString();
         }
 
         private void OnComboChanged(float multiplier, int chain)

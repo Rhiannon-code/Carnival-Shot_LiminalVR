@@ -22,17 +22,17 @@ namespace IntuitiveDesigns.ShootingRange
         public float MoverLength { get { return moverLength; } }
 
         /// How long it stands on the rail's origin before it sets off, so the booking knows the spot is
-        /// taken while the sign is still swinging up
-        public float SettleSeconds { get { return target != null ? target.TimeToRise : 0f; } }
+        /// taken while the sign is still swinging up. A sign with no hinge is up at once
+        public float SettleSeconds(Hinge hinge)
+        {
+            return target != null && hinge != Hinge.None ? target.TimeToRise : 0f;
+        }
+
+        /// How long the sign takes to drop out of sight once it stops
+        public float FallSeconds { get { return target != null ? target.TimeToFall : 0f; } }
 
         /// How long one that is not going to travel would stand there
         public float RollHold() { return UnityEngine.Random.Range(minHold, maxHold); }
-
-        /// What that costs the rail, the standing about, and the sign dropping again afterwards
-        public float StandSeconds(float hold)
-        {
-            return hold + (target != null ? target.TimeToFall : 0f);
-        }
 
         /// Riding a rail with its figure in view, shootable, and worth launching a bat from
         public bool Exposed { get { return _running && (target == null || target.Live); } }

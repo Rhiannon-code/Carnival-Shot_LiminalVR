@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -42,8 +41,30 @@ namespace IntuitiveDesigns.ShootingRange
         private readonly Dictionary<GameObject, Queue<Pieces>> _sets =
             new Dictionary<GameObject, Queue<Pieces>>();
 
+        private struct Thrown
+        {
+            public Rigidbody Piece;
+            public float Until;
+        }
+
+        private struct ThrownSet
+        {
+            public GameObject Set;
+            public Pieces Pieces;
+            public float Until;
+        }
+
+        private struct Popping
+        {
+            public ParticleSystem Pop;
+            public float Until;
+        }
+
         private readonly Queue<Rigidbody> _idle = new Queue<Rigidbody>();
         private readonly Queue<ParticleSystem> _pops = new Queue<ParticleSystem>();
+        private readonly List<Thrown> _thrown = new List<Thrown>();
+        private readonly List<ThrownSet> _thrownSets = new List<ThrownSet>();
+        private readonly List<Popping> _popping = new List<Popping>();
 
         private void Awake()
         {
@@ -120,7 +141,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
                 ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
 
-            StartCoroutine(ReclaimSet(set, pieces));
+            _thrownSets.Add(new ThrownSet { Set = set, Pieces = pieces, Until = Time.time + lifetime });
         }
 
         public void Burst(Vector3 at, int count, Vector3 direction, float impulse)
@@ -142,7 +163,7 @@ namespace IntuitiveDesigns.ShootingRange
                 piece.AddForce(push, ForceMode.Impulse);
                 piece.AddTorque(Random.insideUnitSphere * spin, ForceMode.Impulse);
 
-                StartCoroutine(Reclaim(piece));
+                _thrown.Add(new Thrown { Piece = piece, Until = Time.time + lifetime });
             }
 
             PlayPop(at, direction);
@@ -189,22 +210,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        private IEnumerator ReclaimSet(GameObject set, Pieces pieces)
-        {
-            yield return new WaitForSeconds(lifetime);
-
-            for (int i = 0; i < pieces.Bodies.Length; i++)
-            {
-                if (pieces.Bodies[i] == null) continue;
-
-                pieces.Bodies[i].velocity = Vector3.zero;
-                pieces.Bodies[i].angularVelocity = Vector3.zero;
-            }
-
-            pieces.Root.SetActive(false);
-            _sets[set].Enqueue(pieces);
-        }
-
         /// Opens back toward the shooter, in front of what was hit. Left facing its own way it puffed
         /// upward from behind the sign, which hid half of it until the sign spun or fell out of the way
         public void PlayPop(Vector3 at, Vector3 direction)
@@ -219,26 +224,54 @@ namespace IntuitiveDesigns.ShootingRange
             pop.transform.position = at + towardShooter * popLead;
             pop.gameObject.SetActive(true);
             pop.Play(true);
-            StartCoroutine(ReclaimPop(pop));
+            _popping.Add(new Popping { Pop = pop, Until = Time.time + popLifetime });
         }
 
-        private IEnumerator Reclaim(Rigidbody piece)
+        /// One sweep for everything thrown; a coroutine per fragment is 8 to 16 of them per sign
+        private void Update()
         {
-            yield return new WaitForSeconds(lifetime);
+            float now = Time.time;
 
-            piece.velocity = Vector3.zero;
-            piece.angularVelocity = Vector3.zero;
-            piece.gameObject.SetActive(false);
-            _idle.Enqueue(piece);
-        }
+            for (int i = _thrown.Count - 1; i >= 0; i--)
+            {
+                if (now < _thrown[i].Until) continue;
 
-        private IEnumerator ReclaimPop(ParticleSystem pop)
-        {
-            yield return new WaitForSeconds(popLifetime);
+                var piece = _thrown[i].Piece;
+                piece.velocity = Vector3.zero;
+                piece.angularVelocity = Vector3.zero;
+                piece.gameObject.SetActive(false);
+                _idle.Enqueue(piece);
+                _thrown.RemoveAt(i);
+            }
 
-            pop.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            pop.gameObject.SetActive(false);
-            _pops.Enqueue(pop);
+            for (int i = _thrownSets.Count - 1; i >= 0; i--)
+            {
+                if (now < _thrownSets[i].Until) continue;
+
+                var pieces = _thrownSets[i].Pieces;
+                for (int b = 0; b < pieces.Bodies.Length; b++)
+                {
+                    if (pieces.Bodies[b] == null) continue;
+
+                    pieces.Bodies[b].velocity = Vector3.zero;
+                    pieces.Bodies[b].angularVelocity = Vector3.zero;
+                }
+
+                pieces.Root.SetActive(false);
+                _sets[_thrownSets[i].Set].Enqueue(pieces);
+                _thrownSets.RemoveAt(i);
+            }
+
+            for (int i = _popping.Count - 1; i >= 0; i--)
+            {
+                if (now < _popping[i].Until) continue;
+
+                var pop = _popping[i].Pop;
+                pop.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                pop.gameObject.SetActive(false);
+                _pops.Enqueue(pop);
+                _popping.RemoveAt(i);
+            }
         }
     }
 }

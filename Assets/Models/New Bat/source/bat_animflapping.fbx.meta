@@ -6,7 +6,23 @@ ModelImporter:
   - first:
       74: 435074395797770687
     second: flapping
-  externalObjects: {}
+  - first:
+      74: 5386729772563492442
+    second: flapping
+  - first:
+      74: 5386729772563492442
+    second: flapping
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Bat_body_mtl
+    second: {fileID: 2100000, guid: 7842fdc538f11be8d9ed5f41d869aac1, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Bat_eye_mtl
+    second: {fileID: 2100000, guid: e9b2d525b1326d6289d1995d069bf6cc, type: 2}
   materials:
     importMaterials: 1
     materialName: 0
@@ -40,13 +56,13 @@ ModelImporter:
       internalID: 435074395797770687
       firstFrame: 1
       lastFrame: 54
-      wrapMode: 0
+      wrapMode: 2
       orientationOffsetY: 0
       level: 0
       cycleOffset: 0
       loop: 0
       hasAdditiveReferencePose: 0
-      loopTime: 0
+      loopTime: 1
       loopBlend: 0
       loopBlendOrientation: 0
       loopBlendPositionY: 0
@@ -118,7 +134,7 @@ ModelImporter:
     hasExtraRoot: 0
     skeletonHasParents: 1
   lastHumanDescriptionAvatarSource: {instanceID: 0}
-  animationType: 2
+  animationType: 1
   humanoidOversampling: 1
   additionalBone: 0
   userData: 

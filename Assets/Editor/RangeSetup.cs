@@ -6,9 +6,6 @@ using Liminal.SDK.VR.Avatars;
 
 namespace IntuitiveDesigns.ShootingRange.EditorTools
 {
-    /// Wires up what the setup guide asks for, in the scene that is already open. It only ever adds
-    /// what is missing and fills in fields still at their defaults, so anything hand-tuned survives.
-    /// Nothing here generates a scene, and nothing here deletes your work
     public static class RangeSetup
     {
         private const string PrefabPath = "Assets/Prefabs/ShootingRange/TrackMover.prefab";
@@ -52,7 +49,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float ShardMass = 0.2f;
         private const float GloveRake = 0.5f;
 
-        // Knuckle, middle and end joint of the index: a trigger finger hooks at the middle, so the very tip
+        // Knuckle, middle and end joint of the index, a trigger finger hooks at the middle, so the very tip
         // can reach a blade only 2 cm out without the whole finger balling up
         private static readonly float[] TriggerFingerShape = { 0.35f, 1.5f, 1.15f };
 
@@ -156,6 +153,18 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         [MenuItem("Shooting Range/Setup/19 - Pace The 30 Second Rounds", false, 38)]
         public static void ThirtySecondMenu() { Begin("30 second rounds"); PaceTheThirtySecondRounds(); End(); }
 
+        [MenuItem("Shooting Range/Setup/20 - Web And Count The Guns", false, 39)]
+        public static void WebAndCountMenu() { Begin("Gun web and ammo count"); WebAndCountTheGuns(); End(); }
+
+        [MenuItem("Shooting Range/Setup/21 - Fit The Bat Model", false, 39)]
+        public static void BatModelMenu() { Begin("Bat model"); FitTheBatModel(); End(); }
+
+        [MenuItem("Shooting Range/Setup/Perf Readout/Add To The HUD (APK testing only)", false, 50)]
+        public static void AddPerfMenu() { Begin("Perf readout"); AddThePerfReadout(); End(); }
+
+        [MenuItem("Shooting Range/Setup/Perf Readout/Remove (before a .limapp)", false, 51)]
+        public static void RemovePerfMenu() { Begin("Perf readout"); RemoveThePerfReadout(); End(); }
+
         [MenuItem("Shooting Range/Setup/Measure And Check", false, 40)]
         public static void MeasureAndCheck()
         {
@@ -173,10 +182,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             End();
         }
 
-        // ---------------------------------------------------------------- steps
-
-        /// Sets each model's import Scale Factor so every sign's largest side is the same. Measured
-        /// rather than assumed, so running it twice changes nothing
         private static void SizeTheSigns()
         {
             var figure = PrefabFigure();
@@ -242,10 +247,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
         }
 
-        /// Stands every sign on the figure's origin and centres it. It does NOT touch how a sign is
-        /// turned: which way a flat cutout's front and top face cannot be measured off its bounds, so
-        /// that is a hand call. It used to clear rotations to identity and turned the zombie hand
-        /// upside down and backwards doing it
         private static void StraightenTheSigns()
         {
             var figure = PrefabFigure();
@@ -315,10 +316,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var rootScale = root.transform.localScale;
             if (rootScale != Vector3.one)
             {
-                // The figure turns to face the player, and a rotating child under a parent scaled
-                // unevenly is sheared: the sign looks wider head on than it does side on. Moving the
-                // scale onto the figure keeps the size and loses the shear, because the figure's own
-                // scale is applied before its own rotation
                 var lift = RangeSetupUtil.Child(root.transform, "Figure");
                 if (lift != null) lift.localScale = Vector3.Scale(lift.localScale, rootScale);
 
@@ -519,7 +516,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
                 if (covered == 0)
                 {
-                    // Nothing to measure against, so there is nothing to derive: the offset and the
+                    // Nothing to measure against, so there is nothing to derive, the offset and the
                     // hinge stay whatever they were set to by hand, and only the cover is cleared
                     float had = fields.Float("shownOffset");
                     var hinge = (Hinge)fields.Int("hinge");
@@ -1702,12 +1699,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private static readonly string[] FingerNames = { "thumb", "index", "middle", "ring", "pinky" };
         private static readonly float[] GhostGrip = { 10f, 12f, 18f, 20f, 22f };
 
-        /// Replaces 7b, whose curl axis was a guess. Measures each joint's real hinge from the rig, curls
-        /// each finger until it meets the grip, and places the palm on the grip the first time only.
-        /// Ghost hands get the same rig at a relaxed curl and idle on their own
-        /// Overwrites, on purpose: the balanced curve for 30 s rounds (ADR 0050). Round 1 is a warm-up at
-        /// about 0.6 signs a second, round 5 frantic at 1.8, and speed climbs 10% a round rather than 12%,
-        /// because a shorter round leaves less time to adapt. Bats and spiders thin out so they stay a spice
         private static void PaceTheThirtySecondRounds()
         {
             var game = Object.FindObjectOfType<RangeGame>();
@@ -1721,16 +1712,36 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var director = Object.FindObjectOfType<TrackDirector>();
             if (director != null)
             {
-                new Fields(director).Set("waveSizeFirstRound", 16).Set("waveSizeGrowthPerRound", 8)
+                new Fields(director).Set("waveSizeFirstRound", 14).Set("waveSizeGrowthPerRound", 4)
                                     .Set("waveInterval", 1.6f).Set("waveScalePerRound", 0.85f)
                                     .Set("minSpeed", CrossMinSpeed).Set("maxSpeed", CrossMaxSpeed)
-                                    .Set("speedScalePerRound", 1.1f)
-                                    .Set("concurrentTargets", 5).Set("extraConcurrentPerRound", 2)
+                                    .Set("speedScalePerRound", 1.07f)
+                                    .Set("concurrentTargets", 4).Set("extraConcurrentPerRound", 1)
+                                    .Set("maxConcurrentTargets", 6)
                                     .Set("lastLaunchSecondsLeft", 4f).Apply();
-                Did("Track Director: 16 / 24 / 32 / 40 / 48 signs, 5 up at once +2 a round, speed x1.10 a round, " +
+                Did("Track Director: 14 / 18 / 22 / 26 / 30 signs, 4 / 5 / 6 / 6 / 6 up at once, speed x1.07 a round, " +
                     "waves every 1.6 s x0.85 a round, all out with 4 s to go");
             }
             else Fail("No TrackDirector in the scene");
+
+            var prefab = OpenPrefab();
+            var mover = prefab != null ? prefab.GetComponent<TrackMover>() : null;
+            if (mover != null)
+            {
+                new Fields(mover).Set("minHold", 3f).Set("maxHold", 5f).Apply();
+                ClosePrefab(true);
+                Did("TrackMover.prefab: a sign that stands still is up 3 to 5 s");
+            }
+            else Fail("No TrackMover on " + PrefabPath);
+
+            int risers = 0;
+            foreach (var rail in Object.FindObjectsOfType<TrackRail>())
+            {
+                bool riser = rail.Group == TrackGroup.Riser;
+                new Fields(rail).Set("speedScale", riser ? 0.6f : 1f).Apply();
+                if (riser) risers++;
+            }
+            Did(risers + " riser rails at 0.6 speed (2.5 m is gone in 1.3 s at round 5's top speed otherwise), the rest at 1");
 
             var bats = Object.FindObjectOfType<BatSwarm>();
             if (bats != null)
@@ -1743,13 +1754,322 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var nest = Object.FindObjectOfType<SpiderNest>();
             if (nest != null)
             {
-                new Fields(nest).Set("releaseInterval", 8f).Set("maxActive", 1).Set("extraActivePerRound", 1)
-                                .Set("poolSize", 3).Set("intervalScalePerRound", 0.85f).Apply();
-                Did("Spiders: every 8 s x0.85 a round, one at a time +1 a round, never more than 3");
+                new Fields(nest).Set("firstRound", 2).Set("releaseInterval", 8f).Set("intervalScalePerRound", 0.85f).Apply();
+                Did("Spider: from round 2, one at a time in front of the player, 8 s after the last one x0.85 a round");
             }
             else Say("No SpiderNest yet; run step 17 first, then this again");
 
             Dirty();
+        }
+
+        private const string SilkPath = "Assets/Materials/SR_SpiderSilk.mat";
+        private const string AmmoName = "AmmoCount";
+
+        private static void WebAndCountTheGuns()
+        {
+            var silk = RangeSetupUtil.Load<Material>(SilkPath);
+            if (silk == null) Say("No " + SilkPath + " (step 17 makes it): a bite will still lock the trigger, with no web drawn");
+
+            var game = Object.FindObjectOfType<RangeGame>();
+            var guns = Object.FindObjectsOfType<Pistol>();
+            if (guns.Length == 0) { Fail("No Pistol in the scene"); return; }
+
+            foreach (var gun in guns)
+            {
+                var web = new Fields(RangeSetupUtil.Ensure<GunWeb>(gun.gameObject));
+                if (web.Ref("game") == null) web.Set("game", game);
+                if (web.Ref("silk") == null && silk != null) web.Set("silk", silk);
+                web.Apply();
+                Did(gun.name + ": Gun Web wired");
+
+                if (RangeSetupUtil.Child(gun.transform, AmmoName) != null)
+                {
+                    Say(gun.name + ": already has an " + AmmoName + ", left where it is");
+                    continue;
+                }
+
+                var model = new Fields(gun).Ref("visual") as Transform;
+                Bounds box;
+                if (model == null || !BoundsIn(gun.transform, model, out box)) { Fail(gun.name + ": no model to measure"); continue; }
+
+                var holder = new GameObject(AmmoName);
+                holder.transform.SetParent(gun.transform, false);
+                holder.transform.localPosition = new Vector3(box.center.x, box.max.y + 0.012f, box.min.z + 0.02f);
+                holder.transform.localRotation = Quaternion.Euler(35f, 0f, 0f);
+
+                var text = holder.AddComponent<TMPro.TextMeshPro>();
+                text.rectTransform.sizeDelta = new Vector2(0.07f, 0.02f);
+                text.alignment = TMPro.TextAlignmentOptions.Center;
+                text.enableAutoSizing = true;
+                text.fontSizeMin = 0.01f;
+                text.fontSizeMax = 0.2f;
+                text.enableWordWrapping = false;
+                text.fontStyle = TMPro.FontStyles.Bold;
+                text.text = "12";
+
+                new Fields(holder.AddComponent<AmmoCounter>()).Set("pistol", gun).Apply();
+                Did(gun.name + ": ammo count 7 x 2 cm, 1.2 cm over the back of the slide, tipped 35 degrees up at the eye");
+            }
+
+            Dirty();
+        }
+
+        /// Every mesh under part, as a box in space's axes
+        private static bool BoundsIn(Transform space, Transform part, out Bounds box)
+        {
+            box = new Bounds();
+            bool any = false;
+            foreach (var filter in part.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null || filter.name == GlowName) continue;
+
+                var mesh = filter.sharedMesh.bounds;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var point = space.InverseTransformPoint(filter.transform.TransformPoint(new Vector3(
+                        (corner & 1) == 0 ? mesh.min.x : mesh.max.x,
+                        (corner & 2) == 0 ? mesh.min.y : mesh.max.y,
+                        (corner & 4) == 0 ? mesh.min.z : mesh.max.z)));
+
+                    if (!any) { box = new Bounds(point, Vector3.zero); any = true; }
+                    else box.Encapsulate(point);
+                }
+            }
+
+            return any;
+        }
+
+        private const string BatPath = "Assets/Prefabs/ShootingRange/Bat.prefab";
+        private const string PerfName = "PerfReadout";
+
+        /// The fps / worst-frame readout for headset testing, small in the HUD's bottom-left corner. It
+        /// sits at the canvas root, not in the play panel, which is hidden between rounds. ADR 0018: an APK
+        /// may carry it, a .limapp must not, so it has a Remove twin rather than living in the scene
+        private static void AddThePerfReadout()
+        {
+            var hud = Object.FindObjectOfType<RangeHUD>();
+            var canvas = hud != null ? hud.GetComponentInParent<Canvas>() : null;
+            if (canvas == null) { Fail("No RangeHUD on a canvas in the scene"); return; }
+
+            if (Object.FindObjectOfType<IntuitiveDesigns.CrystalCatch.PerfReadout>() != null)
+            {
+                Say("There is already a perf readout in the scene, left as it is");
+                return;
+            }
+
+            var holder = new GameObject(PerfName, typeof(RectTransform));
+            holder.layer = canvas.gameObject.layer;
+            var rect = (RectTransform)holder.transform;
+            rect.SetParent(canvas.transform, false);
+            rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.zero;
+            rect.anchoredPosition = new Vector2(12f, 12f);
+            rect.sizeDelta = new Vector2(360f, 96f);
+
+            var text = holder.AddComponent<TMPro.TextMeshProUGUI>();
+            var timer = new Fields(hud).Ref("timerText") as TMPro.TMP_Text;
+            if (timer != null)
+            {
+                text.font = timer.font;
+                text.fontSharedMaterial = timer.fontSharedMaterial;
+            }
+            text.alignment = TMPro.TextAlignmentOptions.BottomLeft;
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 8f;
+            text.fontSizeMax = 40f;
+            text.raycastTarget = false;
+            text.text = "-- fps";
+
+            new Fields(holder.AddComponent<IntuitiveDesigns.CrystalCatch.PerfReadout>())
+                .Set("text", text).Set("targetFps", 72f).Set("warnBelowFps", 66f).Set("logEachSample", true).Apply();
+
+            Dirty();
+            Did("Perf readout in the HUD's bottom-left corner: fps, average and worst frame against 72 Hz, " +
+                "also to adb logcat as [Perf]. Remove it before building a .limapp (ADR 0018)");
+        }
+
+        private static void RemoveThePerfReadout()
+        {
+            var readouts = Object.FindObjectsOfType<IntuitiveDesigns.CrystalCatch.PerfReadout>();
+            if (readouts.Length == 0) { Say("No perf readout in the scene"); return; }
+
+            foreach (var readout in readouts)
+            {
+                if (readout.gameObject.name == PerfName) Object.DestroyImmediate(readout.gameObject);
+                else Object.DestroyImmediate(readout);
+            }
+
+            Dirty();
+            Did(readouts.Length + " perf readout(s) removed, so the scene can go into a .limapp");
+        }
+
+        private const string BatModelPath = "Assets/Models/New Bat/source/bat_animflapping.fbx";
+        private const string BatModelName = "Model";
+        private static readonly string[] Greybox = { "Body", "WingLeft", "WingRight" };
+        // The greybox's, measured before it was removed, so a second run sizes the bat the same
+        private const float BatWingspan = 0.52f;
+        // The model hovers upright, tipped nose-down about its wings this far, its body flies level
+        private const float BatPitch = 90f;
+        private static void FitTheBatModel()
+        {
+            var importer = AssetImporter.GetAtPath(BatModelPath) as ModelImporter;
+            if (importer == null) { Fail("No bat model at " + BatModelPath); return; }
+
+            var body = LitTexture("Assets/Materials/SR_BatBody.mat", "Assets/Models/New Bat/textures/Murcielago_body.jpeg");
+            var eye = LitTexture("Assets/Materials/SR_BatEye.mat", "Assets/Models/New Bat/textures/Murcielago_ojo.jpeg");
+            importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), "Bat_body_mtl"), body);
+            importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), "Bat_eye_mtl"), eye);
+
+            importer.animationType = ModelImporterAnimationType.Legacy;
+            var clips = importer.clipAnimations.Length > 0 ? importer.clipAnimations : importer.defaultClipAnimations;
+            for (int i = 0; i < clips.Length; i++)
+            {
+                clips[i].loopTime = true;
+                clips[i].wrapMode = WrapMode.Loop;
+            }
+            importer.clipAnimations = clips;
+            importer.SaveAndReimport();
+            Did("Bat model: Legacy, flap clip loops, materials remapped to SR_BatBody / SR_BatEye");
+
+            AnimationClip flap = null;
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(BatModelPath))
+            {
+                var clip = asset as AnimationClip;
+                if (clip != null && !clip.name.StartsWith("__preview")) { flap = clip; break; }
+            }
+            if (flap == null) { Fail("The bat model has no animation clip"); return; }
+
+            var contents = PrefabUtility.LoadPrefabContents(BatPath);
+            try
+            {
+                var bat = contents.GetComponent<Bat>();
+                if (bat == null) { Fail("Bat.prefab has no Bat component"); return; }
+
+                foreach (var name in Greybox)
+                {
+                    var old = RangeSetupUtil.Child(contents.transform, name);
+                    if (old != null) Object.DestroyImmediate(old.gameObject);
+                }
+
+                var oldModel = RangeSetupUtil.Child(contents.transform, BatModelName);
+                if (oldModel != null) Object.DestroyImmediate(oldModel.gameObject);
+
+                var model = (GameObject)PrefabUtility.InstantiatePrefab(RangeSetupUtil.Load<GameObject>(BatModelPath), contents.transform);
+                model.name = BatModelName;
+                model.layer = contents.layer;
+                foreach (var part in model.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = contents.layer;
+
+                var flapper = model.GetComponent<Animation>();
+                if (flapper == null) flapper = model.AddComponent<Animation>();
+                if (flapper.GetClip(flap.name) == null) flapper.AddClip(flap, flap.name);
+                flapper.clip = flap;
+                flapper.wrapMode = WrapMode.Loop;
+                flapper.playAutomatically = true;
+                flapper.cullingType = AnimationCullingType.AlwaysAnimate;
+
+                // Measured at the first frame, wings out
+                flap.SampleAnimation(model, 0f);
+                Vector3 up, forward, middle;
+                float span;
+                if (!MeasureBat(model.transform, out up, out forward, out middle, out span)) return;
+
+                model.transform.localRotation = Quaternion.Euler(BatPitch, 0f, 0f) * Quaternion.Inverse(Quaternion.LookRotation(forward, up));
+                float scale = BatWingspan / Mathf.Max(0.001f, span);
+                model.transform.localScale = Vector3.one * scale;
+                model.transform.localPosition = -(model.transform.localRotation * (middle * scale));
+
+                foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+                {
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    renderer.receiveShadows = false;
+                    var skinned = renderer as SkinnedMeshRenderer;
+                    if (skinned != null) skinned.updateWhenOffscreen = false;
+                }
+
+                new Fields(bat).Set("flapper", flapper).Set("flapSpeed", 0.75f).Apply();
+                PrefabUtility.SaveAsPrefabAsset(contents, BatPath);
+                Did("Bat.prefab: greybox gone, rigged bat in at a " + (BatWingspan * 100f).ToString("0") + " cm wingspan, tipped " + BatPitch + " degrees flat (x" +
+                    scale.ToString("0.0") + "), facing its flight, flapping by its own Animation at 0.75 speed, about 2 slow mechanical beats a second");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(contents); }
+        }
+
+        /// In the model's own axes, up along the spine (hip to head), forward from the body's middle
+        /// toward the eyes, square to up, and the span across the wings, square to both
+        private static bool MeasureBat(Transform model, out Vector3 up, out Vector3 forward, out Vector3 middle, out float span)
+        {
+            up = forward = middle = Vector3.zero;
+            span = 0f;
+
+            Transform hip = null, head = null;
+            foreach (var bone in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (bone.name == "Hip") hip = bone;
+                else if (bone.name == "Haed" || bone.name == "Head") head = bone;
+            }
+            if (hip == null || head == null) { Fail("Bat model: no Hip and Head bones to find its up by"); return false; }
+
+            var points = new List<Vector3>();
+            Vector3 eyes = Vector3.zero;
+            int eyeCount = 0;
+            var baked = new Mesh();
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var skinned = renderer as SkinnedMeshRenderer;
+                Vector3[] vertices;
+                if (skinned != null) { skinned.BakeMesh(baked); vertices = baked.vertices; }
+                else
+                {
+                    var filter = renderer.GetComponent<MeshFilter>();
+                    if (filter == null || filter.sharedMesh == null) continue;
+                    vertices = filter.sharedMesh.vertices;
+                }
+
+                // BakeMesh comes out in the renderer's space without its scale, a mesh filter's with it
+                var space = skinned != null ? Matrix4x4.TRS(renderer.transform.position, renderer.transform.rotation, Vector3.one)
+                                            : renderer.transform.localToWorldMatrix;
+                foreach (var vertex in vertices) points.Add(model.InverseTransformPoint(space.MultiplyPoint3x4(vertex)));
+
+                if (renderer.name.ToLowerInvariant().Contains("eye"))
+                {
+                    eyes += model.InverseTransformPoint(renderer.bounds.center);
+                    eyeCount++;
+                }
+            }
+            Object.DestroyImmediate(baked);
+            if (points.Count == 0 || eyeCount == 0) { Fail("Bat model: no body and eyes to measure"); return false; }
+
+            var box = new Bounds(points[0], Vector3.zero);
+            foreach (var point in points) box.Encapsulate(point);
+            middle = box.center;
+
+            up = (model.InverseTransformPoint(head.position) - model.InverseTransformPoint(hip.position)).normalized;
+            forward = Vector3.ProjectOnPlane(eyes / eyeCount - middle, up).normalized;
+            var across = Vector3.Cross(up, forward).normalized;
+
+            float low = float.MaxValue, high = float.MinValue;
+            foreach (var point in points)
+            {
+                float along = Vector3.Dot(point - middle, across);
+                low = Mathf.Min(low, along);
+                high = Mathf.Max(high, along);
+            }
+            span = high - low;
+            return forward.sqrMagnitude > 0.5f;
+        }
+
+        private static Material LitTexture(string path, string texturePath)
+        {
+            var material = RangeSetupUtil.Load<Material>(path);
+            if (material == null)
+            {
+                material = new Material(Shader.Find("Mobile/Diffuse"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            material.shader = Shader.Find("Mobile/Diffuse");
+            material.mainTexture = RangeSetupUtil.Load<Texture2D>(texturePath);
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         private const string FogName = "GroundFog";
@@ -1757,9 +2077,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float FogWidth = 7f;
         private const float FogEndZ = 6f;
 
-        /// Two fog layers over the range floor, from just past the bench out to the first tier. The planes
-        /// are rebuilt every run; the two materials are made once and then left alone, so tune the look on
-        /// the materials, never on the planes
         private static void LayTheGroundFog()
         {
             var shader = Shader.Find("CrystalCatch/Ground Fog");
@@ -1853,9 +2170,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private const string SpiderPath = "Assets/Prefabs/ShootingRange/Spider.prefab";
 
-        /// A cartoon stand-in until the artist's spider arrives: fuzzy black ball, big yellow eyes, a
-        /// fanged grin and eight bent legs, plus its thread and web. Unlit colour materials saved as
-        /// assets, so the shader ships in the build. Overwrites the prefab; the nest is added once
         private static void BuildTheSpider()
         {
             var black = UnlitColour("Assets/Materials/SR_SpiderBody.mat", new Color(0.06f, 0.05f, 0.07f));
@@ -1916,9 +2230,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             if (nest == null)
             {
                 var holder = new GameObject("SpiderNest");
-                holder.transform.position = new Vector3(0f, 0f, 6f);
                 nest = holder.AddComponent<SpiderNest>();
-                Did("SpiderNest added at (0, 0, 6): spiders drop over the 5 x 3 m in front of the first tier");
+                Did("SpiderNest added: the spider drops in front of wherever the player is facing");
             }
 
             new Fields(nest).Set("game", game).Set("spiderPrefab", RangeSetupUtil.Load<Spider>(SpiderPath)).Apply();
@@ -2166,8 +2479,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             return axes[0] * point.x + axes[1] * point.y + axes[2] * point.z;
         }
 
-        /// Palm flat on the grip's side panel, fingers round the front strap, the index knuckle just
-        /// under the trigger guard. A starting point for tuning by eye, not a final pose
         private static void PalmOnTheGrip(Pistol pistol, Transform glove, GloveRig rig, Bounds grip, bool rightHand)
         {
             var axes = GripAxes(pistol);
@@ -2175,14 +2486,10 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             var palmTarget = -axes[0] * side;
 
-            // Fully square to the raked grip tips the hand down too far (build test, 2026-10-13); halfway
-            // between the rake and the gun's own level sits right
             var fingersTarget = Vector3.Slerp(pistol.transform.forward, axes[1], GloveRake).normalized;
             var turn = Quaternion.LookRotation(fingersTarget, palmTarget) * Quaternion.Inverse(Quaternion.LookRotation(rig.Along, rig.Palm));
             glove.rotation = turn * glove.rotation;
 
-            // Levelling the hand (GloveRake) lifts the wrist end toward the back of the slide, which cut into the
-            // web of the thumb at 2.4 cm down (build test, 2026-10-13); 3.2 cm down and 3 mm off the panel clears it
             var knuckles = new Vector3(
                 grip.center.x + side * (grip.extents.x + 0.015f),
                 grip.center.y + grip.extents.y,
@@ -2192,17 +2499,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             Did(glove.name + ": palm on the " + (rightHand ? "right" : "left") + " of the grip, knuckles at the front strap");
         }
 
-        /// Each finger closes until its tip is as near as it gets to its own spot on the far side panel,
-        /// level with its knuckle, so it wraps round the front strap rather than stopping on it. The
-        /// thumb aims high on that panel, just under the slide, and the index at the trigger. A test
-        /// of "crossed the middle" stopped every finger at the same angle whatever the grip measured
         private static float[] FitCurls(Pistol pistol, GloveRig rig, GloveFingers.Joint[] joints, Bounds grip, bool rightHand)
         {
             var axes = GripAxes(pistol);
             float side = rightHand ? 1f : -1f;
             float far = grip.center.x - side * grip.extents.x;
-            // Measured off the artist's frame: the trigger blade hangs about 2 cm ahead of the grip's front and
-            // 1.5 cm above the magazine's top, inside the guard whose bottom bar is level with that top
             var trigger = FromGripSpace(new Vector3(grip.center.x, grip.max.y + 0.02f, grip.max.z + 0.015f), axes);
 
             var curls = new float[5];

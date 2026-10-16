@@ -4,10 +4,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// The barker. Welcomes the player as the guns appear, judges each round on the share of its signs
-    /// hit, calls the next round in and counts it down, heckles misses and cheers power ups and long
-    /// combos. Round calls queue and are never cut off: the game waits while he is Talking. Every
-    /// slot may stay empty
     public class CarnyVoice : MonoBehaviour
     {
         [Header("Refs")]
@@ -58,7 +54,7 @@ namespace IntuitiveDesigns.ShootingRange
         private int _misses;
         private float _busyUntil;
         private float _quietUntil;
-        private bool _cleared;
+        private bool _endedEarly;
 
         private void Awake()
         {
@@ -75,7 +71,8 @@ namespace IntuitiveDesigns.ShootingRange
                 game.CountdownTick += OnCountdownTick;
                 game.CountdownGo += OnCountdownGo;
                 game.RoundStarted += OnRoundStarted;
-                game.RoundCleared += OnRoundCleared;
+                game.RoundCleared += OnWaveOut;
+                game.WaveOver += OnWaveOut;
                 game.RoundEnded += OnRoundEnded;
                 game.FinalScore += OnFinalScore;
             }
@@ -92,7 +89,8 @@ namespace IntuitiveDesigns.ShootingRange
                 game.CountdownTick -= OnCountdownTick;
                 game.CountdownGo -= OnCountdownGo;
                 game.RoundStarted -= OnRoundStarted;
-                game.RoundCleared -= OnRoundCleared;
+                game.RoundCleared -= OnWaveOut;
+                game.WaveOver -= OnWaveOut;
                 game.RoundEnded -= OnRoundEnded;
                 game.FinalScore -= OnFinalScore;
             }
@@ -106,7 +104,8 @@ namespace IntuitiveDesigns.ShootingRange
         {
             yield return new WaitForSecondsRealtime(welcomeAfterSeconds);
 
-            if (game != null && game.RoundNumber > 0) yield break;
+            // A grab inside that first second has already started the countdown
+            if (game != null && game.Current != RangeGame.State.WaitingForPickup) yield break;
             Queue(welcome);
             Queue(welcomeThen);
         }
@@ -130,17 +129,17 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnRoundStarted(int round)
         {
             _misses = 0;
-            _cleared = false;
+            _endedEarly = false;
         }
 
-        private void OnRoundCleared(int round)
+        private void OnWaveOut(int round)
         {
-            _cleared = true;
+            _endedEarly = true;
         }
 
         private void OnRoundEnded(int round, int roundScore)
         {
-            if (!_cleared) Queue(timeUp);
+            if (!_endedEarly) Queue(timeUp);
             Queue(Verdict());
 
             if (game.IsFinalRound) return;
@@ -158,8 +157,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private AudioClip[] Verdict()
         {
-            if (_cleared) return verdictGreat;
-
             float hit = director != null && director.WaveSize > 0 ? (float)director.Killed / director.WaveSize : 0f;
             if (hit >= verdictSteps.z) return verdictGreat;
             if (hit >= verdictSteps.y) return verdictGood;

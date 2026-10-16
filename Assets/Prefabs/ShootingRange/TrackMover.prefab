@@ -366,8 +366,8 @@ MonoBehaviour:
   target: {fileID: 5465035754655860925}
   hitScore: 100
   moverLength: 0.34
-  minHold: 2
-  maxHold: 4
+  minHold: 3
+  maxHold: 5
 --- !u!114 &5465035754655860925
 MonoBehaviour:
   m_ObjectHideFlags: 0
