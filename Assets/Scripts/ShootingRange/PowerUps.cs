@@ -93,8 +93,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnDisable()
         {
-            // SlowMotion restores time in its own OnDisable
-            for (int i = 0; i < KindCount; i++) _remaining[i] = 0f;
+            // Expired, not just zeroed, or the auras and the gun tint stay lit
+            ClearAll();
 
             if (combo != null) combo.Changed -= OnComboChanged;
 

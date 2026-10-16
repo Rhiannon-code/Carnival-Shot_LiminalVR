@@ -35,6 +35,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float waveScalePerRound = 0.82f;
         [SerializeField] private float speedScalePerRound = 1.12f;
         [SerializeField] private int extraConcurrentPerRound = 2;
+        [SerializeField] private int maxConcurrentTargets = 6;
         [SerializeField] private float minWaveInterval = 0.6f;
 
         [Header("How many stand still instead of travelling (data, 0-1)")]
@@ -143,7 +144,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             _waveInterval = Mathf.Max(minWaveInterval, waveInterval * Mathf.Pow(waveScalePerRound, steps));
             _speedScale = Mathf.Pow(speedScalePerRound, steps);
-            _concurrency = Mathf.Min(poolSize, concurrentTargets + extraConcurrentPerRound * steps);
+            _concurrency = Mathf.Min(poolSize, maxConcurrentTargets, concurrentTargets + extraConcurrentPerRound * steps);
 
             RebuildUnlocked(round);
             RebuildAvailable(Stage());
@@ -152,10 +153,11 @@ namespace IntuitiveDesigns.ShootingRange
             _nextWave = Time.time;
             RaiseTargetsLeft();
 
-            Debug.Log("[TrackDirector] Round " + round + ": " + _waveSize + " targets, wave every " +
-                      _waveInterval.ToString("0.00") + " s, speed x" + _speedScale.ToString("0.00") +
-                      ", up to " + _concurrency + " at once, " + _unlocked.Count + " patterns over " +
-                      _available.Count + " of " + grid.Rails.Length + " rails.");
+            if (Debug.isDebugBuild)
+                Debug.Log("[TrackDirector] Round " + round + ": " + _waveSize + " targets, wave every " +
+                          _waveInterval.ToString("0.00") + " s, speed x" + _speedScale.ToString("0.00") +
+                          ", up to " + _concurrency + " at once, " + _unlocked.Count + " patterns over " +
+                          _available.Count + " of " + grid.Rails.Length + " rails.");
         }
 
         private void OnRoundEnded(int round, int roundScore)
@@ -257,9 +259,14 @@ namespace IntuitiveDesigns.ShootingRange
                 var due = _pending[i];
                 if (due.Due > now) continue;
 
-                if (now > due.Due + retrySeconds) { _pending.RemoveAt(i); continue; }
-
-                if (ActiveCount() >= cap) continue;
+                // A launch waits as long as it takes for a slot, or a pattern bigger than the cap would
+                // lose everything past its first few signs. Its retry clock starts once it has one
+                if (ActiveCount() >= cap)
+                {
+                    due.Due = now;
+                    _pending[i] = due;
+                    continue;
+                }
 
                 var mover = TakeIdle();
                 if (mover == null) continue;
@@ -271,12 +278,16 @@ namespace IntuitiveDesigns.ShootingRange
                 PowerUpKind? special = null;
                 if (powerUps != null && UnityEngine.Random.value < specialShare) special = powerUps.RollSpecial();
 
-                float speed = special.HasValue ? due.Speed * specialSpeed : due.Speed;
+                float speed = (special.HasValue ? due.Speed * specialSpeed : due.Speed) * due.Rail.SpeedScale;
                 float hold = !special.HasValue && UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
-                var pass = due.Rail.Book(now, speed, mover.SettleSeconds,
-                                         hold > 0f ? mover.StandSeconds(hold) : 0f);
+                var pass = due.Rail.Book(now, speed, mover.SettleSeconds(due.Rail.Hinge), hold, mover.FallSeconds);
 
-                if (!grid.TryDispatch(due.Rail, pass, mover.MoverLength)) continue;
+                // Only the rail turning it away, again and again, gives up on a launch
+                if (!grid.TryDispatch(due.Rail, pass, mover.MoverLength))
+                {
+                    if (now > due.Due + retrySeconds) _pending.RemoveAt(i);
+                    continue;
+                }
 
                 _pending.RemoveAt(i);
                 _launched++;

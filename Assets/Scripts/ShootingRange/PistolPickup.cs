@@ -23,10 +23,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Floating in front of the player until taken (data)")]
         [SerializeField] private bool floatInFront = true;
-        [Tooltip("The prompt to hover under, as the player sees it. While set, Float Offset Y is not used")]
         [SerializeField] private Transform showUnder;
         [SerializeField] private float belowDegrees = 12f;
-        [Tooltip("X out to its hand's side, Y below the eye, Z how far in front")]
         [SerializeField] private Vector3 floatOffset = new Vector3(0.2f, -0.4f, 0.45f);
         [SerializeField] private float anchorAfterSeconds = 0.5f;
         [SerializeField] private float bobHeight = 0.03f;
@@ -36,6 +34,14 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Desktop testing")]
         [SerializeField] private bool editorMouseGrab = true;
+
+        /// The grip: VRButton.Three on the OVR path, but Three is thumbstick touch on UnityXR, where a
+        /// resting thumb would fire it (ADR 0015)
+#if UNITY_XR
+        public static readonly string GripButton = VRButton.Seconday;
+#else
+        public static readonly string GripButton = VRButton.Three;
+#endif
 
         public float GrabRadius { get { return grabRadius; } }
         public bool Taken { get; private set; }
@@ -166,7 +172,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             // Squeezing the grip takes it, the way a hand closes on a real gun
             var device = rig.InputDevice;
-            if (device == null || !device.GetButtonDown(VRButton.Three)) return false;
+            if (device == null || !device.GetButtonDown(GripButton)) return false;
 
             Take(rig.LimbType, "grip");
             return true;
@@ -188,11 +194,14 @@ namespace IntuitiveDesigns.ShootingRange
             if (HapticPulse.Instance != null) HapticPulse.Instance.Hit(limb, takeHaptic);
 
             bool ready = AllTaken;
-            if (game != null && ready) game.BeginFromPickup();
+            if (game == null) game = RangeGame.Instance;
+            if (game == null) Debug.LogError("[PistolPickup] No RangeGame to start, in the scene or on " + name + ".", this);
+            else if (ready) game.BeginFromPickup();
 
-            Debug.Log("[PistolPickup] " + name + " taken in the " + limb + " by " + how + " after " +
-                      _waited.ToString("0.0") + " s. " +
-                      (ready ? "Both guns are up, starting." : "Waiting on the other gun."));
+            if (Debug.isDebugBuild)
+                Debug.Log("[PistolPickup] " + name + " taken in the " + limb + " by " + how + " after " +
+                          _waited.ToString("0.0") + " s. " +
+                          (ready ? "Both guns are up, starting." : "Waiting on the other gun."));
 
             enabled = false;
         }

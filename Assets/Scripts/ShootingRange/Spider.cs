@@ -2,8 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Drops from a web on the ceiling on a stretchy thread that bounces like a bungee cord, dangles
-    /// swaying and twisting, then reels itself back up. A bonus shot: missing it costs nothing
     [RequireComponent(typeof(Rigidbody))]
     public class Spider : MonoBehaviour, IShootable
     {
@@ -22,7 +20,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float gravity = 9.8f;
         [SerializeField] private float stiffness = 40f;
         [SerializeField] private float damping = 2.5f;
-        [Tooltip("Damping once the first rebound is over. Twice the square root of Stiffness settles with no bounce at all")]
         [SerializeField] private float settleDamping = 12.6f;
         [SerializeField] private float threadWidth = 0.006f;
         [SerializeField] private float attachHeight = 0.08f;
@@ -32,8 +29,16 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float webGive = 0.05f;
         [SerializeField] private int webSpokes = 7;
 
+        [Header("Bite (data, seconds)")]
+        [SerializeField] private float biteAfterSeconds = 3f;
+        [SerializeField] private float biteLockSeconds = 2f;
+
+        [Header("Swiped away (data)")]
+        [SerializeField] private float swipeFling = 2f;
+        [SerializeField] private float swingDamping = 0.8f;
+        [SerializeField] private float maxSwingDegrees = 75f;
+
         [Header("Dangling (data)")]
-        [SerializeField] private Vector2 dangleSeconds = new Vector2(3f, 5f);
         [SerializeField] private float swayDegrees = 4f;
         [SerializeField] private float swaySeconds = 2.4f;
         [SerializeField] private float twistDegrees = 18f;
@@ -46,6 +51,9 @@ namespace IntuitiveDesigns.ShootingRange
 
         public bool Active { get { return _phase != Phase.Off; } }
 
+        /// Still in the player's way: on the way down or hanging there
+        public bool InTheWay { get { return _phase == Phase.Dropping || _phase == Phase.Dangling; } }
+
         private Rigidbody _body;
         private SpiderNest _nest;
         private Transform _player;
@@ -57,8 +65,11 @@ namespace IntuitiveDesigns.ShootingRange
         private float _length;
         private float _speed;
         private float _clock;
-        private float _dangleUntil;
+        private float _biteAt;
+        private float _lastSag;
         private float _seed;
+        private Vector2 _swing;
+        private Vector2 _swingSpeed;
 
         private void Awake()
         {
@@ -86,6 +97,9 @@ namespace IntuitiveDesigns.ShootingRange
             _speed = 0f;
             _clock = 0f;
             _seed = Random.value * 10f;
+            _swing = Vector2.zero;
+            _swingSpeed = Vector2.zero;
+            _lastSag = -1f;
             _phase = Phase.Dropping;
 
             transform.position = anchor + Vector3.down * attachHeight;
@@ -97,6 +111,17 @@ namespace IntuitiveDesigns.ShootingRange
         {
             _phase = Phase.Off;
             gameObject.SetActive(false);
+        }
+
+        /// Batted aside by a hand or a gun moving at velocity: it swings off on its thread like a
+        /// pendulum and climbs back up out of the way
+        public void KnockAway(Vector3 velocity)
+        {
+            if (!InTheWay) return;
+
+            float reach = Mathf.Max(0.2f, _length + attachHeight);
+            _swingSpeed += new Vector2(-velocity.z, velocity.x) * swipeFling / reach;
+            _phase = Phase.Climbing;
         }
 
         public void OnShot(Vector3 point, Vector3 direction, float impulse)
@@ -128,10 +153,11 @@ namespace IntuitiveDesigns.ShootingRange
             if (_phase == Phase.Dropping && _clock > 1f && Mathf.Abs(_speed) < 0.15f)
             {
                 _phase = Phase.Dangling;
-                _dangleUntil = _clock + Random.Range(dangleSeconds.x, dangleSeconds.y);
+                _biteAt = _clock + biteAfterSeconds;
             }
-            else if (_phase == Phase.Dangling && _clock >= _dangleUntil)
+            else if (_phase == Phase.Dangling && _clock >= _biteAt)
             {
+                if (RangeGame.Instance != null) RangeGame.Instance.Bitten(transform.position, biteLockSeconds);
                 _phase = Phase.Climbing;
             }
             else if (_phase == Phase.Climbing && _rest <= 0f && _length < 0.3f)
@@ -140,6 +166,7 @@ namespace IntuitiveDesigns.ShootingRange
                 return;
             }
 
+            Swing(dt);
             _body.MovePosition(_anchor + Sway() * (Vector3.down * (_length + attachHeight)));
             _body.MoveRotation(Facing());
         }
@@ -152,13 +179,24 @@ namespace IntuitiveDesigns.ShootingRange
             Twitch();
         }
 
+        /// A pendulum the length of the thread: the swipe's swing dies away as it climbs
+        private void Swing(float dt)
+        {
+            float reach = Mathf.Max(0.2f, _length + attachHeight);
+            _swingSpeed += (-(gravity / reach) * _swing - swingDamping * _swingSpeed) * dt;
+
+            float most = maxSwingDegrees * Mathf.Deg2Rad;
+            _swing += _swingSpeed * dt;
+            _swing = new Vector2(Mathf.Clamp(_swing.x, -most, most), Mathf.Clamp(_swing.y, -most, most));
+        }
+
         private Quaternion Sway()
         {
             float t = _clock + _seed;
             float grow = Mathf.Clamp01(_clock / 1.5f);
             float a = swayDegrees * grow * Mathf.Sin(t * 2f * Mathf.PI / Mathf.Max(0.1f, swaySeconds));
             float b = swayDegrees * 0.5f * grow * Mathf.Cos(t * 2f * Mathf.PI / Mathf.Max(0.1f, swaySeconds * 1.37f));
-            return Quaternion.Euler(a, 0f, b);
+            return Quaternion.Euler(a + _swing.x * Mathf.Rad2Deg, 0f, b + _swing.y * Mathf.Rad2Deg);
         }
 
         /// Faces the player, twisting back and forth on the thread the way a hanging spider turns
@@ -187,7 +225,9 @@ namespace IntuitiveDesigns.ShootingRange
                 thread.widthMultiplier = threadWidth / Mathf.Sqrt(1f + stretch / Mathf.Max(0.1f, _rest));
             }
 
-            if (web == null) return;
+            // The web only moves with the sag, so it is left alone until that has moved a millimetre
+            if (web == null || Mathf.Abs(sag - _lastSag) < 0.001f) return;
+            _lastSag = sag;
 
             int n = 0;
             for (int i = 0; i < webSpokes; i++)

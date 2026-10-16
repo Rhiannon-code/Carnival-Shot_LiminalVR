@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Liminal.SDK.VR;
 using Liminal.SDK.VR.Avatars;
 using Liminal.SDK.VR.Avatars.Controllers;
 using Liminal.SDK.VR.Input;
@@ -60,6 +61,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private bool hideControllers = true;
 
         private float _nextSweep;
+        private int _hiddenControllers;
+        private IVRDevice _listeningTo;
 
         private void Start()
         {
@@ -145,7 +148,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (hand.ghostFingers == null) return;
 
             var device = rig.InputDevice;
-            bool grip = device != null && device.GetButton(VRButton.Three);
+            bool grip = device != null && device.GetButton(PistolPickup.GripButton);
             bool trigger = device != null && device.GetButton(VRButton.Trigger);
 
             hand.ghostFingers.Hold(grip || over ? 1f : 0f, trigger ? 1f : 0f, over ? hand.armedFingers : null);
@@ -157,14 +160,38 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// The SDK spawns its controller models and laser when a controller connects, which can be
-        /// after the first frame, so this looks again once a second. Only active ones are found
+        /// after the first frame, so this looks again once a second until both are gone, and again
+        /// whenever a controller reconnects. Only active ones are found
         private void HideControllers()
         {
-            if (!hideControllers || Time.unscaledTime < _nextSweep) return;
+            if (!hideControllers) return;
+
+            // The device can come up after this does, so it is listened to as soon as there is one
+            if (_listeningTo == null && VRDevice.Device != null)
+            {
+                _listeningTo = VRDevice.Device;
+                _listeningTo.InputDeviceConnected += OnControllerConnected;
+            }
+
+            if (_hiddenControllers >= 2 || Time.unscaledTime < _nextSweep) return;
             _nextSweep = Time.unscaledTime + 1f;
 
-            foreach (var visual in FindObjectsOfType<VRControllerVisual>()) visual.gameObject.SetActive(false);
+            foreach (var visual in FindObjectsOfType<VRControllerVisual>())
+            {
+                visual.gameObject.SetActive(false);
+                _hiddenControllers++;
+            }
             foreach (var pointer in FindObjectsOfType<BasePointerVisual>()) pointer.gameObject.SetActive(false);
+        }
+
+        private void OnControllerConnected(IVRDevice device, IVRInputDevice input)
+        {
+            _hiddenControllers = 0;
+        }
+
+        private void OnDestroy()
+        {
+            if (_listeningTo != null) _listeningTo.InputDeviceConnected -= OnControllerConnected;
         }
 
         /// The ghost sits where its glove will be once the gun is in this hand, and slides onto the

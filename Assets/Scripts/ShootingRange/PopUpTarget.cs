@@ -17,7 +17,7 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Signs (one is picked per launch; each brings its own collider)")]
         [SerializeField] private Transform[] variants;
 
-        [Header("Stand (optional; a sibling of the Figure, never under it, or the setup tool takes it for a sign)")]
+        [Header("Stand (optional: a sibling of the Figure, never under it, or the setup tool takes it for a sign)")]
         [SerializeField] private Transform stand;
         [SerializeField] private float standShows = 0.04f;
 
@@ -54,7 +54,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Special power-up sign glow (data)")]
         [SerializeField] private Material specialGlow;
-        [Tooltip("How far the outline stands out past the sign's edge, metres")]
         [SerializeField] private float specialBorder = 0.035f;
         [SerializeField] private float specialStrength = 1.8f;
 
@@ -188,6 +187,11 @@ namespace IntuitiveDesigns.ShootingRange
         /// An outline round the sign that was picked, in the power-up's colour, or off for null. It is
         /// the sign's own shape, grown in its flat plane and set just behind it, so only the border
         /// that sticks out past the edge shows. One per carriage, moved onto whichever sign is up
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int InflateId = Shader.PropertyToID("_Inflate");
+        private static readonly int EdgeId = Shader.PropertyToID("_Edge");
+        private static readonly int StrengthId = Shader.PropertyToID("_Strength");
+
         public void Glow(Color? colour)
         {
             if (!colour.HasValue || specialGlow == null || _sign == null)
@@ -216,10 +220,10 @@ namespace IntuitiveDesigns.ShootingRange
 
             // Edge 0 lights the whole face of the copy; the sign in front hides all but its rim
             _glowBlock.Clear();
-            _glowBlock.SetColor("_Color", colour.Value);
-            _glowBlock.SetFloat("_Inflate", 0f);
-            _glowBlock.SetFloat("_Edge", 0f);
-            _glowBlock.SetFloat("_Strength", specialStrength);
+            _glowBlock.SetColor(ColorId, colour.Value);
+            _glowBlock.SetFloat(InflateId, 0f);
+            _glowBlock.SetFloat(EdgeId, 0f);
+            _glowBlock.SetFloat(StrengthId, specialStrength);
             _glow.SetPropertyBlock(_glowBlock);
             _glow.enabled = true;
         }

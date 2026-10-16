@@ -55,7 +55,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float fireInterval = 0.18f;
         [SerializeField] private float spreadDegrees = 0.4f;
 
-        [Header("Magazine (data, 0 = unlimited)")]
+        [Header("Magazine (data, 0 = unlimited). Empty, it only clicks until the grip is squeezed")]
         [SerializeField] private int magazineSize = 12;
         [SerializeField] private float reloadSeconds = 2f;
 
@@ -84,7 +84,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)] private float fireHaptic = 0.75f;
         [SerializeField, Range(0f, 1f)] private float scatterHaptic = 1f;
 
-        [Header("Desktop testing")]
+        [Header("Desktop testing (left click fires, right click reloads)")]
         [SerializeField] private bool mouseFires = true;
 
         public bool IsHeld { get; private set; }
@@ -92,9 +92,12 @@ namespace IntuitiveDesigns.ShootingRange
         public VRAvatarLimbType Hand { get { return hand; } }
         public Vector3 GripPosition { get { return transform.position; } }
         public Transform Muzzle { get { return muzzle != null ? muzzle : transform; } }
+        /// The model as posed: recoil, reload tilt and twirl all move this, not the gun's own transform
+        public Transform Visual { get { return visual != null ? visual : transform; } }
         public int RoundsLeft { get { return magazineSize > 0 ? _rounds : -1; } }
         public int MagazineSize { get { return magazineSize; } }
         public bool IsReloading { get { return _reloadRemaining > 0f; } }
+        public bool IsEmpty { get { return magazineSize > 0 && _rounds <= 0 && !IsReloading; } }
 
         public event Action<int, int> AmmoChanged;
         public event Action Fired;
@@ -110,6 +113,7 @@ namespace IntuitiveDesigns.ShootingRange
         private float _recoil;
         private float _recoilVelocity;
         private float _reloadRemaining;
+        private float _lockedUntil;
         private Transform _magazine;
         private Vector3 _magazineRest;
         private Vector3 _magazineScale;
@@ -164,6 +168,7 @@ namespace IntuitiveDesigns.ShootingRange
             IsHeld = held;
             _cooldown = 0f;
             _reloadRemaining = 0f;
+            _lockedUntil = 0f;
 
             _grab = held ? 0f : 1f;
             _grabFrom = transform.position;
@@ -185,7 +190,14 @@ namespace IntuitiveDesigns.ShootingRange
             if (_cooldown > 0f) _cooldown -= Time.unscaledDeltaTime;
             TickReload();
 
+            if (WantsToReload()) BeginReload();
             if (WantsToFire()) TryFire();
+        }
+
+        /// The trigger does nothing for this long, a spider's bite. The grip still reloads
+        public void LockTrigger(float seconds)
+        {
+            _lockedUntil = Mathf.Max(_lockedUntil, Time.unscaledTime + seconds);
         }
 
         private void LateUpdate()
@@ -408,7 +420,7 @@ namespace IntuitiveDesigns.ShootingRange
 
                 float into = (reloadSeconds - _reloadRemaining) / Mathf.Max(0.01f, tiltInAndOutSeconds);
                 float outOf = _reloadRemaining / Mathf.Max(0.01f, tiltInAndOutSeconds);
-                return Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, into, outOf));
+                return Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, Mathf.Min(into, outOf)));
             }
         }
 
@@ -490,6 +502,15 @@ namespace IntuitiveDesigns.ShootingRange
             return auto ? Input.GetMouseButton(0) : Input.GetMouseButtonDown(0);
         }
 
+        private bool WantsToReload()
+        {
+            var rig = HandRig();
+            var device = rig != null ? rig.InputDevice : null;
+            if (device != null && device.GetButtonDown(PistolPickup.GripButton)) return true;
+
+            return mouseFires && Input.GetMouseButtonDown(1);
+        }
+
         private void TickReload()
         {
             if (_reloadRemaining <= 0f) return;
@@ -521,12 +542,18 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void TryFire()
         {
-            if (_cooldown > 0f || _reloadRemaining > 0f) return;
+            if (_cooldown > 0f || _reloadRemaining > 0f || Time.unscaledTime < _lockedUntil) return;
 
             var powerUps = PowerUps.Instance;
             bool bottomless = powerUps != null && powerUps.BottomlessMagazine;
 
-            if (magazineSize > 0 && _rounds <= 0 && !bottomless) { BeginReload(); return; }
+            // Dry. Reloading is the player's job, the click tells them so
+            if (magazineSize > 0 && _rounds <= 0 && !bottomless)
+            {
+                _cooldown = fireInterval;
+                Play(Pick(emptyClips), 0.5f);
+                return;
+            }
 
             int pellets = powerUps != null ? powerUps.Pellets : 1;
             float spread = pellets > 1 ? powerUps.PelletSpread : spreadDegrees;
@@ -567,8 +594,6 @@ namespace IntuitiveDesigns.ShootingRange
 
             RaiseAmmo();
             if (Fired != null) Fired();
-
-            if (magazineSize > 0 && _rounds <= 0 && !bottomless) BeginReload();
         }
 
         private void Flash(Color colour)
@@ -591,10 +616,9 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void BeginReload()
         {
-            if (_reloadRemaining > 0f || magazineSize <= 0) return;
+            if (_reloadRemaining > 0f || magazineSize <= 0 || _rounds >= magazineSize) return;
 
             _reloadRemaining = reloadSeconds;
-            Play(Pick(emptyClips), 0.5f);
             RaiseAmmo();
         }
 

@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -35,7 +34,14 @@ namespace IntuitiveDesigns.ShootingRange
         // Unity never pitches audio with timeScale, so the world's slow motion has to be heard on purpose
         [SerializeField, Range(0.1f, 1f)] private float minSlowPitch = 0.5f;
 
+        private struct Playing
+        {
+            public ParticleSystem System;
+            public float Until;
+        }
+
         private readonly Queue<ParticleSystem> _bursts = new Queue<ParticleSystem>();
+        private readonly List<Playing> _playing = new List<Playing>();
         private AudioSource[] _voices;
         private int _nextVoice;
 
@@ -76,6 +82,21 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+        }
+
+        /// One sweep for every burst still playing; a coroutine per impact is garbage at full auto
+        private void Update()
+        {
+            for (int i = _playing.Count - 1; i >= 0; i--)
+            {
+                if (Time.time < _playing[i].Until) continue;
+
+                var ps = _playing[i].System;
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                ps.gameObject.SetActive(false);
+                _bursts.Enqueue(ps);
+                _playing.RemoveAt(i);
+            }
         }
 
         public void PlayImpact(Vector3 point, Vector3 normal, Collider struck)
@@ -123,15 +144,7 @@ namespace IntuitiveDesigns.ShootingRange
                                   : Quaternion.identity;
             ps.gameObject.SetActive(true);
             ps.Play(true);
-            StartCoroutine(ReturnBurst(ps));
-        }
-
-        private IEnumerator ReturnBurst(ParticleSystem ps)
-        {
-            yield return new WaitForSeconds(burstLifetime);
-            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            ps.gameObject.SetActive(false);
-            _bursts.Enqueue(ps);
+            _playing.Add(new Playing { System = ps, Until = Time.time + burstLifetime });
         }
 
         private static AudioClip Pick(AudioClip[] clips)

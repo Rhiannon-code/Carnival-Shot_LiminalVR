@@ -27,6 +27,11 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnDisable()
         {
+            Hide();
+        }
+
+        private void Hide()
+        {
             if (beam != null) beam.enabled = false;
             if (dot != null) dot.gameObject.SetActive(false);
         }
@@ -35,7 +40,7 @@ namespace IntuitiveDesigns.ShootingRange
         /// gun is pointed anywhere but at the range
         public void Draw()
         {
-            if (_pistol == null || !_pistol.IsHeld || _pistol.IsReloading) { OnDisable(); return; }
+            if (_pistol == null || !_pistol.IsHeld || _pistol.IsReloading) { Hide(); return; }
 
             Vector3 origin = _pistol.SightOrigin;
             Vector3 forward = _pistol.SightForward;
