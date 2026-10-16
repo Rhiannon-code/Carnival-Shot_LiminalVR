@@ -150,8 +150,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         [MenuItem("Shooting Range/Setup/18 - Lay The Ground Fog", false, 37)]
         public static void FogMenu() { Begin("Ground fog"); LayTheGroundFog(); End(); }
 
-        [MenuItem("Shooting Range/Setup/19 - Pace The 30 Second Rounds", false, 38)]
-        public static void ThirtySecondMenu() { Begin("30 second rounds"); PaceTheThirtySecondRounds(); End(); }
+        [MenuItem("Shooting Range/Setup/19 - Pace The Rounds", false, 38)]
+        public static void PaceTheRoundsMenu() { Begin("Pace the rounds"); PaceTheRounds(); End(); }
 
         [MenuItem("Shooting Range/Setup/20 - Web And Count The Guns", false, 39)]
         public static void WebAndCountMenu() { Begin("Gun web and ammo count"); WebAndCountTheGuns(); End(); }
@@ -1699,27 +1699,27 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private static readonly string[] FingerNames = { "thumb", "index", "middle", "ring", "pinky" };
         private static readonly float[] GhostGrip = { 10f, 12f, 18f, 20f, 22f };
 
-        private static void PaceTheThirtySecondRounds()
+        private static void PaceTheRounds()
         {
             var game = Object.FindObjectOfType<RangeGame>();
             if (game != null)
             {
-                new Fields(game).Set("roundSeconds", 30f).Apply();
-                Did("Range Game: 30 s rounds");
+                new Fields(game).Set("secondsPerRound", new[] { 30f, 30f, 45f, 45f, 60f }).Apply();
+                Did("Range Game: rounds of 30 / 30 / 45 / 45 / 60 s");
             }
             else Fail("No RangeGame in the scene");
 
             var director = Object.FindObjectOfType<TrackDirector>();
             if (director != null)
             {
-                new Fields(director).Set("waveSizeFirstRound", 14).Set("waveSizeGrowthPerRound", 4)
+                new Fields(director).Set("signsPerRound", new[] { 14, 18, 33, 39, 60 })
                                     .Set("waveInterval", 1.6f).Set("waveScalePerRound", 0.85f)
                                     .Set("minSpeed", CrossMinSpeed).Set("maxSpeed", CrossMaxSpeed)
                                     .Set("speedScalePerRound", 1.07f)
                                     .Set("concurrentTargets", 4).Set("extraConcurrentPerRound", 1)
                                     .Set("maxConcurrentTargets", 6)
                                     .Set("lastLaunchSecondsLeft", 4f).Apply();
-                Did("Track Director: 14 / 18 / 22 / 26 / 30 signs, 4 / 5 / 6 / 6 / 6 up at once, speed x1.07 a round, " +
+                Did("Track Director: 14 / 18 / 33 / 39 / 60 signs, 4 / 5 / 6 / 6 / 6 up at once, speed x1.07 a round, " +
                     "waves every 1.6 s x0.85 a round, all out with 4 s to go");
             }
             else Fail("No TrackDirector in the scene");
