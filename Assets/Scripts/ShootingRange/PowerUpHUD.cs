@@ -12,7 +12,11 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float calloutSeconds = 1.4f;
         [SerializeField] private float refreshInterval = 0.1f;
 
+        [Header("More than one at once (data)")]
+        [SerializeField] private Color stackedColour = new Color(1f, 0.15f, 0.55f);
+
         private readonly StringBuilder _line = new StringBuilder(128);
+        private readonly int[] _shownSeconds = new int[PowerUps.KindCount];
         private string[] _hex;
         private float _nextRefresh;
         private float _calloutUntil;
@@ -40,9 +44,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (calloutText != null) calloutText.text = string.Empty;
         }
 
-        [Header("More than one at once (data)")]
-        [SerializeField] private Color stackedColour = new Color(1f, 0.15f, 0.55f);
-
         private void OnGranted(PowerUpKind kind, float seconds, bool stacked)
         {
             if (calloutText == null) return;
@@ -69,6 +70,19 @@ namespace IntuitiveDesigns.ShootingRange
             if (activeText == null || powerUps == null || now < _nextRefresh) return;
             _nextRefresh = now + refreshInterval;
 
+            // The text only changes when a whole second ticks over, or a power up starts or ends
+            bool changed = false;
+            for (int i = 0; i < PowerUps.KindCount; i++)
+            {
+                var kind = (PowerUpKind)i;
+                int seconds = powerUps.IsActive(kind) ? Mathf.CeilToInt(powerUps.Remaining(kind)) : 0;
+                if (seconds == _shownSeconds[i]) continue;
+
+                _shownSeconds[i] = seconds;
+                changed = true;
+            }
+            if (!changed) return;
+
             _line.Length = 0;
             for (int i = 0; i < PowerUps.KindCount; i++)
             {
@@ -77,7 +91,7 @@ namespace IntuitiveDesigns.ShootingRange
 
                 if (_line.Length > 0) _line.Append("   ");
                 _line.Append("<color=#").Append(_hex[i]).Append('>')
-                     .Append(PowerUps.Label(kind)).Append(' ').Append(Mathf.CeilToInt(powerUps.Remaining(kind)))
+                     .Append(PowerUps.Label(kind)).Append(' ').Append(_shownSeconds[i])
                      .Append("</color>");
             }
 

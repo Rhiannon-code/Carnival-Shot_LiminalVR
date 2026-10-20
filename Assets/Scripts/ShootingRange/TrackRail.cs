@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -23,6 +24,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Traffic (data)")]
         [SerializeField] private float minGap = 0.9f;
+        [SerializeField] private float speedScale = 1f;
 
         [Header("Threat")]
         [SerializeField] private bool reachesPlayer;
@@ -46,6 +48,7 @@ namespace IntuitiveDesigns.ShootingRange
         public Renderer Cover { get { return cover; } }
         public float FromRound { get { return fromRound; } }
         public float Length { get { return length; } }
+        public float SpeedScale { get { return speedScale; } }
         public Vector3 Origin { get { return transform.position; } }
         public Vector3 Direction { get { return transform.forward; } }
 
@@ -67,18 +70,20 @@ namespace IntuitiveDesigns.ShootingRange
             return Origin + Direction * Mathf.Clamp(distance, 0f, length);
         }
 
-        /// holdSeconds above zero is one that stands still instead of travelling
-        public Pass Book(float departTime, float speed, float settleSeconds, float holdSeconds)
+        /// holdSeconds above zero is one that stands still instead of travelling. Either way the sign
+        /// drops out of sight where it stops, and the spot is not free until it has
+        public Pass Book(float departTime, float speed, float settleSeconds, float holdSeconds, float fallSeconds)
         {
             float moving = departTime + Mathf.Max(0f, settleSeconds);
+            float fall = Mathf.Max(0f, fallSeconds);
 
             if (holdSeconds > 0f)
                 return new Pass { Depart = departTime, Moving = moving, Speed = 0f,
-                                  Clear = moving + holdSeconds };
+                                  Clear = moving + holdSeconds + fall };
 
             float safe = Mathf.Max(0.01f, speed);
             return new Pass { Depart = departTime, Moving = moving, Speed = safe,
-                              Clear = moving + length / safe };
+                              Clear = moving + length / safe + fall };
         }
 
         public bool CanAccept(Pass candidate)
@@ -111,19 +116,31 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
+        private static readonly float[] Bends = new float[4];
+
         private bool Separated(Pass a, Pass b)
         {
             float start = Mathf.Max(a.Depart, b.Depart);
             float end = Mathf.Min(a.Clear, b.Clear);
             if (end <= start) return true;
 
-            // The gap bends at each of the two moments a pass starts travelling, and runs straight
-            // between them, which is why testing the ends of those three stretches covers all of it
-            float first = Mathf.Clamp(Mathf.Min(a.Moving, b.Moving), start, end);
-            float second = Mathf.Clamp(Mathf.Max(a.Moving, b.Moving), start, end);
+            // The gap bends where either pass starts travelling and where either stops at the end to
+            // fall, and runs straight between, which is why testing the ends of those stretches covers it
+            Bends[0] = a.Moving;
+            Bends[1] = b.Moving;
+            Bends[2] = Arrival(a);
+            Bends[3] = Arrival(b);
+            Array.Sort(Bends);
 
-            return Clears(a, b, start, first) && Clears(a, b, first, second) &&
-                   Clears(a, b, second, end);
+            float from = start;
+            for (int i = 0; i < Bends.Length; i++)
+            {
+                float to = Mathf.Clamp(Bends[i], start, end);
+                if (!Clears(a, b, from, to)) return false;
+                from = to;
+            }
+
+            return Clears(a, b, from, end);
         }
 
         private bool Clears(Pass a, Pass b, float from, float to)
@@ -133,15 +150,20 @@ namespace IntuitiveDesigns.ShootingRange
             float gapAtStart = Offset(a, from) - Offset(b, from);
             float gapAtEnd = Offset(a, to) - Offset(b, to);
 
-            // The sign flipped, so somewhere in between the gap was zero: one overtook the other
+            // The sign flipped, so somewhere in between the gap was zero, one overtook the other
             if (gapAtStart * gapAtEnd < 0f) return false;
 
             return Mathf.Min(Mathf.Abs(gapAtStart), Mathf.Abs(gapAtEnd)) >= minGap;
         }
 
-        private static float Offset(Pass pass, float time)
+        private float Arrival(Pass pass)
         {
-            return time <= pass.Moving ? 0f : (time - pass.Moving) * pass.Speed;
+            return pass.Speed > 0f ? pass.Moving + length / pass.Speed : pass.Moving;
+        }
+
+        private float Offset(Pass pass, float time)
+        {
+            return time <= pass.Moving ? 0f : Mathf.Min(length, (time - pass.Moving) * pass.Speed);
         }
 
 #if UNITY_EDITOR

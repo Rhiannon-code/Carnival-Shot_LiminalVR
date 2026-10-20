@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Liminal.SDK.VR.Avatars;
 using Liminal.SDK.VR.Input;
+using IntuitiveDesigns.CrystalCatch;
 
 namespace IntuitiveDesigns.ShootingRange
 {
@@ -18,10 +19,31 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private bool requireProximity = true;
         [SerializeField] private float proximityGraceSeconds = 12f;
         [SerializeField] private float autoStartSeconds = 45f;
+        [SerializeField, Range(0f, 1f)] private float takeHaptic = 0.6f;
+
+        [Header("Floating in front of the player until taken (data)")]
+        [SerializeField] private bool floatInFront = true;
+        [SerializeField] private Transform showUnder;
+        [SerializeField] private float belowDegrees = 12f;
+        [SerializeField] private Vector3 floatOffset = new Vector3(0.2f, -0.4f, 0.45f);
+        [SerializeField] private float anchorAfterSeconds = 0.5f;
+        [SerializeField] private float bobHeight = 0.03f;
+        [SerializeField] private float bobSeconds = 2.4f;
+        [SerializeField] private float swayDegrees = 10f;
+        [SerializeField] private float turnInDegrees = 30f;
 
         [Header("Desktop testing")]
         [SerializeField] private bool editorMouseGrab = true;
 
+        /// The grip: VRButton.Three on the OVR path, but Three is thumbstick touch on UnityXR, where a
+        /// resting thumb would fire it (ADR 0015)
+#if UNITY_XR
+        public static readonly string GripButton = VRButton.Seconday;
+#else
+        public static readonly string GripButton = VRButton.Three;
+#endif
+
+        public float GrabRadius { get { return grabRadius; } }
         public bool Taken { get; private set; }
         public VRAvatarLimbType HeldBy { get; private set; }
 
@@ -41,17 +63,11 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        private static readonly string[] GrabButtons =
-        {
-            VRButton.Trigger,
-#if UNITY_XR
-            VRButton.Seconday,
-#else
-            VRButton.Three,
-#endif
-        };
-
         private float _waited;
+        private bool _anchored;
+        private Vector3 _anchor;
+        private Quaternion _facing = Quaternion.identity;
+        private Vector3 _ahead;
 
         private void Awake()
         {
@@ -77,6 +93,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (Taken) return;
 
             _waited += Time.deltaTime;
+            if (floatInFront) Float();
 
             var avatar = VRAvatar.Active;
             if (avatar != null)
@@ -95,6 +112,52 @@ namespace IntuitiveDesigns.ShootingRange
                 Take(pistol != null ? pistol.Hand : VRAvatarLimbType.RightHand, "auto start");
         }
 
+        /// Hovers at chest height in front of the player, off to its own hand's side, bobbing so it
+        /// reads as something to take. The two guns bob out of step
+        private void Float()
+        {
+            if (!_anchored && !Anchor()) return;
+
+            float side = pistol != null && pistol.Hand == VRAvatarLimbType.LeftHand ? -1f : 1f;
+            float t = Time.unscaledTime / Mathf.Max(0.1f, bobSeconds) * 2f * Mathf.PI + (side < 0f ? Mathf.PI * 0.5f : 0f);
+
+            var offset = new Vector3(floatOffset.x * side, bobHeight * Mathf.Sin(t), 0f);
+            transform.position = _anchor + _ahead + _facing * offset;
+            // Angled in toward the other gun, so the player sees them side on and knows them for pistols
+            float yaw = -side * turnInDegrees + swayDegrees * Mathf.Sin(t * 0.5f);
+            transform.rotation = _facing * Quaternion.Euler(0f, yaw, 0f);
+        }
+
+        /// Set once, from where the head is just after the start. Following the head instead would
+        /// pull the gun away as the player leans in to take it
+        private bool Anchor()
+        {
+            if (_waited < anchorAfterSeconds) return false;
+
+            var avatar = VRAvatar.Active;
+            var head = avatar != null && avatar.Head != null ? avatar.Head.Transform : null;
+            if (head == null) return false;
+
+            var forward = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+            _facing = forward.sqrMagnitude > 1e-4f ? Quaternion.LookRotation(forward, Vector3.up) : Quaternion.identity;
+            _anchor = head.position;
+
+            // Along the line from the eye to the prompt, tipped down under it, so the guns sit just
+            // below the words whatever the player's height
+            if (showUnder != null)
+            {
+                var below = Quaternion.AngleAxis(belowDegrees, _facing * Vector3.right);
+                _ahead = below * (showUnder.position - _anchor).normalized * floatOffset.z;
+            }
+            else
+            {
+                _ahead = _facing * new Vector3(0f, floatOffset.y, floatOffset.z);
+            }
+
+            _anchored = true;
+            return true;
+        }
+
         private bool TryHand(IVRAvatarHand rig)
         {
             if (rig == null || rig.Transform == null) return false;
@@ -107,18 +170,12 @@ namespace IntuitiveDesigns.ShootingRange
             // hand is
             if (!near && _waited < proximityGraceSeconds) return false;
 
+            // Squeezing the grip takes it, the way a hand closes on a real gun
             var device = rig.InputDevice;
-            if (device == null) return false;
+            if (device == null || !device.GetButtonDown(GripButton)) return false;
 
-            for (int i = 0; i < GrabButtons.Length; i++)
-            {
-                if (!device.GetButtonDown(GrabButtons[i])) continue;
-
-                Take(rig.LimbType, "grab");
-                return true;
-            }
-
-            return false;
+            Take(rig.LimbType, "grip");
+            return true;
         }
 
         private void Take(VRAvatarLimbType limb, string how)
@@ -134,12 +191,17 @@ namespace IntuitiveDesigns.ShootingRange
                 pistol.SetHeld(true);
             }
 
-            bool ready = AllTaken;
-            if (game != null && ready) game.BeginFromPickup();
+            if (HapticPulse.Instance != null) HapticPulse.Instance.Hit(limb, takeHaptic);
 
-            Debug.Log("[PistolPickup] " + name + " taken in the " + limb + " by " + how + " after " +
-                      _waited.ToString("0.0") + " s. " +
-                      (ready ? "Both guns are up, starting." : "Waiting on the other gun."));
+            bool ready = AllTaken;
+            if (game == null) game = RangeGame.Instance;
+            if (game == null) Debug.LogError("[PistolPickup] No RangeGame to start, in the scene or on " + name + ".", this);
+            else if (ready) game.BeginFromPickup();
+
+            if (Debug.isDebugBuild)
+                Debug.Log("[PistolPickup] " + name + " taken in the " + limb + " by " + how + " after " +
+                          _waited.ToString("0.0") + " s. " +
+                          (ready ? "Both guns are up, starting." : "Waiting on the other gun."));
 
             enabled = false;
         }

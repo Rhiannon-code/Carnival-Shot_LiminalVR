@@ -133,7 +133,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private static void Report(int points, Vector3 where, bool chained)
         {
-            if (points != 0 && RangeGame.Instance != null) RangeGame.Instance.Scored(points, where, chained);
+            if (points != 0 && RangeGame.Instance != null) RangeGame.Instance.Scored(points, where, chained, false);
         }
     }
 }

@@ -38,7 +38,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (Instance == this) Instance = null;
         }
 
-        public bool Fire(Vector3 origin, Vector3 direction, float speedScale)
+        public bool Fire(Vector3 origin, Vector3 direction, float speedScale, Color tracer)
         {
             if (_idle.Count == 0)
             {
@@ -47,7 +47,7 @@ namespace IntuitiveDesigns.ShootingRange
                 return false;
             }
 
-            _idle.Dequeue().Fire(origin, direction, speedScale);
+            _idle.Dequeue().Fire(origin, direction, speedScale, tracer);
             return true;
         }
 

@@ -22,19 +22,19 @@ namespace IntuitiveDesigns.ShootingRange
         public float MoverLength { get { return moverLength; } }
 
         /// How long it stands on the rail's origin before it sets off, so the booking knows the spot is
-        /// taken while the sign is still swinging up
-        public float SettleSeconds { get { return target != null ? target.TimeToRise : 0f; } }
+        /// taken while the sign is still swinging up. A sign with no hinge is up at once
+        public float SettleSeconds(Hinge hinge)
+        {
+            return target != null && hinge != Hinge.None ? target.TimeToRise : 0f;
+        }
+
+        /// How long the sign takes to drop out of sight once it stops
+        public float FallSeconds { get { return target != null ? target.TimeToFall : 0f; } }
 
         /// How long one that is not going to travel would stand there
         public float RollHold() { return UnityEngine.Random.Range(minHold, maxHold); }
 
-        /// What that costs the rail: the standing about, and the sign dropping again afterwards
-        public float StandSeconds(float hold)
-        {
-            return hold + (target != null ? target.TimeToFall : 0f);
-        }
-
-        /// Riding a rail with its figure in view: shootable, and worth launching a bat from
+        /// Riding a rail with its figure in view, shootable, and worth launching a bat from
         public bool Exposed { get { return _running && (target == null || target.Live); } }
 
         /// Where the figure is, which is not where the carriage is once it has popped up
@@ -51,6 +51,7 @@ namespace IntuitiveDesigns.ShootingRange
         private float _hold;
         private bool _stationary;
         private bool _running;
+        private PowerUpKind? _special;
 
         private void Awake()
         {
@@ -71,8 +72,10 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// holdSeconds above zero is one that stands still instead of travelling, for that long. The
         /// booking is made from the same number, so it cannot be told one thing and the mover another
-        public void Launch(TrackRail rail, float speed, float holdSeconds)
+        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one
+        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special)
         {
+            _special = special;
             _rail = rail;
             _speed = speed;
             _distance = 0f;
@@ -92,7 +95,11 @@ namespace IntuitiveDesigns.ShootingRange
 
             gameObject.SetActive(true);
 
-            if (target != null) target.Present(rail.ShownOffset, rail.SignOffset, rail.Hinge, rail.Cover);
+            if (target == null) return;
+
+            target.Present(rail.ShownOffset, rail.SignOffset, rail.Hinge, rail.Cover);
+            var powerUps = PowerUps.Instance;
+            target.Glow(special.HasValue && powerUps != null ? powerUps.Colour(special.Value) : (Color?)null);
         }
 
         private void FixedUpdate()
@@ -102,7 +109,7 @@ namespace IntuitiveDesigns.ShootingRange
             // Nothing moves until its sign is up, and every sign takes the same time to get there
             if (target != null && !target.Presented) return;
 
-            // Some of them never travel at all: up, a few seconds in the open, then back down
+            // Some of them never travel at all, up, a few seconds in the open, then back down
             if (_stationary)
             {
                 _held += Time.fixedDeltaTime;
@@ -121,13 +128,16 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (!Exposed) return;
 
-            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false);
+            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, true);
+            if (_special.HasValue && PowerUps.Instance != null) PowerUps.Instance.Grant(_special.Value);
+            bool special = _special.HasValue;
 
             // Counted the moment it is hit, so the HUD and the combo never wait for the figure to
             // finish spinning or falling
             Resolve(true);
 
-            if (target != null) target.Hit(point, direction);
+            // A special always shatters, the biggest reaction there is for the hardest shot
+            if (target != null) target.Hit(point, direction, special);
             else Retire();
         }
 
@@ -154,6 +164,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Resolve(bool shot)
         {
             _running = false;
+            _special = null;
             _rail = null;
 
             if (Resolved != null) Resolved(this, shot);

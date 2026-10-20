@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 using Liminal.SDK.VR.Avatars;
 
@@ -21,8 +20,8 @@ namespace IntuitiveDesigns.CrystalCatch
         [Header("Diagnostics")]
         [SerializeField] private bool logDeviceStateOnce = false;
 
-        private int _leftToken;
-        private int _rightToken;
+        private float _leftStopAt;
+        private float _rightStopAt;
         private bool _logged;
 
         private void Awake()
@@ -73,12 +72,32 @@ namespace IntuitiveDesigns.CrystalCatch
             bool left = hand == VRAvatarLimbType.LeftHand;
             var controller = left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
 
-            int token = left ? ++_leftToken : ++_rightToken;
+            // A newer pulse moves the stop, so an older one never cuts it short
+            float stopAt = Time.unscaledTime + seconds;
+            if (left) _leftStopAt = stopAt;
+            else _rightStopAt = stopAt;
 
             LogDeviceState();
             Vibrate(controller, frequency, Mathf.Clamp01(amplitude));
             LogPulse(controller, amplitude, seconds);
-            StartCoroutine(StopAfter(controller, left, token, seconds));
+        }
+
+        /// One check a frame instead of a coroutine per shot
+        private void Update()
+        {
+            float now = Time.unscaledTime;
+
+            if (_leftStopAt > 0f && now >= _leftStopAt)
+            {
+                _leftStopAt = 0f;
+                Vibrate(OVRInput.Controller.LTouch, 0f, 0f);
+            }
+
+            if (_rightStopAt > 0f && now >= _rightStopAt)
+            {
+                _rightStopAt = 0f;
+                Vibrate(OVRInput.Controller.RTouch, 0f, 0f);
+            }
         }
 
         private static void Vibrate(OVRInput.Controller controller, float freq, float amp)
@@ -105,16 +124,6 @@ namespace IntuitiveDesigns.CrystalCatch
         {
             Debug.Log("[Haptic] " + controller + " amp=" + amplitude.ToString("0.00") +
                       " for " + seconds.ToString("0.000") + "s");
-        }
-
-        private IEnumerator StopAfter(OVRInput.Controller controller, bool left, int token, float seconds)
-        {
-            yield return new WaitForSecondsRealtime(seconds);
-
-            // A newer pulse has taken over this controller, so stopping now would cut it short
-            if (token != (left ? _leftToken : _rightToken)) yield break;
-
-            Vibrate(controller, 0f, 0f);
         }
 
         [ContextMenu("Stop all vibration")]

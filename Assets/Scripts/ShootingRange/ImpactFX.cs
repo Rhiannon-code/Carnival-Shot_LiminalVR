@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,6 +7,13 @@ namespace IntuitiveDesigns.ShootingRange
     {
         public static ImpactFX Instance { get; private set; }
 
+        [System.Serializable]
+        public class Surface
+        {
+            public PhysicMaterial material;
+            public AudioClip[] clips;
+        }
+
         [Header("Impact burst")]
         [SerializeField] private ParticleSystem impactPrefab;
         [SerializeField] private int burstCopies = 8;
@@ -15,17 +21,27 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Impact audio")]
         [SerializeField] private AudioClip[] impactClips;
+        [SerializeField] private Surface[] surfaces;
         [SerializeField, Range(0f, 1f)] private float impactVolume = 0.55f;
 
         [Header("Shared voices")]
         [SerializeField] private int voices = 12;
         [SerializeField, Range(0f, 0.3f)] private float pitchJitter = 0.08f;
         [SerializeField] private float maxAudioDistance = 25f;
+        // Unity's default is 1 m, which put a sign 8 m down the range 18 dB under the gun in your hand
+        [SerializeField] private float minAudioDistance = 4f;
 
         // Unity never pitches audio with timeScale, so the world's slow motion has to be heard on purpose
         [SerializeField, Range(0.1f, 1f)] private float minSlowPitch = 0.5f;
 
+        private struct Playing
+        {
+            public ParticleSystem System;
+            public float Until;
+        }
+
         private readonly Queue<ParticleSystem> _bursts = new Queue<ParticleSystem>();
+        private readonly List<Playing> _playing = new List<Playing>();
         private AudioSource[] _voices;
         private int _nextVoice;
 
@@ -57,6 +73,7 @@ namespace IntuitiveDesigns.ShootingRange
                 var src = holder.AddComponent<AudioSource>();
                 src.playOnAwake = false;
                 src.spatialBlend = 1f;
+                src.minDistance = minAudioDistance;
                 src.maxDistance = maxAudioDistance;
                 _voices[i] = src;
             }
@@ -67,10 +84,40 @@ namespace IntuitiveDesigns.ShootingRange
             if (Instance == this) Instance = null;
         }
 
-        public void PlayImpact(Vector3 point, Vector3 normal)
+        /// One sweep for every burst still playing; a coroutine per impact is garbage at full auto
+        private void Update()
+        {
+            for (int i = _playing.Count - 1; i >= 0; i--)
+            {
+                if (Time.time < _playing[i].Until) continue;
+
+                var ps = _playing[i].System;
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                ps.gameObject.SetActive(false);
+                _bursts.Enqueue(ps);
+                _playing.RemoveAt(i);
+            }
+        }
+
+        public void PlayImpact(Vector3 point, Vector3 normal, Collider struck)
         {
             PlayBurst(point, normal);
-            PlayClip(Pick(impactClips), point, impactVolume);
+            PlayClip(Pick(ClipsFor(struck)), point, impactVolume);
+        }
+
+        private AudioClip[] ClipsFor(Collider struck)
+        {
+            var material = struck != null ? struck.sharedMaterial : null;
+            if (material == null || surfaces == null) return impactClips;
+
+            for (int i = 0; i < surfaces.Length; i++)
+            {
+                if (surfaces[i] != null && surfaces[i].material == material && surfaces[i].clips != null &&
+                    surfaces[i].clips.Length > 0)
+                    return surfaces[i].clips;
+            }
+
+            return impactClips;
         }
 
         public void PlayClip(AudioClip clip, Vector3 point, float volume)
@@ -97,15 +144,7 @@ namespace IntuitiveDesigns.ShootingRange
                                   : Quaternion.identity;
             ps.gameObject.SetActive(true);
             ps.Play(true);
-            StartCoroutine(ReturnBurst(ps));
-        }
-
-        private IEnumerator ReturnBurst(ParticleSystem ps)
-        {
-            yield return new WaitForSeconds(burstLifetime);
-            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            ps.gameObject.SetActive(false);
-            _bursts.Enqueue(ps);
+            _playing.Add(new Playing { System = ps, Until = Time.time + burstLifetime });
         }
 
         private static AudioClip Pick(AudioClip[] clips)

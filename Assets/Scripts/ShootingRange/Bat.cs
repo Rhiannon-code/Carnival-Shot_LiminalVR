@@ -13,11 +13,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float flyPast = 1.5f;
 
         [Header("Wings")]
-        [SerializeField] private Transform leftWing;
-        [SerializeField] private Transform rightWing;
+        [SerializeField] private Animation flapper;
+        [SerializeField] private float flapSpeed = 0.75f;
         [SerializeField] private AudioSource wingLoop;
-        [SerializeField] private float flapsPerSecond = 8f;
-        [SerializeField] private float flapDegrees = 55f;
 
         private Rigidbody _body;
         private BatSwarm _swarm;
@@ -26,7 +24,6 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _velocity;
         private float _travelled;
         private float _range;
-        private float _flap;
         private bool _flying;
 
         private void Awake()
@@ -46,12 +43,20 @@ namespace IntuitiveDesigns.ShootingRange
             _range = toHead.magnitude + flyPast;
             _position = from;
             _travelled = 0f;
-            _flap = Random.value;
             _flying = true;
 
             transform.position = from;
             transform.rotation = Quaternion.LookRotation(_velocity);
             gameObject.SetActive(true);
+
+            // Out of step with the rest of the swarm
+            if (flapper != null && flapper.clip != null)
+            {
+                var flap = flapper[flapper.clip.name];
+                flap.speed = flapSpeed;
+                flap.time = Random.value * flap.length;
+                flapper.Play(flapper.clip.name);
+            }
 
             if (wingLoop != null) wingLoop.Play();
         }
@@ -60,15 +65,6 @@ namespace IntuitiveDesigns.ShootingRange
         {
             _flying = false;
             gameObject.SetActive(false);
-        }
-
-        private void Update()
-        {
-            _flap += Time.deltaTime * flapsPerSecond;
-
-            Quaternion lift = Quaternion.Euler(0f, 0f, Mathf.Sin(_flap * 2f * Mathf.PI) * flapDegrees);
-            if (leftWing != null) leftWing.localRotation = Quaternion.Inverse(lift);
-            if (rightWing != null) rightWing.localRotation = lift;
         }
 
         private void FixedUpdate()
@@ -104,11 +100,11 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_flying) return;
 
             _flying = false;
-            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false);
+            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, false);
             _swarm.Popped(this, point, direction);
         }
 
-        private static float DistanceToSegment(Vector3 point, Vector3 a, Vector3 b)
+        public static float DistanceToSegment(Vector3 point, Vector3 a, Vector3 b)
         {
             Vector3 ab = b - a;
             float t = ab.sqrMagnitude > 1e-8f ? Mathf.Clamp01(Vector3.Dot(point - a, ab) / ab.sqrMagnitude) : 0f;

@@ -16,14 +16,17 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Arena arena;
         [SerializeField] private ComboTracker combo;
         [SerializeField] private TrackDirector director;
+        [SerializeField] private CarnyVoice barker;
 
         [Header("Session (data)")]
         [SerializeField] private float roundSeconds = 60f;
         [SerializeField] private int maxRounds = 5;
         [SerializeField] private int countdownFrom = 3;
+        [SerializeField] private int betweenRoundsCountdownFrom = 3;
         [SerializeField] private float countdownStep = 1f;
         [SerializeField] private float roundTallySeconds = 3f;
         [SerializeField] private float endHoldSeconds = 3f;
+        [SerializeField] private float longestPauseSeconds = 12f;
         [SerializeField] private float endFadeSeconds = 2f;
 
         [Header("Start")]
@@ -50,10 +53,14 @@ namespace IntuitiveDesigns.ShootingRange
         public event Action CountdownGo;
         public event Action<int> RoundStarted;
         public event Action<int, int> RoundEnded;
+        /// Every sign in the wave was shot
         public event Action<int> RoundCleared;
+        /// The wave ran out before the clock, with signs that got away
+        public event Action<int> WaveOver;
         public event Action<int> FinalScore;
-        public event Action<Vector3, bool> Scoring;
         public event Action<Vector3> PlayerHit;
+        /// The spider got the player: the trigger is dead for that many seconds
+        public event Action<Vector3, float> PlayerBitten;
 
         private bool _begun;
 
@@ -70,6 +77,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Start()
         {
             TimeRemaining = roundSeconds;
+            if (barker == null) barker = FindObjectOfType<CarnyVoice>();
 
             if (requirePickupToStart && FindObjectOfType<PistolPickup>() == null)
             {
@@ -90,16 +98,16 @@ namespace IntuitiveDesigns.ShootingRange
             StartCoroutine(RunSession());
         }
 
-        public void Scored(int points, Vector3 where, bool chained)
+        /// Only sign hits link the combo. A toppling prop stack scores a link per prop, which hands
+        /// out milestones nobody aimed for
+        public void Scored(int points, Vector3 where, bool chained, bool linksCombo)
         {
             if (Current != State.Playing) return;
 
-            if (combo != null) combo.Register(chained);
+            if (combo != null && linksCombo) combo.Register(chained);
             float multiplier = combo != null ? combo.Multiplier : 1f;
 
             AddScore(Mathf.RoundToInt(points * multiplier));
-
-            if (Scoring != null) Scoring(where, chained);
         }
 
         /// A vampire or a bat got to the player. It costs the combo and nothing else
@@ -109,6 +117,14 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (combo != null) combo.Reset(true);
             if (PlayerHit != null) PlayerHit(from);
+        }
+
+        public void Bitten(Vector3 from, float lockSeconds)
+        {
+            if (Current != State.Playing) return;
+
+            if (combo != null) combo.Reset(true);
+            if (PlayerBitten != null) PlayerBitten(from, lockSeconds);
         }
 
         private void AddScore(int points)
@@ -121,7 +137,8 @@ namespace IntuitiveDesigns.ShootingRange
         private IEnumerator RunSession()
         {
             SetState(State.Intro);
-            yield return StartCoroutine(Countdown());
+            yield return StartCoroutine(Pause(0f));
+            yield return StartCoroutine(Countdown(countdownFrom));
 
             for (RoundNumber = 1; RoundNumber <= maxRounds; RoundNumber++)
             {
@@ -130,16 +147,28 @@ namespace IntuitiveDesigns.ShootingRange
                 if (RoundNumber >= maxRounds) break;
 
                 SetState(State.RoundEnd);
-                yield return new WaitForSecondsRealtime(roundTallySeconds);
-                yield return StartCoroutine(Countdown());
+                yield return StartCoroutine(Pause(roundTallySeconds));
+                yield return StartCoroutine(Countdown(betweenRoundsCountdownFrom));
             }
 
             yield return StartCoroutine(EndExperience());
         }
 
-        private IEnumerator Countdown()
+        /// At least this long, and longer while the barker is still talking, up to longestPauseSeconds
+        private IEnumerator Pause(float least)
         {
-            for (int n = countdownFrom; n >= 1; n--)
+            float waited = 0f;
+            float most = Mathf.Max(least, longestPauseSeconds);
+            while (waited < least || (barker != null && barker.Talking && waited < most))
+            {
+                waited += Time.unscaledDeltaTime;
+                yield return null;
+            }
+        }
+
+        private IEnumerator Countdown(int from)
+        {
+            for (int n = from; n >= 1; n--)
             {
                 if (CountdownTick != null) CountdownTick(n);
                 yield return new WaitForSecondsRealtime(countdownStep);
@@ -160,7 +189,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (RoundStarted != null) RoundStarted(RoundNumber);
             if (TimeChanged != null) TimeChanged(TimeRemaining);
 
-            bool cleared = false;
+            bool waveOut = false;
+            bool everySign = false;
 
             while (TimeRemaining > 0f)
             {
@@ -169,11 +199,11 @@ namespace IntuitiveDesigns.ShootingRange
 
                 if (RoundGoalMet())
                 {
-                    cleared = true;
+                    waveOut = true;
+                    everySign = director == null || director.Killed >= director.WaveSize;
 
                     // A wave also runs out when targets escape, and that is not worth a bonus
-                    if (director == null || director.Killed >= director.WaveSize)
-                        AddScore(Mathf.RoundToInt(Mathf.Max(0f, TimeRemaining) * clearBonusPerSecond));
+                    if (everySign) AddScore(Mathf.RoundToInt(Mathf.Max(0f, TimeRemaining) * clearBonusPerSecond));
                     break;
                 }
 
@@ -182,9 +212,10 @@ namespace IntuitiveDesigns.ShootingRange
 
             TimeRemaining = Mathf.Max(0f, TimeRemaining);
 
-            if (cleared && RoundCleared != null) RoundCleared(RoundNumber);
+            if (waveOut && everySign && RoundCleared != null) RoundCleared(RoundNumber);
+            if (waveOut && !everySign && WaveOver != null) WaveOver(RoundNumber);
             // A combo must not survive the break. Carried over, its next link could land on a
-            // milestone and hand out a power-up before the player has fired a shot
+            // milestone and hand out a power up before the player has fired a shot
             if (combo != null) combo.Reset(true);
 
             if (RoundEnded != null) RoundEnded(RoundNumber, RoundScore);
@@ -203,7 +234,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (SlowMotion.Instance != null) SlowMotion.Instance.Restore();
             if (FinalScore != null) FinalScore(TotalScore);
 
-            yield return new WaitForSecondsRealtime(endHoldSeconds);
+            yield return StartCoroutine(Pause(endHoldSeconds));
 
             if (ScreenFader.Instance != null) ScreenFader.Instance.FadeTo(Color.black, endFadeSeconds);
             yield return new WaitForSecondsRealtime(endFadeSeconds);

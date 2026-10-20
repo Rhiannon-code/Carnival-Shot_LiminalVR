@@ -17,7 +17,6 @@ namespace IntuitiveDesigns.ShootingRange
         {
             public PowerUpKind kind;
             public float seconds = 8f;
-            public int weight = 3;
             public Color colour = Color.white;
 
             // Off for slow motion, or a steady hit rate would hold the world slowed indefinitely
@@ -37,9 +36,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField]
         private Tuning[] tuning =
         {
-            new Tuning { kind = PowerUpKind.FullAuto,    seconds = 8f, weight = 3, colour = new Color(1f, 0.55f, 0.05f) },
-            new Tuning { kind = PowerUpKind.Scattershot, seconds = 8f, weight = 3, colour = new Color(0.35f, 1f, 0.2f) },
-            new Tuning { kind = PowerUpKind.SlowMotion,  seconds = 3f, weight = 1, colour = new Color(0.7f, 0.45f, 1f), extendsOnCombo = false },
+            new Tuning { kind = PowerUpKind.FullAuto,    seconds = 8f, colour = new Color(1f, 0.55f, 0.05f) },
+            new Tuning { kind = PowerUpKind.Scattershot, seconds = 8f, colour = new Color(0.35f, 1f, 0.2f) },
+            new Tuning { kind = PowerUpKind.SlowMotion,  seconds = 3f, colour = new Color(0.7f, 0.45f, 1f), extendsOnCombo = false },
         };
 
         [Header("Kept alive by the combo (data)")]
@@ -51,6 +50,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float pelletSpreadDegrees = 6f;
 
         [Header("Slow motion (data)")]
+        [SerializeField, Range(0f, 1f)] private float slowMotionOdds = 0.15f;
         [SerializeField] private int minTargetsForSlowMotion = 5;
         [SerializeField, Range(0.05f, 1f)] private float slowScale = 0.3f;
 
@@ -83,11 +83,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnEnable()
         {
-            if (combo != null)
-            {
-                combo.MilestoneReached += OnMilestone;
-                combo.Changed += OnComboChanged;
-            }
+            if (combo != null) combo.Changed += OnComboChanged;
 
             if (game == null) return;
 
@@ -97,14 +93,10 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnDisable()
         {
-            // SlowMotion restores time in its own OnDisable
-            for (int i = 0; i < KindCount; i++) _remaining[i] = 0f;
+            // Expired, not just zeroed, or the auras and the gun tint stay lit
+            ClearAll();
 
-            if (combo != null)
-            {
-                combo.MilestoneReached -= OnMilestone;
-                combo.Changed -= OnComboChanged;
-            }
+            if (combo != null) combo.Changed -= OnComboChanged;
 
             if (game == null) return;
 
@@ -223,12 +215,6 @@ namespace IntuitiveDesigns.ShootingRange
             return count;
         }
 
-        private void OnMilestone(int chain)
-        {
-            if (game != null && game.Current != RangeGame.State.Playing) return;
-            Grant(Roll());
-        }
-
         private void OnComboChanged(float multiplier, int chain)
         {
             if (chain == 0) return;
@@ -264,35 +250,12 @@ namespace IntuitiveDesigns.ShootingRange
             else slowMotion.Exit();
         }
 
-        private PowerUpKind Roll()
+        /// What the next special sign carries. Full Auto and Scattershot are even; slow motion is rarer,
+        /// and only on offer with enough signs up for it to buy the player something
+        public PowerUpKind RollSpecial()
         {
-            int total = 0;
-            for (int i = 0; i < tuning.Length; i++) total += Mathf.Max(0, tuning[i].weight);
-            if (total <= 0) return PowerUpKind.FullAuto;
-
-            // Slow motion on an empty range is a wasted grant, so it only enters the draw when there
-            // is enough on the rails for it to buy the player something
-            bool allowSlow = LiveTargets() >= minTargetsForSlowMotion;
-            if (!allowSlow)
-            {
-                for (int i = 0; i < tuning.Length; i++)
-                {
-                    if (tuning[i].kind == PowerUpKind.SlowMotion) total -= Mathf.Max(0, tuning[i].weight);
-                }
-
-                if (total <= 0) return PowerUpKind.FullAuto;
-            }
-
-            int pick = UnityEngine.Random.Range(0, total);
-            for (int i = 0; i < tuning.Length; i++)
-            {
-                if (!allowSlow && tuning[i].kind == PowerUpKind.SlowMotion) continue;
-
-                pick -= Mathf.Max(0, tuning[i].weight);
-                if (pick < 0) return tuning[i].kind;
-            }
-
-            return tuning[tuning.Length - 1].kind;
+            if (UnityEngine.Random.value < slowMotionOdds && LiveTargets() >= minTargetsForSlowMotion) return PowerUpKind.SlowMotion;
+            return UnityEngine.Random.value < 0.5f ? PowerUpKind.FullAuto : PowerUpKind.Scattershot;
         }
 
         private float BaseSeconds(PowerUpKind kind)
