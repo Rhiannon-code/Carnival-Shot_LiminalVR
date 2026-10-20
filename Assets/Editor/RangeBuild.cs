@@ -13,6 +13,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string Scene = "Assets/Scenes/ShootingRangeCarnival.unity";
         private const string OutputDir = "Builds/Quest";
         private const string ApkName = "ShootingRangeCarnival-Quest.apk";
+        private const string ProductName = "Carnival Shot";
 
         private const string NdkLibs =
             "PlaybackEngines/AndroidPlayer/NDK/toolchains/llvm/prebuilt/linux-x86_64/lib64";
@@ -20,6 +21,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         [MenuItem("Shooting Range/Build/Configure Player Settings for Quest 2", false, 0)]
         public static void Configure()
         {
+            PlayerSettings.productName = ProductName;
+
             // IL2CPP first: ARM64 is not a legal architecture under Mono, so setting them the other
             // way round silently leaves you on ARMv7
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
@@ -40,7 +43,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             EditorUserBuildSettings.androidBuildSubtarget = MobileTextureSubtarget.ASTC;
             EditorUserBuildSettings.development = false;
 
-            Debug.Log("[RangeBuild] Player settings set for Quest 2: IL2CPP, ARM64, Oculus VR, " +
+            Debug.Log("[RangeBuild] Player settings set for Quest 2: \"" + ProductName + "\", IL2CPP, ARM64, Oculus VR, " +
                       "single pass, ASTC, Gradle. These are project wide, not per scene.");
         }
 
