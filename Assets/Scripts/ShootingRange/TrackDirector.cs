@@ -22,8 +22,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private int poolSize = 32;
 
         [Header("Wave size (data)")]
-        [SerializeField] private int waveSizeFirstRound = 30;
-        [SerializeField] private int waveSizeGrowthPerRound = 20;
+        [SerializeField] private int[] signsPerRound = { 14, 18, 33, 39, 60 };
 
         [Header("Pace (data, round 1)")]
         [SerializeField] private float waveInterval = 2.2f;
@@ -137,7 +136,8 @@ namespace IntuitiveDesigns.ShootingRange
         {
             int steps = Mathf.Max(0, round - 1);
 
-            _waveSize = Mathf.Max(1, waveSizeFirstRound + waveSizeGrowthPerRound * steps);
+            int last = signsPerRound.Length - 1;
+            _waveSize = last >= 0 ? Mathf.Max(1, signsPerRound[Mathf.Min(steps, last)]) : 1;
             _launched = 0;
             _resolved = 0;
             _killed = 0;

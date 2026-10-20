@@ -23,6 +23,24 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         public Fields Set(string name, Object value) { Find(name).objectReferenceValue = value; return this; }
         public Fields Set(string name, Vector3 value) { Find(name).vector3Value = value; return this; }
 
+        public Fields Set(string name, float[] values)
+        {
+            var array = Find(name);
+            array.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++) array.GetArrayElementAtIndex(i).floatValue = values[i];
+
+            return this;
+        }
+
+        public Fields Set(string name, int[] values)
+        {
+            var array = Find(name);
+            array.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++) array.GetArrayElementAtIndex(i).intValue = values[i];
+
+            return this;
+        }
+
         public Fields SetArray(string name, IList<Object> values)
         {
             var array = Find(name);

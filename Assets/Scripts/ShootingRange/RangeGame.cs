@@ -19,8 +19,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private CarnyVoice barker;
 
         [Header("Session (data)")]
-        [SerializeField] private float roundSeconds = 60f;
-        [SerializeField] private int maxRounds = 5;
+        [SerializeField] private float[] secondsPerRound = { 30f, 30f, 45f, 45f, 60f };
         [SerializeField] private int countdownFrom = 3;
         [SerializeField] private int betweenRoundsCountdownFrom = 3;
         [SerializeField] private float countdownStep = 1f;
@@ -41,9 +40,9 @@ namespace IntuitiveDesigns.ShootingRange
         public int RoundScore { get; private set; }
         public int TotalScore { get; private set; }
         public int RoundNumber { get; private set; }
-        public int MaxRounds { get { return maxRounds; } }
-        public float RoundSeconds { get { return roundSeconds; } }
-        public bool IsFinalRound { get { return maxRounds > 0 && RoundNumber >= maxRounds; } }
+        public int MaxRounds { get { return secondsPerRound.Length; } }
+        public float RoundSeconds { get { return SecondsFor(RoundNumber); } }
+        public bool IsFinalRound { get { return MaxRounds > 0 && RoundNumber >= MaxRounds; } }
         public int NextRoundNumber { get { return RoundNumber + 1; } }
 
         public event Action<int> ScoreChanged;
@@ -76,7 +75,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Start()
         {
-            TimeRemaining = roundSeconds;
+            TimeRemaining = SecondsFor(1);
             if (barker == null) barker = FindObjectOfType<CarnyVoice>();
 
             if (requirePickupToStart && FindObjectOfType<PistolPickup>() == null)
@@ -140,11 +139,11 @@ namespace IntuitiveDesigns.ShootingRange
             yield return StartCoroutine(Pause(0f));
             yield return StartCoroutine(Countdown(countdownFrom));
 
-            for (RoundNumber = 1; RoundNumber <= maxRounds; RoundNumber++)
+            for (RoundNumber = 1; RoundNumber <= MaxRounds; RoundNumber++)
             {
                 yield return StartCoroutine(RunRound());
 
-                if (RoundNumber >= maxRounds) break;
+                if (RoundNumber >= MaxRounds) break;
 
                 SetState(State.RoundEnd);
                 yield return StartCoroutine(Pause(roundTallySeconds));
@@ -180,7 +179,7 @@ namespace IntuitiveDesigns.ShootingRange
         private IEnumerator RunRound()
         {
             RoundScore = 0;
-            TimeRemaining = roundSeconds;
+            TimeRemaining = RoundSeconds;
 
             if (arena != null) arena.PresentRound(RoundNumber);
             if (combo != null) combo.Reset(true);
@@ -219,6 +218,12 @@ namespace IntuitiveDesigns.ShootingRange
             if (combo != null) combo.Reset(true);
 
             if (RoundEnded != null) RoundEnded(RoundNumber, RoundScore);
+        }
+
+        private float SecondsFor(int round)
+        {
+            if (MaxRounds == 0) return 0f;
+            return secondsPerRound[Mathf.Clamp(round - 1, 0, MaxRounds - 1)];
         }
 
         /// A range with traffic ends on its wave, a practice shelf on its plates
