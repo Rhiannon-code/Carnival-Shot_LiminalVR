@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
@@ -16,6 +17,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private LayerMask hitMask = ~0;
         [SerializeField] private float upwardBias = 0.15f;
 
+        [Header("Ricochet (data)")]
+        [SerializeField] private int maxBounces = 1;
+        [SerializeField, Range(0f, 1f)] private float bounceSpeedKept = 0.6f;
+
         public bool Live { get { return _live; } }
         public float Impulse { get { return impulse; } }
         public float Speed { get { return speed; } }
@@ -26,6 +31,14 @@ namespace IntuitiveDesigns.ShootingRange
         private float _distance;
         private float _age;
         private bool _live;
+        private int _bounces;
+
+        // What this round has already gone through: the reaction, or the collider of a loose piece. By reaction, so a
+        // stand with a collider on every sword is struck once, not once per sword, and not again on the next step
+        private readonly List<Object> _passed = new List<Object>();
+
+        // Shared by every round: they step one at a time, and a buffer each would be 32 arrays for nothing
+        private static readonly RaycastHit[] Hits = new RaycastHit[16];
 
         private void Awake()
         {
@@ -38,6 +51,8 @@ namespace IntuitiveDesigns.ShootingRange
             _velocity = direction.normalized * speed * Mathf.Max(0.05f, speedScale);
             _age = 0f;
             _distance = 0f;
+            _bounces = 0;
+            _passed.Clear();
             _live = true;
             AimAlongVelocity();
             gameObject.SetActive(true);
@@ -63,12 +78,41 @@ namespace IntuitiveDesigns.ShootingRange
             float length = step.magnitude;
             if (length <= 0f) return;
 
-            RaycastHit hit;
-            if (Physics.SphereCast(transform.position, radius, step / length, out hit, length,
-                                   hitMask, QueryTriggerInteraction.Ignore))
+            Vector3 from = transform.position;
+            Vector3 along = step / length;
+            int count = Physics.SphereCastNonAlloc(from, radius, along, Hits, length, hitMask, QueryTriggerInteraction.Ignore);
+            SortNearestFirst(count);
+
+            for (int i = 0; i < count; i++)
             {
-                transform.position = hit.point;
-                Impact(hit);
+                var hit = Hits[i];
+
+                // Already inside it at the start of the step: the single cast this replaced never saw those either
+                if (hit.distance <= 0f && hit.point == Vector3.zero) continue;
+
+                var shootable = hit.collider.GetComponentInParent<IShootable>();
+                Object struck = shootable != null ? (Object)(Component)shootable : hit.collider;
+                if (_passed.Contains(struck)) continue;
+
+                Strike(hit, shootable, along);
+
+                // A prop or a loose piece in front of a sign must never save the sign: it reacts, and the round goes on
+                if (PassesThrough(hit, shootable)) { _passed.Add(struck); continue; }
+
+                Vector3 centre = from + along * hit.distance;
+                _distance += hit.distance;
+
+                if (shootable == null && _bounces < maxBounces)
+                {
+                    _bounces++;
+                    _velocity = Vector3.Reflect(_velocity, hit.normal) * bounceSpeedKept;
+                    transform.position = centre + hit.normal * 0.005f;
+                    AimAlongVelocity();
+                    return;
+                }
+
+                transform.position = centre;
+                Finish();
                 return;
             }
 
@@ -77,26 +121,47 @@ namespace IntuitiveDesigns.ShootingRange
             AimAlongVelocity();
         }
 
-        private void Impact(RaycastHit hit)
+        private static bool PassesThrough(RaycastHit hit, IShootable shootable)
         {
-            Vector3 direction = _velocity.sqrMagnitude > 1e-6f ? _velocity.normalized : transform.forward;
+            return shootable is RoomReaction || shootable is Knockable || IsLoose(hit, shootable);
+        }
 
+        /// Shards, and anything else knocked loose to physics. Kinematic things that don't react, like the coffin,
+        /// are part of the room
+        private static bool IsLoose(RaycastHit hit, IShootable shootable)
+        {
+            return shootable == null && hit.rigidbody != null && !hit.rigidbody.isKinematic;
+        }
+
+        private void Strike(RaycastHit hit, IShootable shootable, Vector3 direction)
+        {
+            // Things in the room bring their own push, sized for them; the round's would throw a plushie across the room
             var body = hit.rigidbody;
-            if (body != null && !body.isKinematic)
+            if (body != null && !body.isKinematic && !(shootable is RoomReaction))
             {
                 // Dead flat, the same impulse only slides a prop along the bench
                 Vector3 push = (direction + Vector3.up * upwardBias).normalized * impulse;
                 body.AddForceAtPosition(push, hit.point, ForceMode.Impulse);
             }
 
-            var shootable = hit.collider.GetComponentInParent<IShootable>();
             if (shootable != null) shootable.OnShot(hit.point, direction, impulse);
 
-            // Signs and bats bring their own puff and their own sound, the dust and the thud are for the room
+            // Signs and bats bring their own puff and their own sound, the dust and the thud are for the room. Loose
+            // pieces get neither: a round through a spray of shards would be a burst of thuds
             bool target = shootable is TrackMover || shootable is Bat;
-            if (!target && ImpactFX.Instance != null) ImpactFX.Instance.PlayImpact(hit.point, hit.normal, hit.collider);
+            if (!target && !IsLoose(hit, shootable) && ImpactFX.Instance != null) ImpactFX.Instance.PlayImpact(hit.point, hit.normal, hit.collider);
+        }
 
-            Finish();
+        /// The buffer comes back in no particular order, and it is never more than a handful long
+        private static void SortNearestFirst(int count)
+        {
+            for (int i = 1; i < count; i++)
+            {
+                var hit = Hits[i];
+                int j = i - 1;
+                while (j >= 0 && Hits[j].distance > hit.distance) { Hits[j + 1] = Hits[j]; j--; }
+                Hits[j + 1] = hit;
+            }
         }
 
         private void Finish()

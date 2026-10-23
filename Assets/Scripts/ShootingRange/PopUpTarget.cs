@@ -21,9 +21,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Transform stand;
         [SerializeField] private float standShows = 0.04f;
 
-        [Header("Shape (data)")]
+        [Header("Shape (data, metres)")]
         [SerializeField] private bool sidewaysFlip;
         [SerializeField] private Vector3 hitCentreOffset = new Vector3(0f, 0.35f, 0f);
+        [SerializeField] private float mountGap = 0.01f;
 
         [Header("How much of the sign clears its cover (data, metres)")]
         [SerializeField] private float peek = 0.12f;
@@ -73,6 +74,9 @@ namespace IntuitiveDesigns.ShootingRange
         /// Far enough round to start travelling
         public bool Presented { get { return _phase == Phase.Settling || _phase == Phase.Up; } }
 
+        /// Shot or done with, and on its way down
+        public bool Leaving { get { return _phase == Phase.Spinning || _phase == Phase.Falling; } }
+
         /// How long from being asked to pop up to being all the way there, and how long back down
         public float TimeToRise { get { return riseDelay + riseSeconds; } }
         public float TimeToFall { get { return fallSeconds; } }
@@ -111,8 +115,10 @@ namespace IntuitiveDesigns.ShootingRange
         private float _signTop;
         private bool _measured;
         private Vector3 _standAt;
-        private Quaternion _standTurn = Quaternion.identity;
         private float _standTop;
+        private float[] _heights;
+        private bool _mounted;
+        private Vector3 _door;
         private MeshRenderer _glow;
         private MeshFilter _glowMesh;
         private MaterialPropertyBlock _glowBlock;
@@ -127,16 +133,25 @@ namespace IntuitiveDesigns.ShootingRange
             _facing = figure.rotation;
 
             if (stand != null) _standTop = TopOf(stand);
+
+            _heights = new float[variants != null ? variants.Length : 0];
+            for (int i = 0; i < _heights.Length; i++)
+            {
+                Vector3 low, high;
+                _heights[i] = Measure(variants[i], out low, out high)
+                            ? (high.y - low.y) * figure.localScale.y
+                            : float.MaxValue;
+            }
         }
 
-        /// shown is how far above the carriage the sign's hinge edge sits. The hinge decides which
-        /// edge that is, a floor sign tips up off its feet, a roof sign hangs upside down by its feet,
-        /// a wall sign swings out on its side like a door
-        public void Present(float shown, Vector3 signOffset, Hinge hinge, Renderer cover)
+        /// The rail's shown offset is how far above the carriage the sign's hinge edge sits. The hinge
+        /// decides which edge that is, a floor sign tips up off its feet, a roof sign hangs upside down
+        /// by its feet, a side sign opens like a door from the corner of its pillar
+        public void Present(TrackRail rail)
         {
-            _shown = shown;
-            _signOffset = signOffset;
-            _hinge = hinge;
+            _shown = rail.ShownOffset;
+            _signOffset = rail.SignOffset;
+            _hinge = rail.Hinge;
 
             var player = Player();
             if (player != null)
@@ -145,11 +160,19 @@ namespace IntuitiveDesigns.ShootingRange
                 _side = SideOf(RestWorld(), player);
             }
 
-            PickVariant();
+            Bounds mount;
+            _mounted = false;
+            if (_hinge == Hinge.Sideways && player != null && rail.Mounted(out mount))
+            {
+                _mounted = true;
+                _door = DoorEdge(mount, player.position, mountGap);
+            }
 
-            if (hinge == Hinge.Up) _shown = ShowJustOver(cover, shown);
+            PickVariant(rail.TallestSign);
 
-            if (hinge == Hinge.None)
+            if (_hinge == Hinge.Up) _shown = ShowJustOver(rail.Cover, _shown);
+
+            if (_hinge == Hinge.None)
             {
                 _swing = 0f;
                 Place(0f);
@@ -372,12 +395,49 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (figure == null) return;
 
-            PlaceFigure(figure, RestWorld() + Vector3.up * _shown + _signOffset, _facing, _shape, swing, spin);
+            var shape = _shape;
+            var home = Home();
 
-            if (stand == null) return;
+            // Spun about its hinge edge, a side sign would sweep through its pillar, so it spins about
+            // its own middle, which turns clear of the corner it opens from
+            if (spin != 0f && _hinge == Hinge.Sideways)
+            {
+                var middle = new Vector3(_signMiddle.x, shape.Pivot.y, _signMiddle.z);
+                home += _facing * Vector3.Scale(figure.lossyScale, middle - shape.Pivot);
+                shape.Pivot = middle;
+            }
 
-            stand.rotation = figure.rotation * _standTurn;
+            PlaceFigure(figure, home, _facing, shape, swing, spin);
+
+            if (stand == null || !stand.gameObject.activeSelf) return;
+
+            stand.rotation = figure.rotation;
             stand.position = figure.TransformPoint(_standAt) - stand.TransformVector(0f, _standTop, 0f);
+        }
+
+        /// Where the hinge edge goes. A side sign on a pillar hinges at the pillar's corner, worked out
+        /// from the pillar itself, so moving or swapping the pillar cannot leave it floating or buried
+        private Vector3 Home()
+        {
+            var rest = RestWorld();
+            if (_mounted) return new Vector3(_door.x, rest.y + _shown, _door.z);
+
+            return rest + Vector3.up * _shown + _signOffset;
+        }
+
+        /// The mount's upright edge nearest the player, stood off both faces by gap. A side sign hinged
+        /// there opens out square to the player and folds back flat along the mount's side. Public and
+        /// static so the setup tool's preview uses these very sums
+        public static Vector3 DoorEdge(Bounds mount, Vector3 player, float gap)
+        {
+            float x = Mathf.Abs(player.x - mount.min.x) < Mathf.Abs(player.x - mount.max.x)
+                    ? mount.min.x - gap
+                    : mount.max.x + gap;
+            float z = Mathf.Abs(player.z - mount.min.z) < Mathf.Abs(player.z - mount.max.z)
+                    ? mount.min.z - gap
+                    : mount.max.z + gap;
+
+            return new Vector3(x, 0f, z);
         }
 
         /// Puts the sign's hinge edge on home and swings the sign about it. Rotating a transform only
@@ -399,13 +459,13 @@ namespace IntuitiveDesigns.ShootingRange
             return figure.parent != null ? figure.parent.TransformPoint(_restLocal) : _restLocal;
         }
 
-        private void PickVariant()
+        private void PickVariant(float tallest)
         {
             _measured = false;
 
             if (variants == null || variants.Length == 0) { SetHingeShape(Vector3.zero, Vector3.one); return; }
 
-            int pick = UnityEngine.Random.Range(0, variants.Length);
+            int pick = PickUnder(tallest);
             for (int i = 0; i < variants.Length; i++)
             {
                 if (variants[i] != null) variants[i].gameObject.SetActive(i == pick);
@@ -435,30 +495,46 @@ namespace IntuitiveDesigns.ShootingRange
             LiftOffTheRail();
         }
 
-        /// The stand sits in the middle of the hinge edge with its top against it and its up pointing
-        /// into the sign, so it swings, spins and folds away with the sign
-        private void MountStand(float feet)
+        /// A random sign no taller than tallest (0 = any), or the shortest there is when none fits
+        private int PickUnder(float tallest)
         {
-            if (_hinge != Hinge.Sideways)
+            int shortest = 0;
+            int fits = 0;
+            for (int i = 0; i < _heights.Length; i++)
             {
-                _standAt = new Vector3(_signMiddle.x, feet, _signMiddle.z);
-                _standTurn = Quaternion.identity;
-                return;
+                if (_heights[i] < _heights[shortest]) shortest = i;
+                if (tallest <= 0f || _heights[i] <= tallest) fits++;
             }
 
-            _standAt = new Vector3(_shape.Pivot.x, _signMiddle.y, _signMiddle.z);
-            _standTurn = Quaternion.FromToRotation(Vector3.up, _signMiddle.x > _shape.Pivot.x ? Vector3.right : Vector3.left);
+            if (fits == 0) return shortest;
+
+            int nth = UnityEngine.Random.Range(0, fits);
+            for (int i = 0; i < _heights.Length; i++)
+            {
+                if ((tallest <= 0f || _heights[i] <= tallest) && nth-- == 0) return i;
+            }
+
+            return shortest;
+        }
+
+        /// The stand sits in the middle of the sign's feet with its top against them, so it tips up and
+        /// folds away with the sign. A side sign has none: folded flat against its pillar, a post on its
+        /// edge would stick straight out at the player
+        private void MountStand(float feet)
+        {
+            if (stand == null) return;
+
+            stand.gameObject.SetActive(_hinge != Hinge.Sideways);
+            _standAt = new Vector3(_signMiddle.x, feet, _signMiddle.z);
         }
 
         /// The hinge drops into the stand, so the sign stands that far off its rail and the top of the
         /// stand shows. Metres, so the Figure's scale is divided back out
         private void LiftOffTheRail()
         {
-            if (stand == null || standShows <= 0f) return;
+            if (stand == null || !stand.gameObject.activeSelf || standShows <= 0f) return;
 
-            Vector3 up = _standTurn * Vector3.up;
-            Vector3 scale = figure.localScale;
-            _shape.Pivot -= new Vector3(up.x * standShows / scale.x, up.y * standShows / scale.y, 0f);
+            _shape.Pivot -= new Vector3(0f, standShows / figure.localScale.y, 0f);
         }
 
         private static float TopOf(Transform root)
@@ -596,10 +672,11 @@ namespace IntuitiveDesigns.ShootingRange
                     // Hinged on its outer edge so it opens inward, which mirrors the two walls without
                     // either of them needing to know it is the left one or the right one. Facing the
                     // player, a sign's own +x points to the player's left, so the right-hand wall's outer
-                    // edge is its low x
+                    // edge is its low x. The hinge is on the back face, low z, so folded the sign's back
+                    // lies flat against the side of its pillar
                     return new HingeShape
                     {
-                        Pivot = new Vector3(side >= 0f ? low.x : high.x, 0f, 0f),
+                        Pivot = new Vector3(side >= 0f ? low.x : high.x, 0f, low.z),
                         Axis = Vector3.up,
                         Folded = 90f * (side >= 0f ? 1f : -1f) * (flip ? -1f : 1f),
                     };

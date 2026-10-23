@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using Liminal.SDK.VR.Avatars;
+using Random = UnityEngine.Random;
 
 namespace IntuitiveDesigns.ShootingRange
 {
@@ -33,11 +35,20 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Audio")]
         [SerializeField] private AudioClip[] dropClips;
         [SerializeField] private AudioClip[] deathClips;
+        [SerializeField] private AudioClip[] swatClips;
         [SerializeField, Range(0f, 1f)] private float volume = 0.9f;
+
+        [Header("Leg scratching while he hangs there (loops)")]
+        [SerializeField] private AudioClip dangleLoop;
+        [SerializeField, Range(0f, 1f)] private float dangleVolume = 0.35f;
+
+        /// A spider is on its way down in front of the player
+        public event Action Dropped;
 
         private static readonly RaycastHit[] Hits = new RaycastHit[8];
 
         private Spider _spider;
+        private AudioSource _dangle;
         private Pistol[] _guns;
         private readonly Vector3[] _swatterWas = new Vector3[4];
         private readonly bool[] _swatterSeen = new bool[4];
@@ -55,6 +66,15 @@ namespace IntuitiveDesigns.ShootingRange
 
             _spider = Instantiate(spiderPrefab, transform);
             _spider.gameObject.SetActive(false);
+
+            if (dangleLoop == null) return;
+
+            _dangle = _spider.gameObject.AddComponent<AudioSource>();
+            _dangle.clip = dangleLoop;
+            _dangle.loop = true;
+            _dangle.playOnAwake = false;
+            _dangle.spatialBlend = 1f;
+            _dangle.volume = dangleVolume;
         }
 
         private void Start()
@@ -92,6 +112,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Update()
         {
             WatchForSwipes();
+            Scratch();
 
             if (game == null || game.Current != RangeGame.State.Playing || game.RoundNumber < firstRound) return;
 
@@ -119,6 +140,22 @@ namespace IntuitiveDesigns.ShootingRange
 
             _spider.Drop(this, anchor, depth, head);
             PlayAt(dropClips, anchor);
+            if (Dropped != null) Dropped();
+        }
+
+        /// His legs scratch while he is in the way, from a random point in the loop so no two visits
+        /// sound the same
+        private void Scratch()
+        {
+            if (_dangle == null) return;
+
+            bool inTheWay = _spider.InTheWay;
+            if (inTheWay == _dangle.isPlaying) return;
+
+            if (!inTheWay) { _dangle.Stop(); return; }
+
+            _dangle.time = Random.Range(0f, dangleLoop.length);
+            _dangle.Play();
         }
 
         /// Both hands and both muzzles, each tested along the whole of its last frame's path so a fast
@@ -143,6 +180,7 @@ namespace IntuitiveDesigns.ShootingRange
                 if (Bat.DistanceToSegment(_spider.transform.position, was, now) > knockRadius) continue;
 
                 _spider.KnockAway(velocity);
+                PlayAt(swatClips, _spider.transform.position);
             }
         }
 

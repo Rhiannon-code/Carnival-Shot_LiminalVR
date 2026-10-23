@@ -10,7 +10,7 @@ namespace IntuitiveDesigns.ShootingRange
     {
         public static RangeGame Instance { get; private set; }
 
-        public enum State { WaitingForPickup, Intro, Playing, RoundEnd, Ended }
+        public enum State { HowToPlay, WaitingForPickup, Intro, Playing, RoundEnd, Ended }
 
         [Header("Refs")]
         [SerializeField] private Arena arena;
@@ -20,6 +20,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Session (data)")]
         [SerializeField] private float[] secondsPerRound = { 30f, 30f, 45f, 45f, 60f };
+        [SerializeField] private float controlsSeconds = 5f;
         [SerializeField] private int countdownFrom = 3;
         [SerializeField] private int betweenRoundsCountdownFrom = 3;
         [SerializeField] private float countdownStep = 1f;
@@ -32,10 +33,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private bool requirePickupToStart = true;
 
         [Header("Clearing (data)")]
-        [SerializeField] private float clearBonusPerSecond = 20f;
+        [SerializeField] private int clearBonus = 200;
         [SerializeField] private bool endRoundOnClear = true;
 
-        public State Current { get; private set; } = State.WaitingForPickup;
+        public State Current { get; private set; } = State.HowToPlay;
         public float TimeRemaining { get; private set; }
         public int RoundScore { get; private set; }
         public int TotalScore { get; private set; }
@@ -54,8 +55,6 @@ namespace IntuitiveDesigns.ShootingRange
         public event Action<int, int> RoundEnded;
         /// Every sign in the wave was shot
         public event Action<int> RoundCleared;
-        /// The wave ran out before the clock, with signs that got away
-        public event Action<int> WaveOver;
         public event Action<int> FinalScore;
         public event Action<Vector3> PlayerHit;
         /// The spider got the player: the trigger is dead for that many seconds
@@ -84,6 +83,15 @@ namespace IntuitiveDesigns.ShootingRange
                                  "PistolPickup in the scene. Starting immediately instead.");
                 requirePickupToStart = false;
             }
+
+            StartCoroutine(HowToPlay());
+        }
+
+        /// The controls card has the board through the barker's welcome, then the guns come up to be taken
+        private IEnumerator HowToPlay()
+        {
+            SetState(State.HowToPlay);
+            yield return StartCoroutine(Pause(controlsSeconds));
 
             if (requirePickupToStart) SetState(State.WaitingForPickup);
             else BeginFromPickup();
@@ -188,21 +196,18 @@ namespace IntuitiveDesigns.ShootingRange
             if (RoundStarted != null) RoundStarted(RoundNumber);
             if (TimeChanged != null) TimeChanged(TimeRemaining);
 
-            bool waveOut = false;
-            bool everySign = false;
+            bool shelfCleared = false;
 
             while (TimeRemaining > 0f)
             {
                 TimeRemaining -= Time.unscaledDeltaTime;
                 if (TimeChanged != null) TimeChanged(Mathf.Max(0f, TimeRemaining));
 
-                if (RoundGoalMet())
+                // A practice shelf can end on its plates. A range with traffic always runs to the bell:
+                // its signs are paced to the clock and the last one drops away as it goes
+                if (director == null && endRoundOnClear && arena != null && arena.IsCleared)
                 {
-                    waveOut = true;
-                    everySign = director == null || director.Killed >= director.WaveSize;
-
-                    // A wave also runs out when targets escape, and that is not worth a bonus
-                    if (everySign) AddScore(Mathf.RoundToInt(Mathf.Max(0f, TimeRemaining) * clearBonusPerSecond));
+                    shelfCleared = true;
                     break;
                 }
 
@@ -211,8 +216,14 @@ namespace IntuitiveDesigns.ShootingRange
 
             TimeRemaining = Mathf.Max(0f, TimeRemaining);
 
-            if (waveOut && everySign && RoundCleared != null) RoundCleared(RoundNumber);
-            if (waveOut && !everySign && WaveOver != null) WaveOver(RoundNumber);
+            bool everySign = director != null
+                           ? director.WaveSize > 0 && director.Killed >= director.WaveSize
+                           : shelfCleared;
+            if (everySign)
+            {
+                AddScore(clearBonus);
+                if (RoundCleared != null) RoundCleared(RoundNumber);
+            }
             // A combo must not survive the break. Carried over, its next link could land on a
             // milestone and hand out a power up before the player has fired a shot
             if (combo != null) combo.Reset(true);
@@ -224,13 +235,6 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (MaxRounds == 0) return 0f;
             return secondsPerRound[Mathf.Clamp(round - 1, 0, MaxRounds - 1)];
-        }
-
-        /// A range with traffic ends on its wave, a practice shelf on its plates
-        private bool RoundGoalMet()
-        {
-            if (director != null) return director.WaveCleared;
-            return endRoundOnClear && arena != null && arena.IsCleared;
         }
 
         private IEnumerator EndExperience()

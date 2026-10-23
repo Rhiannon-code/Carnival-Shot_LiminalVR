@@ -29,6 +29,6 @@ Material:
     - _ScaleA: 0.3
     - _ScaleB: 0.55
     m_Colors:
-    - _Color: {r: 0.8, g: 0.74, b: 0.9, a: 1}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _DriftA: {r: 0.06, g: 0.025, b: 0, a: 0}
     - _DriftB: {r: -0.035, g: 0.045, b: 0, a: 0}
