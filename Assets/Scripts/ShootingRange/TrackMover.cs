@@ -51,6 +51,7 @@ namespace IntuitiveDesigns.ShootingRange
         private float _hold;
         private bool _stationary;
         private bool _running;
+        private float _deadline;
         private PowerUpKind? _special;
 
         private void Awake()
@@ -72,10 +73,12 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// holdSeconds above zero is one that stands still instead of travelling, for that long. The
         /// booking is made from the same number, so it cannot be told one thing and the mover another
-        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one
-        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special)
+        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one.
+        /// deadline is when, on the unscaled clock, it has to reach its end, or 0 for no hurry
+        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special, float deadline)
         {
             _special = special;
+            _deadline = deadline;
             _rail = rail;
             _speed = speed;
             _distance = 0f;
@@ -97,7 +100,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (target == null) return;
 
-            target.Present(rail.ShownOffset, rail.SignOffset, rail.Hinge, rail.Cover);
+            target.Present(rail);
             var powerUps = PowerUps.Instance;
             target.Glow(special.HasValue && powerUps != null ? powerUps.Colour(special.Value) : (Color?)null);
         }
@@ -113,10 +116,11 @@ namespace IntuitiveDesigns.ShootingRange
             if (_stationary)
             {
                 _held += Time.fixedDeltaTime;
-                if (_held >= _hold) ReachEnd();
+                if (_held >= _hold || (_deadline > 0f && Time.unscaledTime >= _deadline)) ReachEnd();
                 return;
             }
 
+            if (_deadline > 0f) _speed = SpeedToDeadline();
             _distance += _speed * Time.fixedDeltaTime;
 
             if (_distance >= _rail.Length) { ReachEnd(); return; }
@@ -141,12 +145,25 @@ namespace IntuitiveDesigns.ShootingRange
             else Retire();
         }
 
-        /// Taken off the range between rounds, which is not an outcome, so nobody hears about it
+        /// The speed that ends the run on its deadline. The deadline is on the round's unscaled clock and
+        /// the run is in scaled time, so it is asked again every step and a slow motion mid-run cannot
+        /// carry the sign past the bell
+        private float SpeedToDeadline()
+        {
+            float left = Mathf.Max(Time.fixedDeltaTime, (_deadline - Time.unscaledTime) * Time.timeScale);
+            return (_rail.Length - _distance) / left;
+        }
+
+        /// Taken off the range when the round ends, which is not an outcome, so nobody hears about it.
+        /// One still up drops out of sight and one already going down finishes, rather than blinking away
         public void Stop()
         {
             _running = false;
             _rail = null;
-            Retire();
+            _special = null;
+
+            if (target != null && target.Live) target.Lower();
+            else if (target == null || !target.Leaving) Retire();
         }
 
         private void ReachEnd()

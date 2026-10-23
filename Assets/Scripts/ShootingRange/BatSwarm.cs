@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using Liminal.SDK.VR.Avatars;
+using Random = UnityEngine.Random;
 
 namespace IntuitiveDesigns.ShootingRange
 {
@@ -33,6 +35,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] launchClips;
         [SerializeField] private AudioClip[] deathClips;
         [SerializeField, Range(0f, 1f)] private float volume = 0.9f;
+
+        /// A bat has left its sign and is on its way to the player
+        public event Action Launched;
 
         private Bat[] _pool;
         private float _nextRelease;
@@ -129,6 +134,7 @@ namespace IntuitiveDesigns.ShootingRange
 
                 bat.Launch(this, mover.TargetPoint, head, _speed);
                 PlayAt(launchClips, mover.TargetPoint);
+                if (Launched != null) Launched();
                 return;
             }
         }

@@ -24,6 +24,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Surface[] surfaces;
         [SerializeField, Range(0f, 1f)] private float impactVolume = 0.55f;
 
+        [Header("Bullet holes on the room (optional)")]
+        [SerializeField] private ShotDecals decals;
+
         [Header("Shared voices")]
         [SerializeField] private int voices = 12;
         [SerializeField, Range(0f, 0.3f)] private float pitchJitter = 0.08f;
@@ -103,6 +106,15 @@ namespace IntuitiveDesigns.ShootingRange
         {
             PlayBurst(point, normal);
             PlayClip(Pick(ClipsFor(struck)), point, impactVolume);
+            if (decals != null && StaysPut(struck)) decals.Place(point, normal);
+        }
+
+        /// A hole only goes on what never moves: not a prop that can be knocked about, anything shootable,
+        /// or the coffin, whose lid swings open and would leave the mark in the air
+        private static bool StaysPut(Collider struck)
+        {
+            return struck != null && struck.attachedRigidbody == null &&
+                   struck.GetComponentInParent<IShootable>() == null && struck.GetComponentInParent<Coffin>() == null;
         }
 
         private AudioClip[] ClipsFor(Collider struck)

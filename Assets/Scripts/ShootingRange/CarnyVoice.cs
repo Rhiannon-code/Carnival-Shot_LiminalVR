@@ -11,6 +11,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private TrackDirector director;
         [SerializeField] private PowerUps powerUps;
         [SerializeField] private ComboTracker combo;
+        [SerializeField] private SpiderNest spiders;
+        [SerializeField] private BatSwarm bats;
 
         [Header("Welcome, as the guns appear (the second part follows the first)")]
         [SerializeField] private AudioClip[] welcome;
@@ -34,6 +36,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Vector3 verdictSteps = new Vector3(0.25f, 0.5f, 0.8f);
         [SerializeField] private AudioClip[] goodbye;
 
+        [Header("Warnings, the first time each turns up (they cut in: the spider bites, the bat is coming)")]
+        [SerializeField] private AudioClip[] spiderWarning;
+        [SerializeField] private AudioClip[] batWarning;
+
         [Header("Reactions (only while he is quiet)")]
         [SerializeField] private AudioClip[] missStreak;
         [SerializeField] private AudioClip[] powerUp;
@@ -54,7 +60,9 @@ namespace IntuitiveDesigns.ShootingRange
         private int _misses;
         private float _busyUntil;
         private float _quietUntil;
-        private bool _endedEarly;
+        private bool _cleared;
+        private bool _warnedOfSpiders;
+        private bool _warnedOfBats;
 
         private void Awake()
         {
@@ -62,6 +70,8 @@ namespace IntuitiveDesigns.ShootingRange
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
             if (combo == null) combo = FindObjectOfType<ComboTracker>();
+            if (spiders == null) spiders = FindObjectOfType<SpiderNest>();
+            if (bats == null) bats = FindObjectOfType<BatSwarm>();
         }
 
         private void OnEnable()
@@ -71,8 +81,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.CountdownTick += OnCountdownTick;
                 game.CountdownGo += OnCountdownGo;
                 game.RoundStarted += OnRoundStarted;
-                game.RoundCleared += OnWaveOut;
-                game.WaveOver += OnWaveOut;
+                game.RoundCleared += OnRoundCleared;
                 game.RoundEnded += OnRoundEnded;
                 game.FinalScore += OnFinalScore;
             }
@@ -80,6 +89,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (director != null) director.TargetResolved += OnTargetResolved;
             if (powerUps != null) powerUps.Granted += OnGranted;
             if (combo != null) combo.Changed += OnComboChanged;
+            if (spiders != null) spiders.Dropped += OnSpiderDropped;
+            if (bats != null) bats.Launched += OnBatLaunched;
         }
 
         private void OnDisable()
@@ -89,8 +100,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.CountdownTick -= OnCountdownTick;
                 game.CountdownGo -= OnCountdownGo;
                 game.RoundStarted -= OnRoundStarted;
-                game.RoundCleared -= OnWaveOut;
-                game.WaveOver -= OnWaveOut;
+                game.RoundCleared -= OnRoundCleared;
                 game.RoundEnded -= OnRoundEnded;
                 game.FinalScore -= OnFinalScore;
             }
@@ -98,6 +108,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (director != null) director.TargetResolved -= OnTargetResolved;
             if (powerUps != null) powerUps.Granted -= OnGranted;
             if (combo != null) combo.Changed -= OnComboChanged;
+            if (spiders != null) spiders.Dropped -= OnSpiderDropped;
+            if (bats != null) bats.Launched -= OnBatLaunched;
         }
 
         private IEnumerator Start()
@@ -105,7 +117,8 @@ namespace IntuitiveDesigns.ShootingRange
             yield return new WaitForSecondsRealtime(welcomeAfterSeconds);
 
             // A grab inside that first second has already started the countdown
-            if (game != null && game.Current != RangeGame.State.WaitingForPickup) yield break;
+            if (game != null && game.Current != RangeGame.State.HowToPlay &&
+                game.Current != RangeGame.State.WaitingForPickup) yield break;
             Queue(welcome);
             Queue(welcomeThen);
         }
@@ -129,17 +142,18 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnRoundStarted(int round)
         {
             _misses = 0;
-            _endedEarly = false;
+            _cleared = false;
         }
 
-        private void OnWaveOut(int round)
+        private void OnRoundCleared(int round)
         {
-            _endedEarly = true;
+            _cleared = true;
         }
 
+        /// A clean sweep goes straight to the cheer; anything less hears the bell called first
         private void OnRoundEnded(int round, int roundScore)
         {
-            if (!_endedEarly) Queue(timeUp);
+            if (!_cleared) Queue(timeUp);
             Queue(Verdict());
 
             if (game.IsFinalRound) return;
@@ -177,6 +191,22 @@ namespace IntuitiveDesigns.ShootingRange
 
             _misses = 0;
             React(missStreak);
+        }
+
+        private void OnSpiderDropped()
+        {
+            if (_warnedOfSpiders) return;
+
+            _warnedOfSpiders = true;
+            Interrupt(Pick(spiderWarning));
+        }
+
+        private void OnBatLaunched()
+        {
+            if (_warnedOfBats) return;
+
+            _warnedOfBats = true;
+            Interrupt(Pick(batWarning));
         }
 
         private void OnGranted(PowerUpKind kind, float seconds, bool stack)

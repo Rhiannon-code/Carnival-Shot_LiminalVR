@@ -6,7 +6,7 @@ using Liminal.SDK.VR.Avatars;
 
 namespace IntuitiveDesigns.ShootingRange.EditorTools
 {
-    public static class RangeSetup
+    public static partial class RangeSetup
     {
         private const string PrefabPath = "Assets/Prefabs/ShootingRange/TrackMover.prefab";
         private const string GhostMaterial = "Assets/GhostlyHand/Built-In Render Pipeline/EXAMPLE HAND1.mat";
@@ -431,9 +431,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             Dirty();
         }
 
-        /// How high the wall's top has to be for the furthest floor rail to hide the tallest sign with
-        /// only its peek showing. The sight line over a wall below eye level falls away with distance,
-        /// so the far rails are what sets this, not the near ones
         private static float WallTopNeeded()
         {
             float signTop, signBottom;
@@ -1717,10 +1714,9 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                                     .Set("minSpeed", CrossMinSpeed).Set("maxSpeed", CrossMaxSpeed)
                                     .Set("speedScalePerRound", 1.07f)
                                     .Set("concurrentTargets", 4).Set("extraConcurrentPerRound", 1)
-                                    .Set("maxConcurrentTargets", 6)
-                                    .Set("lastLaunchSecondsLeft", 4f).Apply();
+                                    .Set("maxConcurrentTargets", 6).Apply();
                 Did("Track Director: 14 / 18 / 33 / 39 / 60 signs, 4 / 5 / 6 / 6 / 6 up at once, speed x1.07 a round, " +
-                    "waves every 1.6 s x0.85 a round, all out with 4 s to go");
+                    "waves every 1.6 s x0.85 a round, spread evenly to lead into the last sign, which drops away on the bell");
             }
             else Fail("No TrackDirector in the scene");
 
@@ -2150,22 +2146,25 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             renderer.receiveShadows = false;
         }
 
-        /// The first thing below that is part of the room, not a sign, prop or gun; 0 when nothing is there
-        private static float FloorUnder(Vector3 from)
+        private static float FloorUnder(Vector3 from) { return RoomSurface(from, Vector3.down, 0f); }
+
+        /// The height of the first thing that way that is part of the room, not a sign, prop or gun; fallback
+        /// when nothing is there
+        private static float RoomSurface(Vector3 from, Vector3 direction, float fallback)
         {
             float nearest = float.MaxValue;
-            float floor = 0f;
-            foreach (var hit in Physics.RaycastAll(from, Vector3.down, 10f, ~0, QueryTriggerInteraction.Ignore))
+            float surface = fallback;
+            foreach (var hit in Physics.RaycastAll(from, direction, 10f, ~0, QueryTriggerInteraction.Ignore))
             {
                 var c = hit.collider;
                 if (hit.distance >= nearest || c.GetComponentInParent<TrackMover>() != null ||
                     c.GetComponentInParent<Knockable>() != null || c.GetComponentInParent<Pistol>() != null) continue;
 
                 nearest = hit.distance;
-                floor = hit.point.y;
+                surface = hit.point.y;
             }
 
-            return floor;
+            return surface;
         }
 
         private const string SpiderPath = "Assets/Prefabs/ShootingRange/Spider.prefab";
@@ -2818,6 +2817,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var sets = new List<Object>();
             foreach (var pair in built) sets.Add(pair.Value);
 
+            // The room targets' pieces are cut by step 28, not built from FBX here, but they need pre-warming too
+            if (AssetDatabase.IsValidFolder(RoomShardDir))
+            {
+                foreach (var guid in AssetDatabase.FindAssets("t:GameObject", new[] { RoomShardDir }))
+                    sets.Add(RangeSetupUtil.Load<GameObject>(AssetDatabase.GUIDToAssetPath(guid)));
+            }
+
             new Fields(pool).SetArray("shardSets", sets).Apply();
             Did("ShatterPool pre-warms " + sets.Count + " broken sets");
             Dirty();
@@ -2891,6 +2897,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             var popUp = figure.parent != null ? figure.parent.GetComponent<PopUpTarget>() : null;
             bool flip = popUp != null && new Fields(popUp).Bool("sidewaysFlip");
+            float gap = popUp != null ? new Fields(popUp).Float("mountGap") : 0f;
 
             int count = figure.childCount;
             if (count == 0) { Fail("The Figure has no signs under it"); ClosePrefab(false); return; }
@@ -2919,9 +2926,9 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                                     ? rail.Length * 0.5f
                                     : rail.Length * (i + 0.5f) / count;
 
-                        Stand(figure.GetChild(i), figure.localScale, shelf.transform, rail, along,
-                              player, flip, folded);
-                        placed++;
+                        if (Stand(figure.GetChild(i), figure.localScale, shelf.transform, rail, along,
+                                  player, flip, gap, folded))
+                            placed++;
                     }
                 }
             }
@@ -2939,11 +2946,23 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             Selection.activeGameObject = root;
         }
 
-        /// One sign, posed the way PopUpTarget would pose it on this rail
-        private static void Stand(Transform sign, Vector3 figureScale, Transform parent, TrackRail rail,
-                                  float along, Transform player, bool flip, bool folded)
+        /// One sign, posed the way PopUpTarget would pose it on this rail, or false for one too tall to
+        /// ride it
+        private static bool Stand(Transform sign, Vector3 figureScale, Transform parent, TrackRail rail,
+                                  float along, Transform player, bool flip, float gap, bool folded)
         {
+            Vector3 low, high;
+            PopUpTarget.Measure(sign, out low, out high);
+            if (rail.TallestSign > 0f && (high.y - low.y) * figureScale.y > rail.TallestSign) return false;
+
             Vector3 home = rail.PointAt(along) + Vector3.up * rail.ShownOffset + rail.SignOffset;
+
+            Bounds mount;
+            if (rail.Hinge == Hinge.Sideways && player != null && rail.Mounted(out mount))
+            {
+                var door = PopUpTarget.DoorEdge(mount, player.position, gap);
+                home = new Vector3(door.x, rail.PointAt(along).y + rail.ShownOffset, door.z);
+            }
 
             var stage = new GameObject(sign.name);
             stage.transform.SetParent(parent, false);
@@ -2959,14 +2978,12 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             foreach (var collider in copy.GetComponentsInChildren<Collider>(true))
                 Object.DestroyImmediate(collider);
 
-            Vector3 low, high;
-            PopUpTarget.Measure(sign, out low, out high);
-
             float side = player != null ? PopUpTarget.SideOf(home, player) : 1f;
             var shape = PopUpTarget.ShapeFor(rail.Hinge, low, high, side, flip);
             var facing = player != null ? PopUpTarget.SquareOn(player) : Quaternion.identity;
 
             PopUpTarget.PlaceFigure(stage.transform, home, facing, shape, folded ? shape.Folded : 0f, 0f);
+            return true;
         }
 
         private static Transform PlayerTransform()
@@ -3074,6 +3091,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var figure = PrefabFigure();
             if (figure == null) return;
 
+            // The stand holds a floor or roof sign this much further from its rail than its hinge
+            var popUp = figure.parent != null ? figure.parent.GetComponent<PopUpTarget>() : null;
+            var popUpFields = popUp != null ? new Fields(popUp) : null;
+            float standLift = popUpFields != null && popUpFields.Ref("stand") != null ? popUpFields.Float("standShows") : 0f;
+
             try
             {
                 for (int i = 0; i < figure.childCount; i++)
@@ -3110,7 +3132,24 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
                 if (rail.Hinge == Hinge.Sideways)
                 {
-                    Say(rail.name + " swings out sideways, so height does not gate it");
+                    float highest = Mathf.Max(rail.PointAt(0f).y, rail.PointAt(rail.Length).y) + shown;
+                    Say(rail.name + " opens sideways off its pillar, carrying " + (rail.TallestSign > 0f
+                        ? "signs up to " + rail.TallestSign.ToString("0.00") + " m tall"
+                        : "any sign"));
+
+                    for (int i = 0; i < feet.Count; i++)
+                    {
+                        float tall = high[i] - low[i];
+                        if (rail.TallestSign > 0f && tall > rail.TallestSign)
+                        {
+                            Say("   " + feet[i].PadRight(16) + " " + tall.ToString("0.00") + " m tall, never rides here");
+                            continue;
+                        }
+
+                        float top = highest + tall;
+                        Say("   " + feet[i].PadRight(16) + " top " + top.ToString("0.00") + " at the rail's highest" +
+                            (top > ceiling ? "  THROUGH THE CEILING by " + (top - ceiling).ToString("0.00") : ""));
+                    }
                     continue;
                 }
 
@@ -3137,7 +3176,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
                     float tall = high[i] - low[i];
                     float lift = perSign ? line + SignPeek - tall - railY : shown;
-                    float standsAt = roof ? railY + lift - tall : railY + lift;
+                    float standsAt = roof ? railY + lift - standLift - tall : railY + lift + standLift;
                     float topsAt = standsAt + tall;
 
                     string note = "  " + tall.ToString("0.00") + " m tall";

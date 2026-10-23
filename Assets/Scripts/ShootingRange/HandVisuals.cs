@@ -88,7 +88,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void LateUpdate()
         {
-            bool waiting = game == null || game.Current == RangeGame.State.WaitingForPickup;
+            bool waiting = game == null || game.Current == RangeGame.State.HowToPlay ||
+                           game.Current == RangeGame.State.WaitingForPickup;
 
             for (int i = 0; i < hands.Length; i++)
             {

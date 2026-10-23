@@ -103,12 +103,14 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// The broken pieces of the sign that was actually hit. They arrive where the sign was, so they
         /// line up with what vanished, and are thrown from the hole the round made
-        public void Burst(GameObject set, Transform sign, Vector3 at, Vector3 direction, float impulse)
+        /// clips and volume replace the pool's own shatter sound, for things that are not wooden signs
+        public void Burst(GameObject set, Transform sign, Vector3 at, Vector3 direction, float impulse,
+                          AudioClip[] clips = null, float volume = -1f)
         {
             Queue<Pieces> spare;
             if (set == null || sign == null || !_sets.TryGetValue(set, out spare) || spare.Count == 0)
             {
-                Burst(at, 8, direction, impulse);
+                Burst(at, 8, direction, impulse, clips, volume);
                 return;
             }
 
@@ -137,14 +139,13 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlayPop(at, direction);
-
-            if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
-                ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
+            PlayShatter(at, clips, volume);
 
             _thrownSets.Add(new ThrownSet { Set = set, Pieces = pieces, Until = Time.time + lifetime });
         }
 
-        public void Burst(Vector3 at, int count, Vector3 direction, float impulse)
+        public void Burst(Vector3 at, int count, Vector3 direction, float impulse,
+                          AudioClip[] clips = null, float volume = -1f)
         {
             int thrown = Mathf.Min(count, _idle.Count);
 
@@ -167,9 +168,15 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlayPop(at, direction);
+            PlayShatter(at, clips, volume);
+        }
 
-            if (ImpactFX.Instance != null && shatterClips != null && shatterClips.Length > 0)
-                ImpactFX.Instance.PlayClip(shatterClips[Random.Range(0, shatterClips.Length)], at, shatterVolume);
+        private void PlayShatter(Vector3 at, AudioClip[] clips, float volume)
+        {
+            if (clips == null || clips.Length == 0) { clips = shatterClips; volume = -1f; }
+            if (ImpactFX.Instance == null || clips == null || clips.Length == 0) return;
+
+            ImpactFX.Instance.PlayClip(clips[Random.Range(0, clips.Length)], at, volume >= 0f ? volume : shatterVolume);
         }
 
         /// Built once at Awake. Instantiating eight rigidbodies the moment a sign is shot would hitch

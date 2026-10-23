@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 using TMPro;
 
@@ -20,15 +19,11 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Copy (data)")]
         [SerializeField] private string pickupPrompt = "TAKE THE PISTOL";
         [SerializeField] private string clearedMessage = "WAVE CLEARED";
-        [SerializeField] private string waveOverMessage = "WAVE OVER";
         [SerializeField] private string timeUpMessage = "TIME UP";
         [SerializeField] private string slainLabel = "SLAIN";
         [SerializeField] private string finalScoreLabel = "FINAL SCORE";
-        [SerializeField] private float messageSeconds = 1.6f;
 
-        private Coroutine _message;
         private bool _cleared;
-        private bool _waveOver;
 
         private void OnEnable()
         {
@@ -39,7 +34,6 @@ namespace IntuitiveDesigns.ShootingRange
                 game.CountdownGo += OnGo;
                 game.RoundStarted += OnRoundStarted;
                 game.RoundCleared += OnRoundCleared;
-                game.WaveOver += OnWaveOver;
                 game.RoundEnded += OnRoundEnded;
                 game.FinalScore += OnFinalScore;
             }
@@ -54,7 +48,6 @@ namespace IntuitiveDesigns.ShootingRange
                 game.CountdownGo -= OnGo;
                 game.RoundStarted -= OnRoundStarted;
                 game.RoundCleared -= OnRoundCleared;
-                game.WaveOver -= OnWaveOver;
                 game.RoundEnded -= OnRoundEnded;
                 game.FinalScore -= OnFinalScore;
             }
@@ -68,32 +61,30 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnStateChanged(RangeGame.State state)
         {
             if (state == RangeGame.State.WaitingForPickup) Show(pickupPrompt);
+
+            // The controls card has the board first; later the guns are in hand and the prompt is done
+            if (state == RangeGame.State.HowToPlay || state == RangeGame.State.Intro) Show(string.Empty);
         }
 
+        /// The count itself is on the skulls' eyes (CountdownSkulls); the board only says which round is coming
         private void OnCountdownTick(int n)
         {
-            Show("ROUND " + game.NextRoundNumber + "\n" + n);
+            Show("ROUND " + game.NextRoundNumber);
         }
 
         private void OnGo()
         {
-            Flash("GO");
+            Show(string.Empty);
         }
 
         private void OnRoundStarted(int round)
         {
             _cleared = false;
-            _waveOver = false;
         }
 
         private void OnRoundCleared(int round)
         {
             _cleared = true;
-        }
-
-        private void OnWaveOver(int round)
-        {
-            _waveOver = true;
         }
 
         private void OnRoundEnded(int round, int roundScore)
@@ -109,7 +100,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private string RoundResult()
         {
-            string headline = _cleared ? clearedMessage : _waveOver ? waveOverMessage : timeUpMessage;
+            string headline = _cleared ? clearedMessage : timeUpMessage;
             if (director == null) return headline;
 
             return headline + "\n" + director.Killed + " / " + director.WaveSize + " " + slainLabel;
@@ -117,28 +108,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Show(string text)
         {
-            if (_message != null)
-            {
-                StopCoroutine(_message);
-                _message = null;
-            }
-
             if (centerText != null) centerText.text = text;
-        }
-
-        private void Flash(string text)
-        {
-            if (centerText == null) return;
-
-            Show(text);
-            _message = StartCoroutine(ClearAfter(messageSeconds));
-        }
-
-        private IEnumerator ClearAfter(float seconds)
-        {
-            yield return new WaitForSecondsRealtime(seconds);
-            centerText.text = string.Empty;
-            _message = null;
         }
     }
 }

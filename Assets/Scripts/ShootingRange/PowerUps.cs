@@ -58,7 +58,7 @@ namespace IntuitiveDesigns.ShootingRange
         public event Action<PowerUpKind> Expired;
 
         public bool FullAuto { get { return IsActive(PowerUpKind.FullAuto); } }
-        public bool BottomlessMagazine { get { return IsActive(PowerUpKind.FullAuto); } }
+        public bool BottomlessMagazine { get { return IsActive(PowerUpKind.FullAuto) || IsActive(PowerUpKind.Scattershot); } }
         public int Pellets { get { return IsActive(PowerUpKind.Scattershot) ? Mathf.Max(1, pellets) : 1; } }
         public float PelletSpread { get { return pelletSpreadDegrees; } }
 
