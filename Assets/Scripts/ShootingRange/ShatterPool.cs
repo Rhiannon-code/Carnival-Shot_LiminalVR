@@ -103,14 +103,15 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// The broken pieces of the sign that was actually hit. They arrive where the sign was, so they
         /// line up with what vanished, and are thrown from the hole the round made
-        /// clips and volume replace the pool's own shatter sound, for things that are not wooden signs
+        /// clips and volume replace the pool's own shatter sound, for things that are not wooden signs.
+        /// popScale sizes the smoke puff, 0 for none
         public void Burst(GameObject set, Transform sign, Vector3 at, Vector3 direction, float impulse,
-                          AudioClip[] clips = null, float volume = -1f)
+                          AudioClip[] clips = null, float volume = -1f, float popScale = 1f)
         {
             Queue<Pieces> spare;
             if (set == null || sign == null || !_sets.TryGetValue(set, out spare) || spare.Count == 0)
             {
-                Burst(at, 8, direction, impulse, clips, volume);
+                Burst(at, 8, direction, impulse, clips, volume, popScale);
                 return;
             }
 
@@ -138,14 +139,14 @@ namespace IntuitiveDesigns.ShootingRange
                 body.AddTorque(Random.insideUnitSphere * spin, ForceMode.Impulse);
             }
 
-            PlayPop(at, direction);
+            PlayPop(at, direction, popScale);
             PlayShatter(at, clips, volume);
 
             _thrownSets.Add(new ThrownSet { Set = set, Pieces = pieces, Until = Time.time + lifetime });
         }
 
         public void Burst(Vector3 at, int count, Vector3 direction, float impulse,
-                          AudioClip[] clips = null, float volume = -1f)
+                          AudioClip[] clips = null, float volume = -1f, float popScale = 1f)
         {
             int thrown = Mathf.Min(count, _idle.Count);
 
@@ -167,7 +168,7 @@ namespace IntuitiveDesigns.ShootingRange
                 _thrown.Add(new Thrown { Piece = piece, Until = Time.time + lifetime });
             }
 
-            PlayPop(at, direction);
+            PlayPop(at, direction, popScale);
             PlayShatter(at, clips, volume);
         }
 
@@ -219,11 +220,12 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// Opens back toward the shooter, in front of what was hit. Left facing its own way it puffed
         /// upward from behind the sign, which hid half of it until the sign spun or fell out of the way
-        public void PlayPop(Vector3 at, Vector3 direction)
+        public void PlayPop(Vector3 at, Vector3 direction, float scale = 1f)
         {
-            if (_pops.Count == 0) return;
+            if (scale <= 0f || _pops.Count == 0) return;
 
             var pop = _pops.Dequeue();
+            pop.transform.localScale = Vector3.one * scale;
             Vector3 towardShooter = direction.sqrMagnitude > 1e-6f ? -direction.normalized : Vector3.up;
             Vector3 opens = Quaternion.Euler(pop.shape.rotation) * Vector3.forward;
 

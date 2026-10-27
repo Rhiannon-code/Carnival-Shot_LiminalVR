@@ -244,7 +244,9 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 Say("No ceiling collider over the range, so the bulbs hang from an assumed " + AssumedCeiling + " m roof");
             }
 
-            if (Part(root, "Bulbs")) LayTheBulbs(root, near, far, ceiling);
+            // The string lights (step 37) are the warm light now; these invisible rows were their stand-in
+            if (RangeSetupUtil.Child(root, StringLightsName) != null) Say("String lights are up, so no stand-in bulb rows");
+            else if (Part(root, "Bulbs")) LayTheBulbs(root, near, far, ceiling);
             if (Part(root, "Underglow")) LayTheUnderglow(root, FrontRailPerLevel(rails, eye), eye);
             if (Part(root, "Probes")) LayTheProbes(root, rails, near, far, width, ceiling);
         }

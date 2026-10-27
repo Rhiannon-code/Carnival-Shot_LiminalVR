@@ -81,7 +81,9 @@ MonoBehaviour:
   nudge: 0
   lift: 0.5
   unstickSpeed: 0.5
-  hitClips: []
+  hitClips:
+  - {fileID: 8300000, guid: 0b854305d57aeb0318eca64edeb2f993, type: 3}
+  - {fileID: 8300000, guid: 6b50c9bc7d7ddde0b8c037cbb28937c7, type: 3}
   hitVolume: 0.7
 --- !u!1001 &6607814375344649515
 PrefabInstance:

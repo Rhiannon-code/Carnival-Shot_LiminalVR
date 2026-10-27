@@ -50,6 +50,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Room_FlaskTriangular
       objectReference: {fileID: 0}
+    - target: {fileID: -927199367670048503, guid: a973efd52526c4247aa7210ac2216ec7,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: -4216859302048453862, guid: a973efd52526c4247aa7210ac2216ec7,
         type: 3}
       propertyPath: m_LocalPosition.x

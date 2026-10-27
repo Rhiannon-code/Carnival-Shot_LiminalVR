@@ -30,6 +30,8 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Death (data)")]
         [SerializeField] private int fragments = 3;
         [SerializeField] private float fragmentImpulse = 0.8f;
+        [SerializeField, Range(0f, 1f)]
+        private float popScale = 0.5f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] launchClips;
@@ -111,7 +113,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             bat.Stop();
 
-            if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse);
+            if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse, null, -1f, popScale);
             PlayAt(deathClips, at);
         }
 

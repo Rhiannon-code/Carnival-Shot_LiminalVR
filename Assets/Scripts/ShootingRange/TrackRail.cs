@@ -43,6 +43,9 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Tallest sign this rail carries (data, metres, 0 = any)")]
         [SerializeField] private float tallestSign;
 
+        [Header("The bulbs that run toward the launch point as a sign comes up (optional)")]
+        [SerializeField] private RailBulbs bulbs;
+
         [Header("Difficulty (1 = from the start, 2.5 = halfway through round 2)")]
         [SerializeField] private float fromRound = 1f;
 
@@ -87,6 +90,12 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             return any;
+        }
+
+        /// A sign is about to come up at the origin, seconds from now
+        public void Warn(float seconds)
+        {
+            if (bulbs != null) bulbs.Chase(seconds);
         }
 
         public Vector3 PointAt(float distance)

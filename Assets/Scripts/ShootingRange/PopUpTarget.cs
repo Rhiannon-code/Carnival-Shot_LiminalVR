@@ -8,7 +8,8 @@ namespace IntuitiveDesigns.ShootingRange
 
     public class PopUpTarget : MonoBehaviour
     {
-        private enum Phase { Idle, Waiting, Rising, Settling, Up, Spinning, Falling }
+        private enum Phase { Idle, Waiting, Rising, Settling, Up, Spinning, Falling, Reacting, Taunting }
+        private enum RiseStyle { Smooth, Snap, Peek, Bungee }
 
         [Header("Refs")]
         [SerializeField] private Transform figure;
@@ -19,7 +20,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Stand (optional: a sibling of the Figure, never under it, or the setup tool takes it for a sign)")]
         [SerializeField] private Transform stand;
-        [SerializeField] private float standShows = 0.04f;
 
         [Header("Shape (data, metres)")]
         [SerializeField] private bool sidewaysFlip;
@@ -40,10 +40,33 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float wobbleSeconds = 0.45f;
         [SerializeField] private float wobbleCycles = 2.5f;
 
-        [Header("What a hit does (data, relative odds)")]
-        [SerializeField] private float spinAndFallOdds = 6f;
-        [SerializeField] private float fallOdds = 3f;
-        [SerializeField] private float shatterOdds = 1f;
+        [Header("How it comes up (data, relative odds). Every style takes the same time, so the booking never notices")]
+        [SerializeField] private float smoothOdds = 2f;
+        [SerializeField] private float snapOdds = 2f;
+        [SerializeField] private float peekOdds = 1f;
+        [SerializeField, Tooltip("Roof signs only")] private float bungeeOdds = 2f;
+        [SerializeField, Range(0f, 1f), Tooltip("How far up a peek gets before it pops")] private float peekShare = 0.3f;
+        [SerializeField, Tooltip("Times the landing wobble, for a snap")] private float snapOvershoot = 1.8f;
+        [SerializeField, Tooltip("Times the landing wobble, for a bungee drop")] private float bungeeOvershoot = 2.5f;
+
+        [Header("Rocking as it rides (data)")]
+        [SerializeField, Tooltip("Degrees it leans per m/s² the carriage speeds up or slows by")] private float leanPerAccel = 4f;
+        [SerializeField] private float maxLean = 14f;
+        [SerializeField] private float rockDegrees = 3f;
+        [SerializeField, Tooltip("Metres travelled per rock back and forth")] private float rockSpacing = 0.6f;
+        [SerializeField] private float rockStiffness = 120f;
+        [SerializeField] private float rockDamping = 9f;
+
+        [Header("In the sun (data): a vampire under an open skylight")]
+        [SerializeField, Tooltip("Seconds between one scorch and the next while it stays in the beam")] private float scorchEvery = 0.5f;
+        [SerializeField, Range(0f, 1f), Tooltip("Smoke puff, as a share of a hit's")] private float scorchSmoke = 0.35f;
+        [SerializeField, Tooltip("Degrees a second of stagger per scorch")] private float scorchKick = 220f;
+
+        [Header("Got away (data)")]
+        [SerializeField] private float tauntDegrees = 12f;
+        [SerializeField] private float tauntCycles = 3f;
+        [SerializeField] private float tauntSeconds = 0.4f;
+        [SerializeField] private AudioClip[] tauntClips;
 
         [Header("Reaction (data)")]
         [SerializeField] private float spinTurns = 2f;
@@ -52,6 +75,8 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Shatter (data)")]
         [SerializeField] private int fragments = 8;
         [SerializeField] private float fragmentImpulse = 1.4f;
+        [SerializeField, Tooltip("Metres: room props this close to a shattering sign give a start")]
+        private float joltRadius = 1.5f;
 
         [Header("Special power-up sign glow (data)")]
         [SerializeField] private Material specialGlow;
@@ -75,11 +100,14 @@ namespace IntuitiveDesigns.ShootingRange
         public bool Presented { get { return _phase == Phase.Settling || _phase == Phase.Up; } }
 
         /// Shot or done with, and on its way down
-        public bool Leaving { get { return _phase == Phase.Spinning || _phase == Phase.Falling; } }
+        public bool Leaving
+        {
+            get { return _phase == Phase.Spinning || _phase == Phase.Falling || _phase == Phase.Reacting || _phase == Phase.Taunting; }
+        }
 
         /// How long from being asked to pop up to being all the way there, and how long back down
         public float TimeToRise { get { return riseDelay + riseSeconds; } }
-        public float TimeToFall { get { return fallSeconds; } }
+        public float TimeToFall { get { return tauntSeconds + fallSeconds; } }
 
         /// The middle of the sign that is actually up, which is not a fixed spot: the signs are
         /// different sizes and only the top of one shows over its cover
@@ -106,6 +134,16 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _signOffset;
         private float _swing;
         private float _fallFrom;
+        private float _spinWay = 1f;
+        private RiseStyle _rise;
+        private float _settleScale = 1f;
+        private float _roll;
+        private float _rollSpeed;
+        private Vector3 _lastAt;
+        private Vector3 _lastVelocity;
+        private float _travelled;
+        private float _scorchedAt = -1f;
+        private SignReactions _reactions;
         private HingeShape _shape = new HingeShape { Axis = Vector3.right };
         private float _side = 1f;
         private GameObject _shards;
@@ -116,6 +154,7 @@ namespace IntuitiveDesigns.ShootingRange
         private bool _measured;
         private Vector3 _standAt;
         private float _standTop;
+        private float _standLength;
         private float[] _heights;
         private bool _mounted;
         private Vector3 _door;
@@ -126,13 +165,18 @@ namespace IntuitiveDesigns.ShootingRange
         private void Awake()
         {
             if (figure == null) figure = transform;
+            _reactions = GetComponent<SignReactions>();
             if (hitBox == null) hitBox = GetComponentInChildren<Collider>();
             _live = hitBox;
 
             _restLocal = figure.localPosition;
             _facing = figure.rotation;
 
-            if (stand != null) _standTop = TopOf(stand);
+            if (stand != null)
+            {
+                _standTop = TopOf(stand);
+                _standLength = LengthOf(stand);
+            }
 
             _heights = new float[variants != null ? variants.Length : 0];
             for (int i = 0; i < _heights.Length; i++)
@@ -149,6 +193,8 @@ namespace IntuitiveDesigns.ShootingRange
         /// by its feet, a side sign opens like a door from the corner of its pillar
         public void Present(TrackRail rail)
         {
+            _roll = 0f;
+            _rollSpeed = 0f;
             _shown = rail.ShownOffset;
             _signOffset = rail.SignOffset;
             _hinge = rail.Hinge;
@@ -177,7 +223,7 @@ namespace IntuitiveDesigns.ShootingRange
                 _swing = 0f;
                 Place(0f);
                 SetHitBox(true);
-                _phase = Phase.Up;
+                StartRiding();
                 return;
             }
 
@@ -198,14 +244,64 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (_hinge == Hinge.None || shatter) { Burst(point, direction); Finish(); return; }
 
-            float odds = Mathf.Max(0.0001f, spinAndFallOdds + fallOdds + shatterOdds);
-            float roll = UnityEngine.Random.value * odds;
+            // Where the round struck picks what happens (SignReactions); without one it spins and falls, as it used to
+            var reaction = _reactions != null ? _reactions.Pick(this, point) : SignReaction.Spin;
+            if (reaction == SignReaction.Shatter) { Burst(point, direction); Finish(); return; }
 
-            if (roll >= spinAndFallOdds + fallOdds) { Burst(point, direction); Finish(); return; }
-
-            Begin(roll < spinAndFallOdds ? Phase.Spinning : Phase.Falling);
+            if (_reactions != null) _reactions.Sound(reaction, HitCentre);
             if (ShatterPool.Instance != null) ShatterPool.Instance.PlayPop(HitCentre, direction);
+
+            switch (reaction)
+            {
+                case SignReaction.Spin:
+                    // Away from the side that was struck, as a real one would turn
+                    _spinWay = Vector3.Dot(Vector3.Cross(point - HitCentre, direction), Vector3.up) < 0f ? -1f : 1f;
+                    Begin(Phase.Spinning);
+                    break;
+
+                case SignReaction.Fold:
+                    Begin(Phase.Falling);
+                    break;
+
+                default:
+                    _phase = Phase.Reacting;
+                    _reactions.Play(reaction, this, point, direction);
+                    break;
+            }
         }
+
+        // For SignReactions, which drives the figure while one of its reactions plays
+
+        internal Hinge Hinge { get { return _hinge; } }
+        internal float Folded { get { return _shape.Folded; } }
+        internal float Swing { get { return _swing; } }
+        internal Transform Figure { get { return figure; } }
+        internal Quaternion Facing { get { return _facing; } }
+
+        /// Around the sign that is up, in the world
+        internal Bounds SignBounds
+        {
+            get
+            {
+                var renderers = _sign != null ? _sign.GetComponentsInChildren<Renderer>() : new Renderer[0];
+                if (renderers.Length == 0) return new Bounds(HitCentre, Vector3.one * 0.5f);
+
+                var box = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) box.Encapsulate(renderers[i].bounds);
+                return box;
+            }
+        }
+
+        internal void Pose(float swing)
+        {
+            _swing = swing;
+            Place(swing);
+        }
+
+        /// Folds away from wherever it has swung to, as a plain fall does
+        internal void Fold() { Begin(Phase.Falling); }
+
+        internal void Done() { Finish(); }
 
         /// An outline round the sign that was picked, in the power-up's colour, or off for null. It is
         /// the sign's own shape, grown in its flat plane and set just behind it, so only the border
@@ -299,6 +395,7 @@ namespace IntuitiveDesigns.ShootingRange
         /// Off the range between rounds, and nobody hears about it
         public void Cancel()
         {
+            if (_reactions != null) _reactions.Stop();
             SetHitBox(false);
             _swing = _hinge == Hinge.None ? 0f : _shape.Folded;
             Place(_swing);
@@ -318,7 +415,7 @@ namespace IntuitiveDesigns.ShootingRange
                 case Phase.Rising:
                 {
                     float t = Advance(riseSeconds);
-                    _swing = Mathf.Lerp(_shape.Folded, 0f, t * t * (3f - 2f * t));
+                    _swing = Mathf.Lerp(_shape.Folded, 0f, RiseCurve(t));
                     Place(_swing);
                     if (t >= 1f) Begin(Phase.Settling);
                     break;
@@ -330,9 +427,22 @@ namespace IntuitiveDesigns.ShootingRange
                     // stopping dead on the mark
                     float t = Advance(wobbleSeconds);
                     float ring = Mathf.Sin(t * wobbleCycles * 2f * Mathf.PI) * (1f - t) * (1f - t);
-                    _swing = Mathf.Sign(_shape.Folded) * wobbleDegrees * ring;
+                    _swing = Mathf.Sign(_shape.Folded) * wobbleDegrees * _settleScale * ring;
                     Place(_swing);
-                    if (t >= 1f) { _swing = 0f; Place(0f); _phase = Phase.Up; }
+                    if (t >= 1f) { _swing = 0f; Place(0f); StartRiding(); }
+                    break;
+                }
+
+                case Phase.Up:
+                    Ride();
+                    break;
+
+                case Phase.Taunting:
+                {
+                    float t = Advance(tauntSeconds);
+                    _roll = tauntDegrees * Mathf.Sin(t * tauntCycles * 2f * Mathf.PI) * (1f - t);
+                    Place(_swing);
+                    if (t >= 1f) Begin(Phase.Falling);
                     break;
                 }
 
@@ -340,7 +450,7 @@ namespace IntuitiveDesigns.ShootingRange
                 {
                     float t = Advance(spinSeconds);
                     _swing = 0f;
-                    Place(0f, 360f * spinTurns * t);
+                    Place(0f, _spinWay * 360f * spinTurns * t);
                     if (t >= 1f) Begin(Phase.Falling);
                     break;
                 }
@@ -358,15 +468,115 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void StartRising()
         {
+            _rise = RollRise();
+            _settleScale = _rise == RiseStyle.Snap ? snapOvershoot : _rise == RiseStyle.Bungee ? bungeeOvershoot : 1f;
             Begin(Phase.Rising);
             SetHitBox(true);
             Play(riseClips);
+        }
+
+        private RiseStyle RollRise()
+        {
+            float bungee = _hinge == Hinge.Down ? bungeeOdds : 0f;
+            float roll = UnityEngine.Random.value * Mathf.Max(0.0001f, smoothOdds + snapOdds + peekOdds + bungee);
+
+            if ((roll -= smoothOdds) < 0f) return RiseStyle.Smooth;
+            if ((roll -= snapOdds) < 0f) return RiseStyle.Snap;
+            if ((roll -= peekOdds) < 0f) return RiseStyle.Peek;
+            return bungee > 0f ? RiseStyle.Bungee : RiseStyle.Smooth;
+        }
+
+        /// How far up it is, 0 to 1, a share t of the way through the rise
+        private float RiseCurve(float t)
+        {
+            switch (_rise)
+            {
+                case RiseStyle.Snap: return 1f - (1f - t) * (1f - t) * (1f - t);
+                case RiseStyle.Bungee: return t * t;
+                case RiseStyle.Peek:
+                    if (t < 0.4f) return peekShare * Smooth(t / 0.4f);
+                    if (t < 0.75f) return peekShare;
+                    return peekShare + (1f - peekShare) * (1f - Mathf.Pow(1f - (t - 0.75f) / 0.25f, 3f));
+                default: return Smooth(t);
+            }
+        }
+
+        private static float Smooth(float t) { return t * t * (3f - 2f * t); }
+
+        private void StartRiding()
+        {
+            _phase = Phase.Up;
+            _lastAt = transform.position;
+            _lastVelocity = Vector3.zero;
+            _roll = 0f;
+            _rollSpeed = 0f;
+        }
+
+        /// Leans against the carriage speeding up and slowing down, and rocks as it rolls, on a spring, so it
+        /// tips on past upright when the carriage stops
+        private void Ride()
+        {
+            float dt = Time.deltaTime;
+            if (dt <= 0f) return;
+
+            Vector3 along = _facing * Vector3.right;
+            Vector3 velocity = (transform.position - _lastAt) / dt;
+            float accel = Vector3.Dot(velocity - _lastVelocity, along) / dt;
+            _lastAt = transform.position;
+            _lastVelocity = velocity;
+
+            float speed = Vector3.Dot(velocity, along);
+            _travelled += Mathf.Abs(speed) * dt;
+
+            float lean = Mathf.Clamp(-accel * leanPerAccel, -maxLean, maxLean);
+            if (Mathf.Abs(speed) > 0.05f) lean += rockDegrees * Mathf.Sin(_travelled / Mathf.Max(0.01f, rockSpacing) * 2f * Mathf.PI);
+
+            _rollSpeed += ((lean - _roll) * rockStiffness - _rollSpeed * rockDamping) * dt;
+            _roll += _rollSpeed * dt;
+            Place(_swing);
+        }
+
+        /// A round went close: a twitch on the same spring it rides on
+        public void Flinch(float kick)
+        {
+            if (_phase == Phase.Up) _rollSpeed += kick;
+        }
+
+        public string SignName { get { return _sign != null ? _sign.name : ""; } }
+
+        /// Burned by daylight: smokes and staggers, still up and still to be shot. True when it did, so the
+        /// sizzle plays once per scorch and not every frame
+        public bool Scorch()
+        {
+            if (!Live || Time.time - _scorchedAt < scorchEvery) return false;
+
+            _scorchedAt = Time.time;
+            if (ShatterPool.Instance != null) ShatterPool.Instance.PlayPop(HitCentre, Vector3.up, scorchSmoke);
+            Flinch(UnityEngine.Random.value < 0.5f ? -scorchKick : scorchKick);
+            return true;
+        }
+
+        /// Got away: waggles at the player, then drops out of sight as Lower does
+        public void Escape()
+        {
+            Glow(null);
+            SetHitBox(false);
+
+            if (_hinge == Hinge.None) { Finish(); return; }
+
+            Play(tauntClips);
+            Begin(Phase.Taunting);
         }
 
         private void Begin(Phase phase)
         {
             _phase = phase;
             _timer = 0f;
+            if (phase != Phase.Taunting)
+            {
+                _roll = 0f;
+                _rollSpeed = 0f;
+            }
 
             if (phase != Phase.Falling) return;
 
@@ -408,6 +618,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlaceFigure(figure, home, _facing, shape, swing, spin);
+            if (_roll != 0f) figure.RotateAround(home, Vector3.Cross(Vector3.up, _facing * Vector3.right), _roll);
 
             if (stand == null || !stand.gameObject.activeSelf) return;
 
@@ -528,18 +739,36 @@ namespace IntuitiveDesigns.ShootingRange
             _standAt = new Vector3(_signMiddle.x, feet, _signMiddle.z);
         }
 
-        /// The hinge drops into the stand, so the sign stands that far off its rail and the top of the
-        /// stand shows. Metres, so the Figure's scale is divided back out
+        /// The stand's foot is on the rail and the sign swings up from there, so a rail is placed where the
+        /// foot should rest (ADR 0063). Metres, so the Figure's scale is divided back out
         private void LiftOffTheRail()
         {
-            if (stand == null || !stand.gameObject.activeSelf || standShows <= 0f) return;
+            if (stand == null || !stand.gameObject.activeSelf) return;
 
-            _shape.Pivot -= new Vector3(0f, standShows / figure.localScale.y, 0f);
+            _shape.Pivot -= new Vector3(0f, _standLength / figure.localScale.y, 0f);
         }
 
-        private static float TopOf(Transform root)
+        /// Public and static so the setup tool's preview stands the bracket with these very sums
+        public static float TopOf(Transform root)
         {
-            float top = float.NegativeInfinity;
+            float low, high;
+            Span(root, out low, out high);
+            return high;
+        }
+
+        /// From the stand's foot to its top, in metres
+        public static float LengthOf(Transform stand)
+        {
+            float low, high;
+            Span(stand, out low, out high);
+            return (high - low) * stand.lossyScale.y;
+        }
+
+        /// Lowest and highest point of every mesh under root, in root's own space
+        private static void Span(Transform root, out float low, out float high)
+        {
+            low = float.PositiveInfinity;
+            high = float.NegativeInfinity;
 
             foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
             {
@@ -553,11 +782,13 @@ namespace IntuitiveDesigns.ShootingRange
                         (corner & 2) == 0 ? box.min.y : box.max.y,
                         (corner & 4) == 0 ? box.min.z : box.max.z);
 
-                    top = Mathf.Max(top, root.InverseTransformPoint(filter.transform.TransformPoint(point)).y);
+                    float y = root.InverseTransformPoint(filter.transform.TransformPoint(point)).y;
+                    low = Mathf.Min(low, y);
+                    high = Mathf.Max(high, y);
                 }
             }
 
-            return float.IsNegativeInfinity(top) ? 0f : top;
+            if (float.IsInfinity(low)) low = high = 0f;
         }
 
         /// The sign stays behind its cover and shows only its top edge. Every sign is a different
@@ -735,6 +966,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             // The sign's own broken pieces where it has them, generic debris where it does not
             ShatterPool.Instance.Burst(_shards, _sign, at, direction, fragmentImpulse);
+            RoomReaction.JoltAround(at, joltRadius);
         }
 
         private void SetHitBox(bool on)

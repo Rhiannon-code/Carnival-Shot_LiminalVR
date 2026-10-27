@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
@@ -14,6 +15,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float nudge = 0.3f;
         [SerializeField, Range(0f, 1f)] private float lift = 0.3f;
         [SerializeField] private float unstickSpeed = 0.5f;
+        [SerializeField, Tooltip("Each hit lets go of the nearest piece still held, instead of all of them at once")]
+        private bool oneAtATime;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] hitClips;
@@ -22,9 +25,14 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3[] _restPositions;
         private Quaternion[] _restRotations;
         private bool _released;
+        private bool[] _loose;
+
+        /// The last piece still held has just been let go
+        public event Action AllLoose;
 
         private void Awake()
         {
+            _loose = new bool[pieces.Length];
             _restPositions = new Vector3[pieces.Length];
             _restRotations = new Quaternion[pieces.Length];
 
@@ -52,6 +60,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         public override void OnShot(Vector3 point, Vector3 direction, float impulse)
         {
+            if (oneAtATime) { LetOneGo(point, direction); return; }
+
             Rigidbody nearest = null;
             float best = float.MaxValue;
             foreach (var piece in pieces)
@@ -82,9 +92,48 @@ namespace IntuitiveDesigns.ShootingRange
             PlayOne(hitClips, point, hitVolume);
         }
 
+        /// The boards over a skylight: each hit knocks the nearest one still nailed on free, and a loose one
+        /// that is hit again only gets pushed
+        private void LetOneGo(Vector3 point, Vector3 direction)
+        {
+            int nearest = -1;
+            bool held = false;
+            float best = float.MaxValue;
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                if (pieces[i] == null) continue;
+
+                // A piece still held always beats a loose one, however far
+                bool candidateHeld = !_loose[i];
+                float distance = (pieces[i].worldCenterOfMass - point).sqrMagnitude;
+                if ((candidateHeld && !held) || (candidateHeld == held && distance < best))
+                {
+                    nearest = i;
+                    held = candidateHeld;
+                    best = distance;
+                }
+            }
+
+            if (nearest < 0) return;
+
+            var piece = pieces[nearest];
+            var push = (direction.normalized + Vector3.up * lift).normalized;
+            if (held)
+            {
+                _loose[nearest] = true;
+                piece.isKinematic = false;
+            }
+
+            piece.AddForceAtPosition(push * this.impulse, point, ForceMode.Impulse);
+            PlayOne(hitClips, point, hitVolume);
+
+            if (held && Array.IndexOf(_loose, false) < 0 && AllLoose != null) AllLoose();
+        }
+
         protected override void Restore()
         {
             _released = false;
+            if (_loose != null) for (int i = 0; i < _loose.Length; i++) _loose[i] = false;
 
             for (int i = 0; i < pieces.Length; i++)
             {
