@@ -2420,7 +2420,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1804369446092566458
 Transform:
   m_ObjectHideFlags: 0
@@ -2501,7 +2501,11 @@ MonoBehaviour:
   webRadius: 0.35
   webGive: 0.05
   webSpokes: 7
-  dangleSeconds: {x: 3, y: 5}
+  biteAfterSeconds: 3
+  biteLockSeconds: 2
+  swipeFling: 2
+  swingDamping: 0.8
+  maxSwingDegrees: 75
   swayDegrees: 4
   swaySeconds: 2.4
   twistDegrees: 18

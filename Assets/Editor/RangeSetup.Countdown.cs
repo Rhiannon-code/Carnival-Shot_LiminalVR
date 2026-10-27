@@ -35,7 +35,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 var face = FindPart(skull.transform, "scull");
                 if (face == null) { Fail(name + " has no scull_low mesh under it"); return; }
 
-                ShatterLikeTheRoom(skull, face.GetComponent<Renderer>().sharedMaterial);
+                if (skull.GetComponent<ShatterOnShot>() != null)
+                    Say(name + " still shatters. Run 28b to make it flop like the others");
+                else if (skull.GetComponent<ReleaseOnShot>() == null)
+                {
+                    BoxEachMesh(skull);
+                    MakeItFlop(skull, Clips(WorldSounds + "env_wood_0", 4));
+                    Did(name + " is knocked flying when shot");
+                }
 
                 var lit = Eyes(name, face);
                 if (lit == null) return;
@@ -56,31 +63,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             Dirty();
         }
 
-        /// Each colour breaks into pieces of its own colour, cut once and kept
-        private static void ShatterLikeTheRoom(GameObject skull, Material skin)
-        {
-            var shatter = skull.GetComponent<ShatterOnShot>();
-            if (shatter == null)
-            {
-                BoxEachMesh(skull);
-                shatter = skull.AddComponent<ShatterOnShot>();
-                Did(skull.name + " shatters when shot");
-            }
-
-            var fields = new Fields(shatter);
-            var set = fields.Ref("brokenSet") as GameObject;
-            if (set == null)
-            {
-                string key = skull.name.Replace(" ", "").ToLowerInvariant();
-                set = FindBrokenSet(key) ?? CutPieces(SkullModel, key, skin);
-                if (set == null) return;
-
-                fields.Set("brokenSet", set).Apply();
-                Did(skull.name + " breaks into " + set.name);
-            }
-
-            AddToPool(set);
-        }
         private static GameObject Eyes(string skullName, Transform face)
         {
             var colour = face.GetComponent<Renderer>().sharedMaterial.color;

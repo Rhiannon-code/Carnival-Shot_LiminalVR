@@ -236,3 +236,11 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294966783
   upwardBias: 0.15
+  maxBounces: 2
+  bounceSpeedKept: 0.6
+  ricochetClips:
+  - {fileID: 8300000, guid: c97f2bca1dc986d6e83823e06e908eda, type: 3}
+  - {fileID: 8300000, guid: 0d50dd69ecd8a7fbc954cc52a7fd688c, type: 3}
+  - {fileID: 8300000, guid: f30bb06bdcf447dda9517da95f474546, type: 3}
+  ricochetVolume: 0.7
+  ricochetTracer: {r: 1, g: 0.95, b: 0.6, a: 1}

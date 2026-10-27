@@ -28,7 +28,10 @@ MonoBehaviour:
   spinner: {fileID: 6755445426856356099}
   spinPerHit: 900
   drag: 1.2
-  spinClips: []
+  joltShare: 0.3
+  spinClips:
+  - {fileID: 8300000, guid: 898a8864a528ddff290ff0c9576860dd, type: 3}
+  - {fileID: 8300000, guid: 52939ced4ffb51dc4af4f7e207153a7c, type: 3}
   spinVolume: 0.6
 --- !u!65 &4497217213702306945
 BoxCollider:

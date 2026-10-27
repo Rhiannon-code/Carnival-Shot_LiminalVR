@@ -46,6 +46,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] stacked;
         [SerializeField] private AudioClip[] slowMotion;
         [SerializeField] private AudioClip[] comboStreak;
+        [SerializeField] private AudioClip[] trickShot;
         [SerializeField] private int missesInARow = 4;
         [SerializeField] private int comboEvery = 8;
         [SerializeField, Range(0f, 1f)] private float reactChance = 0.7f;
@@ -64,8 +65,22 @@ namespace IntuitiveDesigns.ShootingRange
         private bool _warnedOfSpiders;
         private bool _warnedOfBats;
 
+        public static CarnyVoice Instance { get; private set; }
+
+        /// He has started on his welcome, while the how-to-play panel is up: the lights come up with it
+        public event System.Action Welcoming;
+
+        /// A ricochet found a sign (ADR 0063)
+        public void TrickShot() { React(trickShot); }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
         private void Awake()
         {
+            Instance = this;
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
@@ -121,6 +136,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.Current != RangeGame.State.WaitingForPickup) yield break;
             Queue(welcome);
             Queue(welcomeThen);
+            if (Welcoming != null) Welcoming();
         }
 
         private void Update()

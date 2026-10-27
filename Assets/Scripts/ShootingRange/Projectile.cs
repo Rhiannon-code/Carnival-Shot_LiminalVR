@@ -20,6 +20,10 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Ricochet (data)")]
         [SerializeField] private int maxBounces = 1;
         [SerializeField, Range(0f, 1f)] private float bounceSpeedKept = 0.6f;
+        [SerializeField] private AudioClip[] ricochetClips;
+        [SerializeField, Range(0f, 1f)] private float ricochetVolume = 0.7f;
+        [SerializeField, Tooltip("The tracer after a bounce, so a ricochet can be followed by eye")]
+        private Color ricochetTracer = new Color(1f, 0.95f, 0.6f, 1f);
 
         public bool Live { get { return _live; } }
         public float Impulse { get { return impulse; } }
@@ -106,6 +110,7 @@ namespace IntuitiveDesigns.ShootingRange
                 {
                     _bounces++;
                     _velocity = Vector3.Reflect(_velocity, hit.normal) * bounceSpeedKept;
+                    Ricochet(centre);
                     transform.position = centre + hit.normal * 0.005f;
                     AimAlongVelocity();
                     return;
@@ -144,12 +149,32 @@ namespace IntuitiveDesigns.ShootingRange
                 body.AddForceAtPosition(push, hit.point, ForceMode.Impulse);
             }
 
-            if (shootable != null) shootable.OnShot(hit.point, direction, impulse);
+            // A room piece can do more than one thing at once: the armoured stand rocks and spins its helmet
+            var room = shootable as RoomReaction;
+            var sign = shootable as TrackMover;
+            if (room != null)
+            {
+                foreach (var reaction in room.GetComponents<RoomReaction>()) reaction.OnShot(hit.point, direction, impulse);
+            }
+            else if (sign != null && _bounces > 0) sign.OnTrickShot(hit.point, direction);
+            else if (shootable != null) shootable.OnShot(hit.point, direction, impulse);
 
             // Signs and bats bring their own puff and their own sound, the dust and the thud are for the room. Loose
             // pieces get neither: a round through a spray of shards would be a burst of thuds
             bool target = shootable is TrackMover || shootable is Bat;
             if (!target && !IsLoose(hit, shootable) && ImpactFX.Instance != null) ImpactFX.Instance.PlayImpact(hit.point, hit.normal, hit.collider);
+            if (!target) TrackMover.NearMiss(hit.point);
+        }
+
+        private void Ricochet(Vector3 at)
+        {
+            if (ricochetClips != null && ricochetClips.Length > 0 && ImpactFX.Instance != null)
+                ImpactFX.Instance.PlayClip(ricochetClips[Random.Range(0, ricochetClips.Length)], at, ricochetVolume);
+
+            if (_trail == null) return;
+
+            _trail.startColor = ricochetTracer;
+            _trail.endColor = new Color(ricochetTracer.r, ricochetTracer.g, ricochetTracer.b, 0f);
         }
 
         /// The buffer comes back in no particular order, and it is never more than a handful long

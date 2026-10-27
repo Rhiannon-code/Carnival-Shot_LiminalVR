@@ -11,6 +11,8 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Feel (data)")]
         [SerializeField] private float spinPerHit = 900f;
         [SerializeField] private float drag = 1.2f;
+        [SerializeField, Range(0f, 1f), Tooltip("A nearby shatter's push, as a share of Spin Per Hit")]
+        private float joltShare = 0.3f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] spinClips;
@@ -38,6 +40,12 @@ namespace IntuitiveDesigns.ShootingRange
             _speed += side * spinPerHit;
 
             PlayOne(spinClips, point, spinVolume);
+        }
+
+        protected override void Jolt(Vector3 from)
+        {
+            if (spinner == null) return;
+            _speed += (Random.value < 0.5f ? -1f : 1f) * spinPerHit * joltShare;
         }
 
         private void Update()

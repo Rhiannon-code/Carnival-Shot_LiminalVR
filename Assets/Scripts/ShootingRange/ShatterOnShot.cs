@@ -32,9 +32,10 @@ namespace IntuitiveDesigns.ShootingRange
             _broken = true;
             Show(false);
 
+            // No smoke: a prop that vanished into a puff would read as gone, not broken
             if (ShatterPool.Instance != null)
                 ShatterPool.Instance.Burst(brokenSet, transform, point, direction, fragmentImpulse,
-                                           shatterClips, shatterVolume);
+                                           shatterClips, shatterVolume, 0f);
         }
 
         protected override void Restore()
@@ -43,9 +44,7 @@ namespace IntuitiveDesigns.ShootingRange
             Show(true);
         }
 
-        /// Whole and out of the way of rounds while protected: its colliders are off, so a shot goes straight through
-        /// without a mark. The countdown skulls are protected while they count
-        public void SetProtected(bool on)
+        public override void SetProtected(bool on)
         {
             if (on) Restore();
             foreach (var item in _colliders) item.enabled = !on && !_broken;

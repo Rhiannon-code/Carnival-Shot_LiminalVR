@@ -10,10 +10,34 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         [MenuItem("Shooting Range/Setup/28 - Build The Room Targets", false, 50)]
         public static void RoomTargetsMenu() { Begin("Room targets"); BuildTheRoomTargets(); End(); }
 
+        [MenuItem("Shooting Range/Setup/28b - Update The Room Targets", false, 50)]
+        public static void UpdateRoomTargetsMenu()
+        {
+            if (!EditorUtility.DisplayDialog("Update the room targets (ADR 0063)",
+                    "Skulls: this REMOVES the shatter from the Room_Skull prefab and from the " +
+                    string.Join(", ", CountdownSkullNames) + " in this scene, and makes each one get knocked " +
+                    "flying instead, like the plushie bat. Their cut pieces stay on disk.\n\n" +
+                    "Armoured stand: Room_ArmourStandArmoured's one-piece model is hidden and its collider REMOVED, " +
+                    "and the castle kit's separate stand, armour and helmet go in its place, so the helmet can spin. " +
+                    "Where it stands in the scene is kept.\n\nChest: a skull, the plushie bat and a vampire go in " +
+                    "Room_Chest, hidden, one of them to spring out each time it opens.\n\nThe scene is saved afterwards.",
+                    "Update them", "Cancel"))
+                return;
+
+            Begin("Room targets, updated");
+            var knock = Clips(WorldSounds + "env_wood_0", 4);
+            FloppySkull(knock);
+            FlopTheCountdownSkulls(knock);
+            LooseHelmetOnTheArmouredStand();
+            GagsInTheChest();
+            End();
+        }
+
         private const string RoomTargetDir = "Assets/Prefabs/ShootingRange/Room";
         private const string RoomShardDir = ShardPrefabDir + "/Room";
         private const string CastlePrefabs = "Assets/Modular Castle/Assets/prefabs2/";
-        private const string ArmouredMannequin = "Assets/Modular Castle/Assets/prefabs/mannequin_armor.prefab";
+        private const string StandWithArmour = CastlePrefabs + "mannequin 1.prefab";
+        private const string StandWithHelmet = CastlePrefabs + "mannequin.prefab";
         private const string CastleModel = "Assets/Modular Castle/Assets/models/castle.fbx";
         private const string FlyingBatModel = "Assets/Models/New Bat/source/bat_animflapping.fbx";
         private const string FlyingBatPrefab = "Assets/Prefabs/ShootingRange/Bat.prefab";
@@ -21,6 +45,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string GlassSounds = "Assets/Sounds/Rhiannon's effects/Heavy Glass Shatter ";
         private const int RoomShardCuts = 3;
         private const float WeaponMass = 1.2f;
+        private const float SkullMass = 0.3f;
+        private const float SkullImpulse = 0.3f;
         private const float PlushieMass = 0.15f;
         private const float PlushieImpulse = 0.2f;
         private const float FirstPlushieImpulse = 0.6f;
@@ -38,12 +64,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var clatter = Clips(WorldSounds + "clatter_0", 4);
             var wood = Clips(WorldSounds + "env_wood_0", 4);
 
-            Shatterable("Room_Skull", "Assets/Models/scull/scull_low.fbx", "scull", null);
+            FloppySkull(wood);
             Shatterable("Room_FlaskTriangular", "Assets/Models/TriangularFlask/flask_low.fbx", "triangularflask", glass);
             Shatterable("Room_FlaskGreen", "Assets/Models/flaskGreen/flask_low.fbx", "flaskgreen", glass);
             ArmourStand();
             ArmouredStand();
             Chest();
+            GagsInTheChest();
             SwordStand(clatter);
             PlushieBat();
 
@@ -79,6 +106,72 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             else Say(name + " is already there, left alone");
 
             WireBrokenSet(prefab, piecesKey, modelPath);
+        }
+
+        // ---------------------------------------------------------------- skulls
+
+        /// Knocked flying and bouncing like the plushie bat rather than shattering (ADR 0063)
+        private static void FloppySkull(List<Object> knock)
+        {
+            const string name = "Room_Skull";
+            string path = RoomTargetDir + "/" + name + ".prefab";
+
+            if (RangeSetupUtil.Load<GameObject>(path) == null)
+            {
+                var model = RangeSetupUtil.Load<GameObject>(SkullModel);
+                if (model == null) { Fail(SkullModel + " is missing, so there is no " + name); return; }
+
+                var copy = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                copy.name = name;
+                BoxEachMesh(copy);
+                MakeItFlop(copy, knock);
+                SaveTarget(copy, path, "knocked flying when shot");
+                return;
+            }
+
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (root.GetComponent<ReleaseOnShot>() != null) { Say(name + " already flops, left alone"); return; }
+
+                MakeItFlop(root, knock);
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Did(name + ": shatters -> knocked flying");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        private static void FlopTheCountdownSkulls(List<Object> knock)
+        {
+            foreach (var name in CountdownSkullNames)
+            {
+                var skull = RangeSetupUtil.FindInScene(name);
+                if (skull == null) { Fail("No '" + name + "' in the scene"); continue; }
+                if (skull.GetComponent<ReleaseOnShot>() != null) { Say(name + " already flops, left alone"); continue; }
+
+                BoxEachMesh(skull);
+                MakeItFlop(skull, knock);
+                Did(name + ": shatters -> knocked flying");
+            }
+
+            Dirty();
+        }
+
+        /// Swaps a shatter for the plushie's knock: one rigidbody the shot throws, put back next round
+        private static void MakeItFlop(GameObject root, List<Object> knock)
+        {
+            var shatter = root.GetComponent<ShatterOnShot>();
+            if (shatter != null) Object.DestroyImmediate(shatter);
+
+            var body = RangeSetupUtil.Ensure<Rigidbody>(root);
+            body.mass = SkullMass;
+            body.isKinematic = true;
+
+            var fields = new Fields(root.AddComponent<ReleaseOnShot>())
+                .SetArray("pieces", new List<Object> { body })
+                .Set("impulse", SkullImpulse).Set("nudge", 0f).Set("lift", 0.5f);
+            if (knock.Count > 0) fields.SetArray("hitClips", knock);
+            fields.Apply();
         }
 
         /// Pieces are found by the model's name, so the order things were cut in can never pair a skull with a
@@ -219,8 +312,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             string path = RoomTargetDir + "/" + name + ".prefab";
             if (RangeSetupUtil.Load<GameObject>(path) != null) { Say(name + " is already there, left alone"); return; }
 
-            var source = RangeSetupUtil.Load<GameObject>(CastlePrefabs + "mannequin.prefab");
-            if (source == null) { Fail(CastlePrefabs + "mannequin.prefab is missing"); return; }
+            var source = RangeSetupUtil.Load<GameObject>(StandWithHelmet);
+            if (source == null) { Fail(StandWithHelmet + " is missing"); return; }
 
             var copy = (GameObject)PrefabUtility.InstantiatePrefab(source);
             copy.name = name;
@@ -235,24 +328,143 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             SaveTarget(copy, path, "the helmet spins when the stand is shot");
         }
 
+        private const string ArmouredStandName = "Room_ArmourStandArmoured";
+        private const string ArmourParts = "Parts";
+
         private static void ArmouredStand()
         {
-            const string name = "Room_ArmourStandArmoured";
-            string path = RoomTargetDir + "/" + name + ".prefab";
-            if (RangeSetupUtil.Load<GameObject>(path) != null) { Say(name + " is already there, left alone"); return; }
+            string path = RoomTargetDir + "/" + ArmouredStandName + ".prefab";
+            if (RangeSetupUtil.Load<GameObject>(path) != null) { Say(ArmouredStandName + " is already there, left alone"); return; }
 
-            var source = RangeSetupUtil.Load<GameObject>(ArmouredMannequin);
-            if (source == null) { Fail(ArmouredMannequin + " is missing"); return; }
+            var copy = new GameObject(ArmouredStandName);
+            var helmet = ArmourWithLooseHelmet(copy.transform);
+            if (helmet == null) { Object.DestroyImmediate(copy); return; }
 
-            var copy = (GameObject)PrefabUtility.InstantiatePrefab(source);
-            copy.name = name;
-            BoxEachMesh(copy);
             copy.AddComponent<WobbleOnShot>();
+            new Fields(copy.AddComponent<SpinOnShot>()).Set("spinner", helmet).Apply();
 
-            SaveTarget(copy, path, "rocks back and forth when shot");
+            SaveTarget(copy, path, "rocks back and forth and spins its helmet when shot");
+        }
+
+        /// Built before 2026-10-27 from the kit's one-piece armoured mannequin, whose helmet can't turn on its own.
+        /// The pieces go in under the same root, lined up with the old model, so its place in the scene is kept
+        private static void LooseHelmetOnTheArmouredStand()
+        {
+            string path = RoomTargetDir + "/" + ArmouredStandName + ".prefab";
+            if (RangeSetupUtil.Load<GameObject>(path) == null) { Say(ArmouredStandName + " is not built yet. Step 28 builds it"); return; }
+
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (root.GetComponent<SpinOnShot>() != null) { Say(ArmouredStandName + " already spins its helmet, left alone"); return; }
+
+                var helmet = ArmourWithLooseHelmet(root.transform);
+                if (helmet == null) return;
+
+                var old = root.GetComponent<MeshRenderer>();
+                if (old != null)
+                {
+                    var parts = RangeSetupUtil.Child(root.transform, ArmourParts);
+                    var was = old.bounds;
+                    var now = BoundsOf(parts.GetComponentsInChildren<Renderer>());
+                    parts.position += new Vector3(was.center.x - now.center.x, was.min.y - now.min.y, was.center.z - now.center.z);
+                    old.enabled = false;
+                }
+
+                foreach (var box in root.GetComponents<Collider>()) Object.DestroyImmediate(box);
+                new Fields(root.AddComponent<SpinOnShot>()).Set("spinner", helmet).Apply();
+
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Did(ArmouredStandName + ": one-piece model swapped for the kit's stand, armour and a helmet that spins");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        /// The kit's stand-and-armour with the helmet off the plain stand set on top, under parent, each part boxed
+        /// for rounds. Returns the helmet, or null with the reason reported
+        private static MeshRenderer ArmourWithLooseHelmet(Transform parent)
+        {
+            var armoured = RangeSetupUtil.Load<GameObject>(StandWithArmour);
+            var helmeted = RangeSetupUtil.Load<GameObject>(StandWithHelmet);
+            var source = helmeted != null ? FindPart(helmeted.transform, "helmet") : null;
+            if (armoured == null || source == null) { Fail(StandWithArmour + " or the helmet in " + StandWithHelmet + " is missing"); return null; }
+
+            var parts = (GameObject)PrefabUtility.InstantiatePrefab(armoured);
+            parts.name = ArmourParts;
+            parts.transform.SetParent(parent, false);
+
+            // The helmet sits on the plain stand in its own prefab, and this stand is the same mesh
+            var stand = FindPart(parts.transform, "mannequin");
+            var helmet = new GameObject("helmet");
+            helmet.transform.SetParent(stand != null ? stand : parts.transform, false);
+            helmet.transform.localPosition = source.localPosition;
+            helmet.transform.localRotation = source.localRotation;
+            helmet.transform.localScale = source.localScale;
+            helmet.AddComponent<MeshFilter>().sharedMesh = source.GetComponent<MeshFilter>().sharedMesh;
+            var renderer = helmet.AddComponent<MeshRenderer>();
+            renderer.sharedMaterials = source.GetComponent<MeshRenderer>().sharedMaterials;
+
+            BoxEachMesh(parts);
+            return renderer;
         }
 
         // ---------------------------------------------------------------- chest
+
+        private const float GagShareOfChest = 0.8f;
+        private static readonly string[] GagModels = { SkullModel, FlyingBatModel, "Assets/Models/Vampire/vimpire.fbx" };
+
+        /// A skull, the plushie bat or a vampire, one picked each time the lid flies open (ADR 0063). Each is
+        /// sized to the box and hidden inside it. Fills blanks: gags already wired are left alone
+        private static void GagsInTheChest()
+        {
+            const string name = "Room_Chest";
+            string path = RoomTargetDir + "/" + name + ".prefab";
+            if (RangeSetupUtil.Load<GameObject>(path) == null) { Say(name + " is not built yet. Step 28 builds it"); return; }
+
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var open = root.GetComponentInChildren<PopOpenOnShot>();
+                if (open == null) { Fail(name + " has no Pop Open On Shot"); return; }
+
+                var fields = new Fields(open);
+                if (fields.Find("gags").arraySize > 0) { Say(name + " already has its gags, left alone"); return; }
+
+                var box = BoundsOf(root.GetComponentsInChildren<Renderer>());
+                float room = Mathf.Min(box.size.x, box.size.y, box.size.z) * GagShareOfChest;
+
+                // On the chest itself, not the lid, so they stay put as the lid swings
+                var holder = new GameObject("Gags").transform;
+                holder.SetParent(open.transform, false);
+
+                var gags = new List<Object>();
+                foreach (var modelPath in GagModels)
+                {
+                    var model = RangeSetupUtil.Load<GameObject>(modelPath);
+                    if (model == null) { Say(modelPath + " is missing, so that one is left out"); continue; }
+
+                    var gag = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                    gag.transform.SetParent(holder, false);
+                    foreach (var animator in gag.GetComponentsInChildren<Animator>(true)) animator.enabled = false;
+                    foreach (var animation in gag.GetComponentsInChildren<Animation>(true)) animation.enabled = false;
+                    foreach (var collider in gag.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(collider);
+
+                    var size = BoundsOf(gag.GetComponentsInChildren<Renderer>()).size;
+                    gag.transform.localScale *= room / Mathf.Max(0.001f, Mathf.Max(size.x, size.y, size.z));
+
+                    var now = BoundsOf(gag.GetComponentsInChildren<Renderer>());
+                    gag.transform.position += new Vector3(box.center.x - now.center.x, box.min.y - now.min.y,
+                                                          box.center.z - now.center.z);
+                    gag.SetActive(false);
+                    gags.Add(gag.transform);
+                }
+
+                fields.SetArray("gags", gags).Set("springHeight", box.size.y).Apply();
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Did(name + ": " + gags.Count + " things that can spring out. Turn each under Gags to face the front if it doesn't");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
 
         /// The kit has the chest's lid and body as separate meshes, but only inside the whole castle model, so
         /// those two are lifted out of it and the rest thrown away

@@ -31,6 +31,8 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Death (data)")]
         [SerializeField] private int fragments = 4;
         [SerializeField] private float fragmentImpulse = 0.8f;
+        [SerializeField, Range(0f, 1f), Tooltip("Smoke puff size against a sign's (1 = the same). It goes off close to the face")]
+        private float popScale = 0.5f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] dropClips;
@@ -122,7 +124,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         public void Popped(Vector3 at, Vector3 direction)
         {
-            if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse);
+            if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse, null, -1f, popScale);
             PlayAt(deathClips, at);
         }
 

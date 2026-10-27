@@ -8,16 +8,16 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float goHoldSeconds = 1f;
 
         private RangeGame _game;
-        private ShatterOnShot[] _skulls;
+        private RoomReaction[] _skulls;
         private float _darkAt = -1f;
 
         private void Start()
         {
-            _skulls = new ShatterOnShot[eyes.Length];
+            _skulls = new RoomReaction[eyes.Length];
             for (int i = 0; i < eyes.Length; i++)
             {
                 // The eyes start switched off, and the plain lookup skips anything inactive
-                var found = eyes[i] != null ? eyes[i].GetComponentsInParent<ShatterOnShot>(true) : null;
+                var found = eyes[i] != null ? eyes[i].GetComponentsInParent<RoomReaction>(true) : null;
                 _skulls[i] = found != null && found.Length > 0 ? found[0] : null;
             }
 
