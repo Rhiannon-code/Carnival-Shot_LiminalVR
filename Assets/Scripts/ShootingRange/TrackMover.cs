@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
@@ -18,6 +19,19 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Standing still (data, seconds)")]
         [SerializeField] private float minHold = 2f;
         [SerializeField] private float maxHold = 4f;
+
+        [Header("Near misses (data): a round striking the room this close makes the sign flinch")]
+        [SerializeField] private float flinchRadius = 0.6f;
+        [SerializeField, Tooltip("Degrees a second of twitch it starts with")] private float flinchKick = 150f;
+
+        [Header("Rail sounds (optional): a clatter that follows the speed, a clunk off the mark, a squeal at the end")]
+        [SerializeField] private AudioSource clatter;
+        [SerializeField] private AudioClip[] launchClips;
+        [SerializeField] private AudioClip[] stopClips;
+        [SerializeField, Range(0f, 1f)] private float clipVolume = 0.5f;
+        [SerializeField, Tooltip("Speed, m/s, at which the clatter plays at its own pitch")] private float clatterSpeed = 1.2f;
+        [SerializeField] private float lowestPitch = 0.8f;
+        [SerializeField] private float highestPitch = 1.4f;
 
         public float MoverLength { get { return moverLength; } }
 
@@ -51,7 +65,22 @@ namespace IntuitiveDesigns.ShootingRange
         private float _hold;
         private bool _stationary;
         private bool _running;
+        private float _deadline;
         private PowerUpKind? _special;
+        private bool _rolling;
+
+        private static readonly List<TrackMover> All = new List<TrackMover>();
+
+        /// Every carriage in the pool, up or not
+        public static IReadOnlyList<TrackMover> Movers { get { return All; } }
+
+        public PopUpTarget Target { get { return target; } }
+
+        /// A round struck the room at this point: every sign up close enough to it flinches
+        public static void NearMiss(Vector3 at)
+        {
+            for (int i = 0; i < All.Count; i++) All[i].Flinch(at);
+        }
 
         private void Awake()
         {
@@ -61,21 +90,25 @@ namespace IntuitiveDesigns.ShootingRange
             // Movement is stepped at 33 Hz, without this the targets visibly stutter across the range
             _body.interpolation = RigidbodyInterpolation.Interpolate;
 
+            All.Add(this);
             if (target == null) target = GetComponent<PopUpTarget>();
             if (target != null) target.Spent += Retire;
         }
 
         private void OnDestroy()
         {
+            All.Remove(this);
             if (target != null) target.Spent -= Retire;
         }
 
         /// holdSeconds above zero is one that stands still instead of travelling, for that long. The
         /// booking is made from the same number, so it cannot be told one thing and the mover another
-        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one
-        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special)
+        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one.
+        /// deadline is when, on the unscaled clock, it has to reach its end, or 0 for no hurry
+        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special, float deadline)
         {
             _special = special;
+            _deadline = deadline;
             _rail = rail;
             _speed = speed;
             _distance = 0f;
@@ -83,6 +116,7 @@ namespace IntuitiveDesigns.ShootingRange
             _hold = holdSeconds;
             _stationary = holdSeconds > 0f;
             _running = true;
+            _rolling = false;
 
             transform.position = rail.PointAt(0f);
 
@@ -94,10 +128,11 @@ namespace IntuitiveDesigns.ShootingRange
             transform.rotation = Quaternion.LookRotation(rail.Direction, reference);
 
             gameObject.SetActive(true);
+            rail.Warn(SettleSeconds(rail.Hinge));
 
             if (target == null) return;
 
-            target.Present(rail.ShownOffset, rail.SignOffset, rail.Hinge, rail.Cover);
+            target.Present(rail);
             var powerUps = PowerUps.Instance;
             target.Glow(special.HasValue && powerUps != null ? powerUps.Colour(special.Value) : (Color?)null);
         }
@@ -113,18 +148,38 @@ namespace IntuitiveDesigns.ShootingRange
             if (_stationary)
             {
                 _held += Time.fixedDeltaTime;
-                if (_held >= _hold) ReachEnd();
+                if (_held >= _hold || (_deadline > 0f && Time.unscaledTime >= _deadline)) ReachEnd();
                 return;
             }
 
+            if (_deadline > 0f) _speed = SpeedToDeadline();
             _distance += _speed * Time.fixedDeltaTime;
+            Rattle();
 
             if (_distance >= _rail.Length) { ReachEnd(); return; }
 
             _body.MovePosition(_rail.PointAt(_distance));
         }
 
-        public void OnShot(Vector3 point, Vector3 direction, float impulse)
+        public void OnShot(Vector3 point, Vector3 direction, float impulse) { Shot(point, direction, false); }
+
+        /// A ricochet that found this sign: the biggest reaction there is, and the barker notices. Worth no
+        /// more than any other hit (ADR 0063)
+        public void OnTrickShot(Vector3 point, Vector3 direction) { Shot(point, direction, true); }
+
+        private void Flinch(Vector3 at)
+        {
+            if (!Exposed || target == null) return;
+
+            var offset = TargetPoint - at;
+            if (offset.sqrMagnitude > flinchRadius * flinchRadius) return;
+
+            // Away from where the round struck
+            float away = Vector3.Dot(offset, target.Facing * Vector3.right) >= 0f ? 1f : -1f;
+            target.Flinch(away * flinchKick);
+        }
+
+        private void Shot(Vector3 point, Vector3 direction, bool trick)
         {
             if (!Exposed) return;
 
@@ -136,17 +191,33 @@ namespace IntuitiveDesigns.ShootingRange
             // finish spinning or falling
             Resolve(true);
 
-            // A special always shatters, the biggest reaction there is for the hardest shot
-            if (target != null) target.Hit(point, direction, special);
+            if (trick && CarnyVoice.Instance != null) CarnyVoice.Instance.TrickShot();
+
+            // A special or a trick shot always shatters, the biggest reaction there is for the hardest shots
+            if (target != null) target.Hit(point, direction, special || trick);
             else Retire();
         }
 
-        /// Taken off the range between rounds, which is not an outcome, so nobody hears about it
+        /// The speed that ends the run on its deadline. The deadline is on the round's unscaled clock and
+        /// the run is in scaled time, so it is asked again every step and a slow motion mid-run cannot
+        /// carry the sign past the bell
+        private float SpeedToDeadline()
+        {
+            float left = Mathf.Max(Time.fixedDeltaTime, (_deadline - Time.unscaledTime) * Time.timeScale);
+            return (_rail.Length - _distance) / left;
+        }
+
+        /// Taken off the range when the round ends, which is not an outcome, so nobody hears about it.
+        /// One still up drops out of sight and one already going down finishes, rather than blinking away
         public void Stop()
         {
+            Quiet();
             _running = false;
             _rail = null;
-            Retire();
+            _special = null;
+
+            if (target != null && target.Live) target.Lower();
+            else if (target == null || !target.Leaving) Retire();
         }
 
         private void ReachEnd()
@@ -154,15 +225,41 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_stationary && _rail.ReachesPlayer && RangeGame.Instance != null)
                 RangeGame.Instance.HitPlayer(TargetPoint);
 
+            if (_rolling) PlayOne(stopClips);
             Resolve(false);
 
-            // It stops at the end and drops out of sight rather than blinking away
-            if (target != null) target.Lower();
+            // It got away, so it gloats before it drops out of sight rather than blinking away
+            if (target != null) target.Escape();
             else Retire();
+        }
+
+        private void Rattle()
+        {
+            if (!_rolling)
+            {
+                _rolling = true;
+                PlayOne(launchClips);
+                if (clatter != null) clatter.Play();
+            }
+
+            if (clatter != null) clatter.pitch = Mathf.Clamp(_speed / Mathf.Max(0.01f, clatterSpeed), lowestPitch, highestPitch);
+        }
+
+        private void Quiet()
+        {
+            _rolling = false;
+            if (clatter != null) clatter.Stop();
+        }
+
+        private void PlayOne(AudioClip[] clips)
+        {
+            if (clips == null || clips.Length == 0 || ImpactFX.Instance == null) return;
+            ImpactFX.Instance.PlayClip(clips[UnityEngine.Random.Range(0, clips.Length)], transform.position, clipVolume);
         }
 
         private void Resolve(bool shot)
         {
+            Quiet();
             _running = false;
             _special = null;
             _rail = null;

@@ -65,6 +65,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private float _waited;
         private bool _anchored;
+        private bool _shown = true;
+        private Renderer[] _looks;
         private Vector3 _anchor;
         private Quaternion _facing = Quaternion.identity;
         private Vector3 _ahead;
@@ -86,11 +88,19 @@ namespace IntuitiveDesigns.ShootingRange
         private void Start()
         {
             if (pistol != null) pistol.SetHeld(false);
+            if (game == null) game = RangeGame.Instance;
+            _looks = (pistol != null ? pistol.Visual : transform).GetComponentsInChildren<Renderer>(true);
         }
 
         private void Update()
         {
             if (Taken) return;
+
+            // Nothing to take while the controls card is up. The guns appear as it goes, in front of
+            // wherever the player is looking then, and the grab timers start from there
+            bool show = game == null || game.Current != RangeGame.State.HowToPlay;
+            if (show != _shown) Show(show);
+            if (!show) return;
 
             _waited += Time.deltaTime;
             if (floatInFront) Float();
@@ -110,6 +120,15 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (autoStartSeconds > 0f && _waited >= autoStartSeconds)
                 Take(pistol != null ? pistol.Hand : VRAvatarLimbType.RightHand, "auto start");
+        }
+
+        private void Show(bool show)
+        {
+            _shown = show;
+            for (int i = 0; i < _looks.Length; i++)
+            {
+                if (_looks[i] != null) _looks[i].enabled = show;
+            }
         }
 
         /// Hovers at chest height in front of the player, off to its own hand's side, bobbing so it

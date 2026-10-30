@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using Liminal.SDK.VR.Avatars;
+using Random = UnityEngine.Random;
 
 namespace IntuitiveDesigns.ShootingRange
 {
@@ -28,11 +30,16 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Death (data)")]
         [SerializeField] private int fragments = 3;
         [SerializeField] private float fragmentImpulse = 0.8f;
+        [SerializeField, Range(0f, 1f)]
+        private float popScale = 0.5f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] launchClips;
         [SerializeField] private AudioClip[] deathClips;
         [SerializeField, Range(0f, 1f)] private float volume = 0.9f;
+
+        /// A bat has left its sign and is on its way to the player
+        public event Action Launched;
 
         private Bat[] _pool;
         private float _nextRelease;
@@ -106,7 +113,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             bat.Stop();
 
-            if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse);
+            if (ShatterPool.Instance != null) ShatterPool.Instance.Burst(at, fragments, direction, fragmentImpulse, null, -1f, popScale);
             PlayAt(deathClips, at);
         }
 
@@ -129,6 +136,7 @@ namespace IntuitiveDesigns.ShootingRange
 
                 bat.Launch(this, mover.TargetPoint, head, _speed);
                 PlayAt(launchClips, mover.TargetPoint);
+                if (Launched != null) Launched();
                 return;
             }
         }

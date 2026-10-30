@@ -37,6 +37,15 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("What this rail hides behind (empty = it rides in the open)")]
         [SerializeField] private Renderer cover;
 
+        [Header("What a side sign folds flat against: the pillar and anything on its face (Sideways only)")]
+        [SerializeField] private Renderer[] mount;
+
+        [Header("Tallest sign this rail carries (data, metres, 0 = any)")]
+        [SerializeField] private float tallestSign;
+
+        [Header("The bulbs that run toward the launch point as a sign comes up (optional)")]
+        [SerializeField] private RailBulbs bulbs;
+
         [Header("Difficulty (1 = from the start, 2.5 = halfway through round 2)")]
         [SerializeField] private float fromRound = 1f;
 
@@ -46,6 +55,7 @@ namespace IntuitiveDesigns.ShootingRange
         public Vector3 SignOffset { get { return signOffset; } }
         public Hinge Hinge { get { return hinge; } }
         public Renderer Cover { get { return cover; } }
+        public float TallestSign { get { return tallestSign; } }
         public float FromRound { get { return fromRound; } }
         public float Length { get { return length; } }
         public float SpeedScale { get { return speedScale; } }
@@ -64,6 +74,29 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         private readonly List<Pass> _passes = new List<Pass>();
+
+        /// Everything the side sign lies against, as one box, or false when nothing is wired
+        public bool Mounted(out Bounds bounds)
+        {
+            bounds = new Bounds();
+            bool any = false;
+            if (mount == null) return false;
+
+            for (int i = 0; i < mount.Length; i++)
+            {
+                if (mount[i] == null) continue;
+                if (any) bounds.Encapsulate(mount[i].bounds);
+                else { bounds = mount[i].bounds; any = true; }
+            }
+
+            return any;
+        }
+
+        /// A sign is about to come up at the origin, seconds from now
+        public void Warn(float seconds)
+        {
+            if (bulbs != null) bulbs.Chase(seconds);
+        }
 
         public Vector3 PointAt(float distance)
         {
