@@ -22,6 +22,6 @@ Material:
     m_Floats:
     - _Edge: 0.08
     - _Falloff: 2.5
-    - _Strength: 1.2
+    - _Strength: 1.6
     m_Colors:
     - _Color: {r: 1, g: 0.15, b: 0.1, a: 1}

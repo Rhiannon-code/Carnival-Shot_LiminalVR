@@ -58,8 +58,12 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Update()
         {
-            // Picking the gun up raises no ammo event, so the count appears on the first held frame
-            if (pistol != null && pistol.IsHeld && _text.text.Length == 0 && !pistol.IsReloading) Show();
+            // Picking the gun up or setting it down raises no ammo event, so the count follows the hold here.
+            // The guns start held and are only set down by their pickup's Start, after this has shown a count
+            if (pistol == null || pistol.IsReloading) return;
+
+            bool showing = _text.text.Length > 0;
+            if (pistol.IsHeld != showing) Show();
         }
     }
 }

@@ -3,8 +3,8 @@ using UnityEngine;
 namespace IntuitiveDesigns.ShootingRange
 {
     /// A boarded skylight. Once its last board is shot off, a beam of daylight falls for a few seconds, then a
-    /// cloud passes, once a round. Vampire signs caught under it smoke, sizzle and stagger, but still have to be
-    /// shot: the sun weakens them, it never scores (ADR 0063). The boards are a ReleaseOnShot on the same object,
+    /// cloud passes, once a round. Vampire signs caught under it burst into flames and burn up, which counts as a kill
+    /// (ADR 0064). The boards are a ReleaseOnShot on the same object,
     /// set to one at a time
     public class Skylight : RoomReaction
     {
@@ -16,9 +16,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Tooltip("How long the cloud takes to cover it")] private float fadeOutSeconds = 1f;
         [SerializeField] private float strength = 0.6f;
         [SerializeField] private float radius = 0.5f;
+        [SerializeField, Tooltip("Metres past the beam's edge that still burns: about half a sign, so one that visibly touches the beam catches")]
+        private float catchMargin = 0.35f;
 
-        [Header("Who it burns: a sign whose name holds any of these")]
-        [SerializeField] private string[] burns = { "vampire", "vimpire" };
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] openClips;
@@ -95,21 +95,12 @@ namespace IntuitiveDesigns.ShootingRange
 
                 var offset = mover.TargetPoint - axis;
                 offset.y = 0f;
-                if (offset.sqrMagnitude > radius * radius || !Burns(mover.Target.SignName)) continue;
+                float reach = radius + catchMargin;
+                if (offset.sqrMagnitude > reach * reach || !mover.Target.IsVampire) continue;
 
-                if (mover.Target.Scorch()) PlayOne(sizzleClips, mover.TargetPoint, volume);
+                PlayOne(sizzleClips, mover.TargetPoint, volume);
+                mover.BurnUp();
             }
-        }
-
-        private bool Burns(string sign)
-        {
-            sign = sign.ToLowerInvariant();
-            foreach (var word in burns)
-            {
-                if (!string.IsNullOrEmpty(word) && sign.Contains(word.ToLowerInvariant())) return true;
-            }
-
-            return false;
         }
 
         private void Shine(float amount)

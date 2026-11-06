@@ -1632,7 +1632,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 if (visual != null)
                 {
                     foreach (var mesh in visual.GetComponentsInChildren<MeshRenderer>(true))
-                        if (mesh.name != GlowName) sources.Add(mesh);
+                        if (mesh.name != GlowName && mesh.GetComponent<AmmoCounter>() == null) sources.Add(mesh);
                 }
                 foreach (var glove in pistol.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                     if (glove.name != GlowName) sources.Add(glove);
@@ -1784,14 +1784,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private static void PaceTheRounds()
         {
-            var game = Object.FindObjectOfType<RangeGame>();
-            if (game != null)
-            {
-                new Fields(game).Set("secondsPerRound", new[] { 30f, 30f, 45f, 45f, 60f }).Apply();
-                Did("Range Game: rounds of 30 / 30 / 45 / 45 / 60 s");
-            }
-            else Fail("No RangeGame in the scene");
-
             var director = Object.FindObjectOfType<TrackDirector>();
             if (director != null)
             {
@@ -1802,7 +1794,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                                     .Set("concurrentTargets", 4).Set("extraConcurrentPerRound", 1)
                                     .Set("maxConcurrentTargets", 6).Apply();
                 Did("Track Director: 14 / 18 / 33 / 39 / 60 signs, 4 / 5 / 6 / 6 / 6 up at once, speed x1.07 a round, " +
-                    "waves every 1.6 s x0.85 a round, spread evenly to lead into the last sign, which drops away on the bell");
+                    "waves every 1.6 s x0.85 a round, or a beat after the last sign up has gone");
             }
             else Fail("No TrackDirector in the scene");
 
@@ -1864,19 +1856,22 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 web.Apply();
                 Did(gun.name + ": Gun Web wired");
 
-                if (RangeSetupUtil.Child(gun.transform, AmmoName) != null)
+                var model = new Fields(gun).Ref("visual") as Transform;
+                if (RangeSetupUtil.Child(gun.transform, AmmoName) != null ||
+                    (model != null && RangeSetupUtil.Child(model, AmmoName) != null))
                 {
                     Say(gun.name + ": already has an " + AmmoName + ", left where it is");
                     continue;
                 }
 
-                var model = new Fields(gun).Ref("visual") as Transform;
-                Bounds box;
-                if (model == null || !BoundsIn(gun.transform, model, out box)) { Fail(gun.name + ": no model to measure"); continue; }
+                // The front sight is the front top of the slide
+                Bounds slide;
+                if (model == null || !PartBounds(model, "top", out slide)) { Fail(gun.name + ": no slide to measure"); continue; }
 
+                // On the model, so it kicks and tilts with the gun instead of the barrel rising through it
                 var holder = new GameObject(AmmoName);
-                holder.transform.SetParent(gun.transform, false);
-                holder.transform.localPosition = new Vector3(box.center.x, box.max.y + 0.012f, box.min.z + 0.02f);
+                holder.transform.SetParent(model, false);
+                holder.transform.localPosition = new Vector3(slide.center.x, slide.max.y + 0.012f, slide.max.z - 0.02f);
                 holder.transform.localRotation = Quaternion.Euler(35f, 0f, 0f);
 
                 var text = holder.AddComponent<TMPro.TextMeshPro>();
@@ -1890,35 +1885,10 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 text.text = "12";
 
                 new Fields(holder.AddComponent<AmmoCounter>()).Set("pistol", gun).Apply();
-                Did(gun.name + ": ammo count 7 x 2 cm, 1.2 cm over the back of the slide, tipped 35 degrees up at the eye");
+                Did(gun.name + ": ammo count 7 x 2 cm, 1.2 cm over the front sight, riding the model, tipped 35 degrees up at the eye");
             }
 
             Dirty();
-        }
-
-        /// Every mesh under part, as a box in space's axes
-        private static bool BoundsIn(Transform space, Transform part, out Bounds box)
-        {
-            box = new Bounds();
-            bool any = false;
-            foreach (var filter in part.GetComponentsInChildren<MeshFilter>(true))
-            {
-                if (filter.sharedMesh == null || filter.name == GlowName) continue;
-
-                var mesh = filter.sharedMesh.bounds;
-                for (int corner = 0; corner < 8; corner++)
-                {
-                    var point = space.InverseTransformPoint(filter.transform.TransformPoint(new Vector3(
-                        (corner & 1) == 0 ? mesh.min.x : mesh.max.x,
-                        (corner & 2) == 0 ? mesh.min.y : mesh.max.y,
-                        (corner & 4) == 0 ? mesh.min.z : mesh.max.z)));
-
-                    if (!any) { box = new Bounds(point, Vector3.zero); any = true; }
-                    else box.Encapsulate(point);
-                }
-            }
-
-            return any;
         }
 
         private const string BatPath = "Assets/Prefabs/ShootingRange/Bat.prefab";
@@ -1948,11 +1918,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             rect.sizeDelta = new Vector2(360f, 96f);
 
             var text = holder.AddComponent<TMPro.TextMeshProUGUI>();
-            var timer = new Fields(hud).Ref("timerText") as TMPro.TMP_Text;
-            if (timer != null)
+            var targets = new Fields(hud).Ref("targetsText") as TMPro.TMP_Text;
+            if (targets != null)
             {
-                text.font = timer.font;
-                text.fontSharedMaterial = timer.fontSharedMaterial;
+                text.font = targets.font;
+                text.fontSharedMaterial = targets.fontSharedMaterial;
             }
             text.alignment = TMPro.TextAlignmentOptions.BottomLeft;
             text.enableAutoSizing = true;
@@ -2385,7 +2355,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                     for (int i = 0; i < visual.childCount; i++)
                     {
                         var child = visual.GetChild(i);
-                        if (child.name.ToLowerInvariant().Contains("glove") || child.GetComponentInChildren<MeshFilter>(true) == null) continue;
+                        if (child.name.ToLowerInvariant().Contains("glove") || child.GetComponent<AmmoCounter>() != null ||
+                            child.GetComponentInChildren<MeshFilter>(true) == null) continue;
                         model = child;
                         break;
                     }
@@ -2464,7 +2435,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 if (fresh || lost) PalmOnTheGrip(pistol, glove, rig, grip, rightHand);
                 else Say(glove.name + ": already on the grip, so its placement was kept");
 
-                var joints = rig.Hinges();
+                var joints = rig.Hinges(ThumbGoal(pistol, grip, rightHand));
                 var curls = FitCurls(pistol, rig, joints, grip, rightHand);
                 rig.ToRest();
 
@@ -2603,14 +2574,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 Vector3 goal;
                 if (finger == GloveFingers.Finger.Index) goal = trigger;
                 else if (finger == GloveFingers.Finger.Thumb)
-                    goal = FromGripSpace(new Vector3(far, grip.center.y + grip.extents.y * 0.3f, grip.max.z - 0.01f), axes);
+                    goal = ThumbGoal(pistol, grip, rightHand);
                 else
                 {
                     float knuckle = Vector3.Dot(rig.Chains[f][0].position, axes[2]);
                     goal = FromGripSpace(new Vector3(far, grip.center.y, knuckle), axes);
                 }
 
-                float limit = finger == GloveFingers.Finger.Thumb ? 60f : 90f;
+                float limit = 90f;
                 float best = 0f;
                 float bestDistance = float.MaxValue;
                 for (float angle = 0f; angle <= limit; angle += 2f)
@@ -2628,6 +2599,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             return curls;
+        }
+
+        /// Where the thumb lies on a pistol: along the far side of the frame, high and toward the front
+        private static Vector3 ThumbGoal(Pistol pistol, Bounds grip, bool rightHand)
+        {
+            float far = grip.center.x - (rightHand ? 1f : -1f) * grip.extents.x;
+            return FromGripSpace(new Vector3(far, grip.center.y + grip.extents.y * 0.3f, grip.max.z - 0.01f), GripAxes(pistol));
         }
 
         /// A SteamVR glove's bones, read by name, at the model's own rest pose
@@ -2702,12 +2680,12 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             /// Each finger joint hinges across its own bone and the palm. The thumb does not close onto the
             /// palm like a finger, it swings across it, so it hinges toward a point out in front of the
-            /// middle knuckle instead. The sign is whichever way brings the tip toward its goal, tested
-            /// by actually turning the joint
-            public GloveFingers.Joint[] Hinges()
+            /// middle knuckle instead; on a gun, toward where it lies on the frame, or it curls into the palm.
+            /// The sign is whichever way brings the tip toward its goal, tested by actually turning the joint
+            public GloveFingers.Joint[] Hinges(Vector3? thumbGoal = null)
             {
                 var palm = Palm;
-                var across = Chains[2].Length > 0 ? Chains[2][0].position + palm * 0.03f : Knuckles + palm * 0.03f;
+                var across = thumbGoal ?? (Chains[2].Length > 0 ? Chains[2][0].position + palm * 0.03f : Knuckles + palm * 0.03f);
                 var joints = new List<GloveFingers.Joint>();
                 for (int f = 0; f < 5; f++)
                 {

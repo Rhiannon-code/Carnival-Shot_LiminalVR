@@ -27,6 +27,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] springClips;
         [SerializeField, Range(0f, 1f)] private float openVolume = 0.7f;
 
+        /// While locked a shot does nothing: the prize chest keeps it shut until the end (PrizeChest)
+        public bool Locked { get; set; }
+
         private Quaternion _closed;
         private float _timer;
         private bool _open;
@@ -41,7 +44,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         public override void OnShot(Vector3 point, Vector3 direction, float impulse)
         {
-            if (_open || hinge == null) return;
+            if (Locked || _open || hinge == null) return;
 
             _open = true;
             _timer = 0f;
@@ -55,6 +58,17 @@ namespace IntuitiveDesigns.ShootingRange
             _gagRest = _gag.localPosition;
             _gag.gameObject.SetActive(true);
             PlayOne(springClips, point, openVolume);
+        }
+
+        /// Flies open with nothing springing out of it
+        public void OpenEmpty()
+        {
+            if (_open || hinge == null) return;
+
+            _open = true;
+            _timer = 0f;
+            _gag = null;
+            PlayOne(openClips, hinge.position, openVolume);
         }
 
         private void Update()

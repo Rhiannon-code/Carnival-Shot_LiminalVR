@@ -21,9 +21,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float FaceAt = 0.965f;
         private const float HaloSize = 0.45f;
 
-        private const int CountdownBeats = 2;
-        private const int DefaultCountdownBeats = 3;
-
         private static void LightTheCountdownSkulls()
         {
             var eyes = new List<Object>();
@@ -57,9 +54,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             new Fields(driver).SetArray("eyes", eyes).Apply();
-            Did("Countdown lights " + string.Join(" -> ", CountdownSkullNames) + " (the last on GO)");
+            Did("Countdown lights " + string.Join(" -> ", CountdownSkullNames) + " (one for each of 3, 2, 1, and the last stays on for GO)");
 
-            ShortenTheCountdown();
             Dirty();
         }
 
@@ -150,27 +146,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             AssetDatabase.CreateAsset(material, path);
             Did("Made " + file + ".mat");
             return material;
-        }
-
-        /// Three skulls, three beats, red, orange, then green on GO, so the count is one beat shorter than 3-2-1-GO
-        private static void ShortenTheCountdown()
-        {
-            var game = Object.FindObjectOfType<RangeGame>();
-            if (game == null) { Fail("No RangeGame in the scene"); return; }
-
-            var fields = new Fields(game);
-            foreach (var field in new[] { "countdownFrom", "betweenRoundsCountdownFrom" })
-            {
-                int beats = fields.Int(field);
-                if (beats == DefaultCountdownBeats)
-                {
-                    fields.Set(field, CountdownBeats);
-                    Did("RangeGame " + field + " " + DefaultCountdownBeats + " -> " + CountdownBeats);
-                }
-                else Say("RangeGame " + field + " is " + beats + ", left alone");
-            }
-
-            fields.Apply();
         }
     }
 }

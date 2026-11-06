@@ -35,7 +35,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         public float MoverLength { get { return moverLength; } }
 
-        /// How long it stands on the rail's origin before it sets off, so the booking knows the spot is
+        /// How long it stands where it comes up before it sets off, so the booking knows the spot is
         /// taken while the sign is still swinging up. A sign with no hinge is up at once
         public float SettleSeconds(Hinge hinge)
         {
@@ -57,6 +57,9 @@ namespace IntuitiveDesigns.ShootingRange
         /// Shot (true), or reached the end of its rail (false)
         public event Action<TrackMover, bool> Resolved;
 
+        /// Any sign, the moment a round lands on it, for the tick the shooter hears
+        public static event Action Struck;
+
         private Rigidbody _body;
         private TrackRail _rail;
         private float _speed;
@@ -65,7 +68,6 @@ namespace IntuitiveDesigns.ShootingRange
         private float _hold;
         private bool _stationary;
         private bool _running;
-        private float _deadline;
         private PowerUpKind? _special;
         private bool _rolling;
 
@@ -75,6 +77,9 @@ namespace IntuitiveDesigns.ShootingRange
         public static IReadOnlyList<TrackMover> Movers { get { return All; } }
 
         public PopUpTarget Target { get { return target; } }
+
+        /// Up, and handing over a power-up if it's shot
+        public bool CarriesPowerUp { get { return _special.HasValue; } }
 
         /// A round struck the room at this point: every sign up close enough to it flinches
         public static void NearMiss(Vector3 at)
@@ -104,21 +109,20 @@ namespace IntuitiveDesigns.ShootingRange
         /// holdSeconds above zero is one that stands still instead of travelling, for that long. The
         /// booking is made from the same number, so it cannot be told one thing and the mover another
         /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one.
-        /// deadline is when, on the unscaled clock, it has to reach its end, or 0 for no hurry
-        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special, float deadline)
+        /// spot is where along the rail it comes up, which only one that stands still moves off the origin
+        public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special, float spot)
         {
             _special = special;
-            _deadline = deadline;
             _rail = rail;
             _speed = speed;
-            _distance = 0f;
+            _distance = spot;
             _held = 0f;
             _hold = holdSeconds;
             _stationary = holdSeconds > 0f;
             _running = true;
             _rolling = false;
 
-            transform.position = rail.PointAt(0f);
+            transform.position = rail.PointAt(spot);
 
             // A wall riser runs straight up, and LookRotation with world up as its reference is
             // degenerate there
@@ -128,7 +132,9 @@ namespace IntuitiveDesigns.ShootingRange
             transform.rotation = Quaternion.LookRotation(rail.Direction, reference);
 
             gameObject.SetActive(true);
-            rail.Warn(SettleSeconds(rail.Hinge));
+
+            // The bulbs run to the rail's origin, which would point the player at the wrong place
+            if (spot <= 0f) rail.Warn(SettleSeconds(rail.Hinge));
 
             if (target == null) return;
 
@@ -148,11 +154,10 @@ namespace IntuitiveDesigns.ShootingRange
             if (_stationary)
             {
                 _held += Time.fixedDeltaTime;
-                if (_held >= _hold || (_deadline > 0f && Time.unscaledTime >= _deadline)) ReachEnd();
+                if (_held >= _hold) ReachEnd();
                 return;
             }
 
-            if (_deadline > 0f) _speed = SpeedToDeadline();
             _distance += _speed * Time.fixedDeltaTime;
             Rattle();
 
@@ -179,13 +184,42 @@ namespace IntuitiveDesigns.ShootingRange
             target.Flinch(away * flinchKick);
         }
 
+        /// Caught in a sunbeam. Worth what a shot is, and counted the same way, so it's a kill
+        public void BurnUp()
+        {
+            if (!Exposed) return;
+
+            Award(TargetPoint);
+            Resolve(true);
+            if (target != null) target.BurnUp();
+            else Retire();
+        }
+
+        /// Caught in a powder keg's blast: a kill as a shot is, and it always shatters
+        public void Blast(Vector3 from)
+        {
+            if (!Exposed) return;
+
+            var point = TargetPoint;
+            Award(point);
+            Resolve(true);
+            if (target != null) target.Hit(point, (point - from).normalized, true);
+            else Retire();
+        }
+
+        private void Award(Vector3 point)
+        {
+            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, true);
+            if (_special.HasValue && PowerUps.Instance != null) PowerUps.Instance.Grant(_special.Value);
+        }
+
         private void Shot(Vector3 point, Vector3 direction, bool trick)
         {
             if (!Exposed) return;
 
-            if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, true);
-            if (_special.HasValue && PowerUps.Instance != null) PowerUps.Instance.Grant(_special.Value);
+            Award(point);
             bool special = _special.HasValue;
+            if (Struck != null) Struck();
 
             // Counted the moment it is hit, so the HUD and the combo never wait for the figure to
             // finish spinning or falling
@@ -196,15 +230,6 @@ namespace IntuitiveDesigns.ShootingRange
             // A special or a trick shot always shatters, the biggest reaction there is for the hardest shots
             if (target != null) target.Hit(point, direction, special || trick);
             else Retire();
-        }
-
-        /// The speed that ends the run on its deadline. The deadline is on the round's unscaled clock and
-        /// the run is in scaled time, so it is asked again every step and a slow motion mid-run cannot
-        /// carry the sign past the bell
-        private float SpeedToDeadline()
-        {
-            float left = Mathf.Max(Time.fixedDeltaTime, (_deadline - Time.unscaledTime) * Time.timeScale);
-            return (_rail.Length - _distance) / left;
         }
 
         /// Taken off the range when the round ends, which is not an outcome, so nobody hears about it.
@@ -225,7 +250,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_stationary && _rail.ReachesPlayer && RangeGame.Instance != null)
                 RangeGame.Instance.HitPlayer(TargetPoint);
 
-            if (_rolling) PlayOne(stopClips);
+            if (_rolling) PlayOne(stopClips, clipVolume);
             Resolve(false);
 
             // It got away, so it gloats before it drops out of sight rather than blinking away
@@ -238,7 +263,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_rolling)
             {
                 _rolling = true;
-                PlayOne(launchClips);
+                PlayOne(launchClips, clipVolume);
                 if (clatter != null) clatter.Play();
             }
 
@@ -251,10 +276,10 @@ namespace IntuitiveDesigns.ShootingRange
             if (clatter != null) clatter.Stop();
         }
 
-        private void PlayOne(AudioClip[] clips)
+        private void PlayOne(AudioClip[] clips, float volume)
         {
             if (clips == null || clips.Length == 0 || ImpactFX.Instance == null) return;
-            ImpactFX.Instance.PlayClip(clips[UnityEngine.Random.Range(0, clips.Length)], transform.position, clipVolume);
+            ImpactFX.Instance.PlayClip(clips[UnityEngine.Random.Range(0, clips.Length)], transform.position, volume);
         }
 
         private void Resolve(bool shot)

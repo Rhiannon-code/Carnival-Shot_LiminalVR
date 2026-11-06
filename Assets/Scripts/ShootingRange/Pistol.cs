@@ -24,18 +24,16 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float tiltInAndOutSeconds = 0.3f;
         [SerializeField] private float slideSlamKick = 0.5f;
 
-        [Header("Magazine drop, then a twirl (data, fractions of the reload)")]
+        [Header("Magazine out, a fresh one slapped home (data, fractions of the reload)")]
         [SerializeField] private Vector3 magazineSlide = new Vector3(0f, -0.895f, -0.447f);
         [SerializeField] private float magazineDrop = 0.25f;
         [SerializeField] private float magazineRise = 0.08f;
-        [SerializeField] private Vector2 magazineFalls = new Vector2(0.06f, 0.26f);
-        [SerializeField] private Vector2 magazineRises = new Vector2(0.3f, 0.42f);
-        [SerializeField] private Vector2 twirlSpan = new Vector2(0.52f, 0.82f);
-        [SerializeField] private float twirlTurns = 1f;
-        [SerializeField] private float letGoSpan = 0.08f;
-        [SerializeField] private float fingerCloseSpan = 0.07f;
+        [SerializeField] private Vector2 magazineFalls = new Vector2(0.04f, 0.3f);
+        [SerializeField] private Vector2 magazineRises = new Vector2(0.4f, 0.6f);
         [SerializeField] private float insertKick = 0.3f;
-        [SerializeField] private Vector2 wristFlick = new Vector2(18f, 8f);
+        [SerializeField, Tooltip("Metres the gun, and the hand on it, jump up the grip as the magazine seats and the slide drops")]
+        private float seatJolt = 0.025f;
+        [SerializeField] private float joltSeconds = 0.12f;
         [SerializeField] private ParticleSystem[] tintedByPowerUp;
         [SerializeField] private Color gunfireColour = new Color(1f, 0.82f, 0.45f);
 
@@ -57,7 +55,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Magazine (data, 0 = unlimited). Empty, it only clicks until the grip is squeezed")]
         [SerializeField] private int magazineSize = 12;
-        [SerializeField] private float reloadSeconds = 2f;
+        [SerializeField] private float reloadSeconds = 1.3f;
 
         [Header("Recoil (data, degrees and metres)")]
         [SerializeField] private float recoilKick = 7f;
@@ -74,7 +72,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] fireClips;
         [SerializeField] private AudioClip reloadClip;
         [SerializeField] private AudioClip magazineOutClip;
-        [SerializeField] private AudioClip twirlClip;
         [SerializeField] private AudioClip slideReleaseClip;
         [SerializeField] private AudioClip[] emptyClips;
         [SerializeField, Range(0f, 1f)] private float fireVolume = 0.8f;
@@ -92,7 +89,7 @@ namespace IntuitiveDesigns.ShootingRange
         public VRAvatarLimbType Hand { get { return hand; } }
         public Vector3 GripPosition { get { return transform.position; } }
         public Transform Muzzle { get { return muzzle != null ? muzzle : transform; } }
-        /// The model as posed: recoil, reload tilt and twirl all move this, not the gun's own transform
+        /// The model as posed: recoil, reload tilt and the reload's jolts all move this, not the gun's own transform
         public Transform Visual { get { return visual != null ? visual : transform; } }
         public int RoundsLeft { get { return magazineSize > 0 ? _rounds : -1; } }
         public int MagazineSize { get { return magazineSize; } }
@@ -118,7 +115,8 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _magazineRest;
         private Vector3 _magazineScale;
         private Vector3 _magazineDown;
-        private Vector3 _twirlPivot;
+        private Vector3 _visualUp;
+        private float _jolt;
         private Vector3 _sightFrom;
         private Vector3 _sightAlong;
         private float _grab = 1f;
@@ -139,6 +137,7 @@ namespace IntuitiveDesigns.ShootingRange
                 _visualRest = visual.localRotation;
                 _visualRestPosition = visual.localPosition;
                 _visualBack = visual.parent.InverseTransformVector(-transform.forward);
+                _visualUp = visual.parent.InverseTransformVector(transform.TransformDirection(GripUp));
                 MuzzleOnTheBarrel();
                 _sightFrom = visual.InverseTransformPoint(Muzzle.position);
                 _sightAlong = visual.InverseTransformDirection(Muzzle.forward);
@@ -225,52 +224,17 @@ namespace IntuitiveDesigns.ShootingRange
             float inward = hand == VRAvatarLimbType.LeftHand ? 1f : -1f;
             // Full auto stacks kicks faster than they recover, so the shove is capped or the gun leaves the hand
             float kick = Mathf.Min(1.6f, _recoil / Mathf.Max(0.01f, recoilKick));
-            var pose = _visualRest * Quaternion.Euler(-_recoil - reloadTilt.x * tilt + Flick(), _shake.x * kick,
-                                                      inward * reloadTilt.y * tilt + _shake.y * kick);
+            visual.localRotation = _visualRest * Quaternion.Euler(-_recoil - reloadTilt.x * tilt, _shake.x * kick,
+                                                                  inward * reloadTilt.y * tilt + _shake.y * kick);
 
-            // The twirl turns the gun about the trigger, where the finger is, not about its own pivot
-            var spin = Twirl;
-            visual.localRotation = pose * spin;
-            visual.localPosition = _visualRestPosition + _visualBack * recoilKickBack * kick +
-                                   pose * Vector3.Scale(visual.localScale, _twirlPivot - spin * _twirlPivot);
+            _jolt = Mathf.MoveTowards(_jolt, 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, joltSeconds));
+            visual.localPosition = _visualRestPosition + _visualBack * recoilKickBack * kick + _visualUp * seatJolt * _jolt;
 
             MoveTheMagazine();
         }
 
-        /// How far round the twirl is, in the visual's own space. The glove undoes it, so the hand stays
-        /// put while the gun spins in it
-        public Quaternion Twirl
-        {
-            get
-            {
-                float t = Phase(twirlSpan);
-                return t > 0f && t < 1f
-                     ? Quaternion.AngleAxis(360f * twirlTurns * Mathf.SmoothStep(0f, 1f, t), Vector3.right)
-                     : Quaternion.identity;
-            }
-        }
-
-        public Vector3 TwirlPivot { get { return _twirlPivot; } }
-
-        /// The glove reports its trigger finger here while the gun is gripped, so the twirl turns on
-        /// that finger. Without a glove the estimate from the magazine stands
-        public void SpinOn(Vector3 worldPoint)
-        {
-            if (visual != null && !IsReloading) _twirlPivot = visual.InverseTransformPoint(worldPoint);
-        }
-
         /// Up the grip, along its rake, in the gun's own space. Setup step 16 fits the glove to it
         public Vector3 GripUp { get { return -magazineSlide.normalized; } }
-
-        /// 0 to 1: how far a finger has let go so the gun can spin on the trigger finger. The hand
-        /// opens as the twirl starts; as the gun comes round, each finger closes lag later than the first
-        public float TwirlOpen(float lag)
-        {
-            float u = Through;
-            float opening = Mathf.InverseLerp(twirlSpan.x - letGoSpan * 0.5f, twirlSpan.x + letGoSpan * 0.5f, u);
-            float closing = Mathf.InverseLerp(twirlSpan.y - fingerCloseSpan * 0.5f, twirlSpan.y + fingerCloseSpan * 0.5f, u - lag);
-            return Mathf.SmoothStep(0f, 1f, opening) * (1f - Mathf.SmoothStep(0f, 1f, closing));
-        }
 
         /// 0 to 1: the grip slackens once the magazine is falling and clamps again as the new one seats
         public float MagSwap
@@ -286,16 +250,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// 0 to 1 and back: the thumb pressing the magazine release, just as the magazine lets go
         public float ReleasePress { get { return Hump(Through, magazineFalls.x - 0.06f, magazineFalls.x + 0.05f); } }
-
-        /// The wrist throwing the gun round the finger as the twirl starts, then a smaller catch back the
-        /// other way as it comes round. Hand and gun move together; only the spin itself is the gun's
-        private float Flick()
-        {
-            float u = Through;
-            float span = Mathf.Max(0.01f, (twirlSpan.y - twirlSpan.x) * 0.25f);
-            return wristFlick.x * Hump(u, twirlSpan.x - span * 0.5f, twirlSpan.x + span) -
-                   wristFlick.y * Hump(u, twirlSpan.y - span * 0.5f, twirlSpan.y + span * 0.5f);
-        }
 
         /// 0 up to 1 and back, starting and stopping at rest so nothing lurches into or out of it
         private static float Hump(float u, float from, float to)
@@ -371,8 +325,7 @@ namespace IntuitiveDesigns.ShootingRange
             muzzle.position = transform.TransformPoint(new Vector3((low.x + high.x) * 0.5f, (low.y + high.y) * 0.5f, high.z));
         }
 
-        /// The fitted model's magazine part, found by name as setup step 16 finds it. The trigger sits
-        /// just above its front top edge, so that is where the twirl turns
+        /// The fitted model's magazine part, found by name as setup step 16 finds it
         private void FindTheMagazine()
         {
             foreach (var part in visual.GetComponentsInChildren<Transform>(true))
@@ -391,23 +344,6 @@ namespace IntuitiveDesigns.ShootingRange
             _magazineRest = _magazine.localPosition;
             _magazineScale = _magazine.localScale;
             _magazineDown = _magazine.parent.InverseTransformVector(transform.TransformDirection(magazineSlide.normalized));
-
-            var box = _magazine.GetComponent<MeshFilter>().sharedMesh.bounds;
-            float top = float.NegativeInfinity;
-            float front = float.NegativeInfinity;
-            Vector3 middle = _magazine.TransformPoint(box.center);
-            for (int corner = 0; corner < 8; corner++)
-            {
-                var world = _magazine.TransformPoint(new Vector3(
-                    (corner & 1) == 0 ? box.min.x : box.max.x,
-                    (corner & 2) == 0 ? box.min.y : box.max.y,
-                    (corner & 4) == 0 ? box.min.z : box.max.z));
-                top = Mathf.Max(top, Vector3.Dot(world - middle, transform.up));
-                front = Mathf.Max(front, Vector3.Dot(world - middle, transform.forward));
-            }
-
-            var trigger = middle + transform.up * (top + 0.02f) + transform.forward * (front - 0.012f);
-            _twirlPivot = visual.InverseTransformPoint(trigger);
         }
 
         /// 0 to 1 and back over the reload, eased at both ends so the gun swings up and settles back.
@@ -521,16 +457,20 @@ namespace IntuitiveDesigns.ShootingRange
 
             Cue(magazineOutClip, magazineFalls.x, before, after);
             Cue(reloadClip, magazineRises.x, before, after);
-            Cue(twirlClip, twirlSpan.x, before, after);
 
             // The fresh magazine slapped home jolts the gun, and the hand riding it
-            if (before < magazineRises.y && after >= magazineRises.y) _recoil += recoilKick * insertKick;
+            if (before < magazineRises.y && after >= magazineRises.y)
+            {
+                _recoil += recoilKick * insertKick;
+                _jolt = 1f;
+            }
 
             if (_reloadRemaining > 0f) return;
 
             _reloadRemaining = 0f;
             _rounds = magazineSize;
             _recoil += recoilKick * slideSlamKick;
+            _jolt = 1f;
             Play(slideReleaseClip, 0.7f);
             RaiseAmmo();
         }
@@ -590,7 +530,7 @@ namespace IntuitiveDesigns.ShootingRange
             _slideKick = 1f;
             Play(Pick(fireClips), fireVolume);
 
-            if (HapticPulse.Instance != null) HapticPulse.Instance.Hit(hand, pellets > 1 ? scatterHaptic : fireHaptic);
+            if (HapticPulse.Instance != null) HapticPulse.Instance.Kick(hand, pellets > 1 ? scatterHaptic : fireHaptic);
 
             RaiseAmmo();
             if (Fired != null) Fired();

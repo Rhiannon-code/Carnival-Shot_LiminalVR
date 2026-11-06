@@ -109,6 +109,19 @@ namespace IntuitiveDesigns.ShootingRange
             if (Instance == this) Instance = null;
         }
 
+        public bool AnyActive
+        {
+            get
+            {
+                for (int i = 0; i < KindCount; i++)
+                {
+                    if (IsActive((PowerUpKind)i)) return true;
+                }
+
+                return false;
+            }
+        }
+
         public bool IsActive(PowerUpKind kind)
         {
             return _remaining[(int)kind] > 0f;

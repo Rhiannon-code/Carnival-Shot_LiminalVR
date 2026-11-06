@@ -104,9 +104,9 @@ namespace IntuitiveDesigns.ShootingRange
         /// The broken pieces of the sign that was actually hit. They arrive where the sign was, so they
         /// line up with what vanished, and are thrown from the hole the round made
         /// clips and volume replace the pool's own shatter sound, for things that are not wooden signs.
-        /// popScale sizes the smoke puff, 0 for none
+        /// popScale sizes the smoke puff, none by default: only the flying bat still has one (user, 2026-11-02)
         public void Burst(GameObject set, Transform sign, Vector3 at, Vector3 direction, float impulse,
-                          AudioClip[] clips = null, float volume = -1f, float popScale = 1f)
+                          AudioClip[] clips = null, float volume = -1f, float popScale = 0f)
         {
             Queue<Pieces> spare;
             if (set == null || sign == null || !_sets.TryGetValue(set, out spare) || spare.Count == 0)
@@ -146,7 +146,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         public void Burst(Vector3 at, int count, Vector3 direction, float impulse,
-                          AudioClip[] clips = null, float volume = -1f, float popScale = 1f)
+                          AudioClip[] clips = null, float volume = -1f, float popScale = 0f)
         {
             int thrown = Mathf.Min(count, _idle.Count);
 
@@ -220,7 +220,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// Opens back toward the shooter, in front of what was hit. Left facing its own way it puffed
         /// upward from behind the sign, which hid half of it until the sign spun or fell out of the way
-        public void PlayPop(Vector3 at, Vector3 direction, float scale = 1f)
+        public void PlayPop(Vector3 at, Vector3 direction, float scale)
         {
             if (scale <= 0f || _pops.Count == 0) return;
 

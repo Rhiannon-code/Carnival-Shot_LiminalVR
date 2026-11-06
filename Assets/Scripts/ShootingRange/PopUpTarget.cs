@@ -8,7 +8,7 @@ namespace IntuitiveDesigns.ShootingRange
 
     public class PopUpTarget : MonoBehaviour
     {
-        private enum Phase { Idle, Waiting, Rising, Settling, Up, Spinning, Falling, Reacting, Taunting }
+        private enum Phase { Idle, Waiting, Rising, Settling, Up, Stunned, Burning, Spinning, Falling, Reacting, Taunting }
         private enum RiseStyle { Smooth, Snap, Peek, Bungee }
 
         [Header("Refs")]
@@ -46,21 +46,22 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float peekOdds = 1f;
         [SerializeField, Tooltip("Roof signs only")] private float bungeeOdds = 2f;
         [SerializeField, Range(0f, 1f), Tooltip("How far up a peek gets before it pops")] private float peekShare = 0.3f;
-        [SerializeField, Tooltip("Times the landing wobble, for a snap")] private float snapOvershoot = 1.8f;
-        [SerializeField, Tooltip("Times the landing wobble, for a bungee drop")] private float bungeeOvershoot = 2.5f;
+        [SerializeField] private float snapOvershoot = 1.8f;
+        [SerializeField] private float bungeeOvershoot = 2.5f;
 
         [Header("Rocking as it rides (data)")]
-        [SerializeField, Tooltip("Degrees it leans per m/s² the carriage speeds up or slows by")] private float leanPerAccel = 4f;
+        [SerializeField] private float leanPerAccel = 4f;
         [SerializeField] private float maxLean = 14f;
         [SerializeField] private float rockDegrees = 3f;
-        [SerializeField, Tooltip("Metres travelled per rock back and forth")] private float rockSpacing = 0.6f;
+        [SerializeField] private float rockSpacing = 0.6f;
         [SerializeField] private float rockStiffness = 120f;
         [SerializeField] private float rockDamping = 9f;
 
-        [Header("In the sun (data): a vampire under an open skylight")]
-        [SerializeField, Tooltip("Seconds between one scorch and the next while it stays in the beam")] private float scorchEvery = 0.5f;
-        [SerializeField, Range(0f, 1f), Tooltip("Smoke puff, as a share of a hit's")] private float scorchSmoke = 0.35f;
-        [SerializeField, Tooltip("Degrees a second of stagger per scorch")] private float scorchKick = 220f;
+        [Header("In the sun (data): a vampire under an open skylight goes up in flames")]
+        [SerializeField] private float burnSeconds = 1f;
+        [SerializeField, Tooltip("Seconds between one lick of flame and the next")] private float flameEvery = 0.05f;
+        [SerializeField] private Color charred = new Color(0.1f, 0.08f, 0.07f);
+        [SerializeField] private AudioClip[] igniteClips;
 
         [Header("Got away (data)")]
         [SerializeField] private float tauntDegrees = 12f;
@@ -69,13 +70,17 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] tauntClips;
 
         [Header("Reaction (data)")]
+        [SerializeField]
+        private string[] vampireNames = { "vampire", "vimpire" };
+        [SerializeField]
+        private float reactionDelay = 0.3f;
         [SerializeField] private float spinTurns = 2f;
         [SerializeField] private float spinSeconds = 0.4f;
 
         [Header("Shatter (data)")]
         [SerializeField] private int fragments = 8;
         [SerializeField] private float fragmentImpulse = 1.4f;
-        [SerializeField, Tooltip("Metres: room props this close to a shattering sign give a start")]
+        [SerializeField]
         private float joltRadius = 1.5f;
 
         [Header("Special power-up sign glow (data)")]
@@ -102,7 +107,7 @@ namespace IntuitiveDesigns.ShootingRange
         /// Shot or done with, and on its way down
         public bool Leaving
         {
-            get { return _phase == Phase.Spinning || _phase == Phase.Falling || _phase == Phase.Reacting || _phase == Phase.Taunting; }
+            get { return _phase == Phase.Stunned || _phase == Phase.Burning || _phase == Phase.Spinning || _phase == Phase.Falling || _phase == Phase.Reacting || _phase == Phase.Taunting; }
         }
 
         /// How long from being asked to pop up to being all the way there, and how long back down
@@ -142,8 +147,17 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _lastAt;
         private Vector3 _lastVelocity;
         private float _travelled;
-        private float _scorchedAt = -1f;
+        private float _nextFlame;
+        private Bounds _burning;
+        private MeshRenderer[] _burnt;
+        private MaterialPropertyBlock _burnBlock;
         private SignReactions _reactions;
+        private SignUnderglow _underglow;
+        private SignHole _hole;
+        private SignScaredFace _scaredFace;
+        private SignReaction _reaction;
+        private Vector3 _hitAt;
+        private Vector3 _hitDirection;
         private HingeShape _shape = new HingeShape { Axis = Vector3.right };
         private float _side = 1f;
         private GameObject _shards;
@@ -166,6 +180,9 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (figure == null) figure = transform;
             _reactions = GetComponent<SignReactions>();
+            _underglow = GetComponent<SignUnderglow>();
+            _hole = GetComponent<SignHole>();
+            _scaredFace = GetComponent<SignScaredFace>();
             if (hitBox == null) hitBox = GetComponentInChildren<Collider>();
             _live = hitBox;
 
@@ -193,6 +210,8 @@ namespace IntuitiveDesigns.ShootingRange
         /// by its feet, a side sign opens like a door from the corner of its pillar
         public void Present(TrackRail rail)
         {
+            if (_hole != null) _hole.Clear();
+
             _roll = 0f;
             _rollSpeed = 0f;
             _shown = rail.ShownOffset;
@@ -217,6 +236,11 @@ namespace IntuitiveDesigns.ShootingRange
             PickVariant(rail.TallestSign);
 
             if (_hinge == Hinge.Up) _shown = ShowJustOver(rail.Cover, _shown);
+            if (_underglow != null)
+            {
+                Place(0f);
+                _underglow.Show(_hinge == Hinge.Up, Home().y, _standLength, _signTop, HitCentre);
+            }
 
             if (_hinge == Hinge.None)
             {
@@ -241,6 +265,8 @@ namespace IntuitiveDesigns.ShootingRange
             Glow(null);
             Play(hitClips);
             Play(_voice, voiceVolume);
+            if (Debris.Instance != null) Debris.Instance.OnSign(point, -direction);
+            if (_scaredFace != null && IsVampire) _scaredFace.Show(_sign);
 
             if (_hinge == Hinge.None || shatter) { Burst(point, direction); Finish(); return; }
 
@@ -248,14 +274,29 @@ namespace IntuitiveDesigns.ShootingRange
             var reaction = _reactions != null ? _reactions.Pick(this, point) : SignReaction.Spin;
             if (reaction == SignReaction.Shatter) { Burst(point, direction); Finish(); return; }
 
+            if (_hole != null) _hole.Show(_sign, point, Vector3.Dot(figure.forward, direction) > 0f ? -figure.forward : figure.forward);
+
+            _reaction = reaction;
+            _hitAt = point;
+            _hitDirection = direction;
+
+            // A vampire holds still with its hole for a moment
+            if (reaction == SignReaction.Spin || !IsVampire) { React(); return; }
+
+            _timer = 0f;
+            _phase = Phase.Stunned;
+        }
+
+        private void React()
+        {
+            var reaction = _reaction;
             if (_reactions != null) _reactions.Sound(reaction, HitCentre);
-            if (ShatterPool.Instance != null) ShatterPool.Instance.PlayPop(HitCentre, direction);
 
             switch (reaction)
             {
                 case SignReaction.Spin:
                     // Away from the side that was struck, as a real one would turn
-                    _spinWay = Vector3.Dot(Vector3.Cross(point - HitCentre, direction), Vector3.up) < 0f ? -1f : 1f;
+                    _spinWay = Vector3.Dot(Vector3.Cross(_hitAt - HitCentre, _hitDirection), Vector3.up) < 0f ? -1f : 1f;
                     Begin(Phase.Spinning);
                     break;
 
@@ -265,7 +306,7 @@ namespace IntuitiveDesigns.ShootingRange
 
                 default:
                     _phase = Phase.Reacting;
-                    _reactions.Play(reaction, this, point, direction);
+                    _reactions.Play(reaction, this, _hitAt, _hitDirection);
                     break;
             }
         }
@@ -437,6 +478,15 @@ namespace IntuitiveDesigns.ShootingRange
                     Ride();
                     break;
 
+                case Phase.Burning:
+                    Burn();
+                    break;
+
+                case Phase.Stunned:
+                    _timer += Time.deltaTime;
+                    if (_timer >= reactionDelay) React();
+                    break;
+
                 case Phase.Taunting:
                 {
                     float t = Advance(tauntSeconds);
@@ -542,18 +592,57 @@ namespace IntuitiveDesigns.ShootingRange
             if (_phase == Phase.Up) _rollSpeed += kick;
         }
 
-        public string SignName { get { return _sign != null ? _sign.name : ""; } }
-
-        /// Burned by daylight: smokes and staggers, still up and still to be shot. True when it did, so the
-        /// sizzle plays once per scorch and not every frame
-        public bool Scorch()
+        public bool IsVampire
         {
-            if (!Live || Time.time - _scorchedAt < scorchEvery) return false;
+            get
+            {
+                string sign = _sign != null ? _sign.name.ToLowerInvariant() : "";
+                foreach (var word in vampireNames)
+                {
+                    if (!string.IsNullOrEmpty(word) && sign.Contains(word.ToLowerInvariant())) return true;
+                }
 
-            _scorchedAt = Time.time;
-            if (ShatterPool.Instance != null) ShatterPool.Instance.PlayPop(HitCentre, Vector3.up, scorchSmoke);
-            Flinch(UnityEngine.Random.value < 0.5f ? -scorchKick : scorchKick);
-            return true;
+                return false;
+            }
+        }
+
+        /// Caught in the sun: it goes up in flames, chars where it stands, then collapses
+        public void BurnUp()
+        {
+            SetHitBox(false);
+            Glow(null);
+            Play(igniteClips);
+            Play(_voice, voiceVolume);
+
+            _burning = SignBounds;
+            _burnt = _sign != null ? _sign.GetComponentsInChildren<MeshRenderer>() : new MeshRenderer[0];
+            if (_scaredFace != null) _scaredFace.Show(_sign);
+            if (_burnBlock == null) _burnBlock = new MaterialPropertyBlock();
+
+            _nextFlame = 0f;
+            _timer = 0f;
+            _phase = Phase.Burning;
+        }
+
+        private void Burn()
+        {
+            float t = Advance(burnSeconds);
+
+            if (_timer >= _nextFlame && Flames.Instance != null)
+            {
+                _nextFlame = _timer + flameEvery;
+                Flames.Instance.Lick(_burning);
+            }
+
+            // SignUnderglow writes the block over at the next launch, which takes this off again
+            foreach (var renderer in _burnt)
+            {
+                renderer.GetPropertyBlock(_burnBlock);
+                _burnBlock.SetColor(ColorId, Color.Lerp(Color.white, charred, t));
+                renderer.SetPropertyBlock(_burnBlock);
+            }
+
+            if (t >= 1f) Begin(Phase.Falling);
         }
 
         /// Got away: waggles at the player, then drops out of sight as Lower does
@@ -618,6 +707,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlaceFigure(figure, home, _facing, shape, swing, spin);
+            if (_underglow != null && _shape.Folded != 0f) _underglow.Upright(1f - Mathf.Clamp01(Mathf.Abs(swing / _shape.Folded)));
             if (_roll != 0f) figure.RotateAround(home, Vector3.Cross(Vector3.up, _facing * Vector3.right), _roll);
 
             if (stand == null || !stand.gameObject.activeSelf) return;
@@ -707,26 +797,32 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// A random sign no taller than tallest (0 = any), or the shortest there is when none fits
+        /// Bat signs are too small for the rails (user, 2026-11-02), so none is ever picked
         private int PickUnder(float tallest)
         {
-            int shortest = 0;
+            int shortest = -1;
             int fits = 0;
             for (int i = 0; i < _heights.Length; i++)
             {
-                if (_heights[i] < _heights[shortest]) shortest = i;
+                if (IsBat(i)) continue;
+                if (shortest < 0 || _heights[i] < _heights[shortest]) shortest = i;
                 if (tallest <= 0f || _heights[i] <= tallest) fits++;
             }
 
+            if (shortest < 0) return 0;
             if (fits == 0) return shortest;
 
             int nth = UnityEngine.Random.Range(0, fits);
             for (int i = 0; i < _heights.Length; i++)
             {
+                if (IsBat(i)) continue;
                 if ((tallest <= 0f || _heights[i] <= tallest) && nth-- == 0) return i;
             }
 
             return shortest;
         }
+
+        private bool IsBat(int i) { return variants[i] != null && variants[i].name.ToLowerInvariant().Contains("bat"); }
 
         /// The stand sits in the middle of the sign's feet with its top against them, so it tips up and
         /// folds away with the sign. A side sign has none: folded flat against its pillar, a post on its
@@ -738,9 +834,6 @@ namespace IntuitiveDesigns.ShootingRange
             stand.gameObject.SetActive(_hinge != Hinge.Sideways);
             _standAt = new Vector3(_signMiddle.x, feet, _signMiddle.z);
         }
-
-        /// The stand's foot is on the rail and the sign swings up from there, so a rail is placed where the
-        /// foot should rest (ADR 0063). Metres, so the Figure's scale is divided back out
         private void LiftOffTheRail()
         {
             if (stand == null || !stand.gameObject.activeSelf) return;
@@ -983,7 +1076,7 @@ namespace IntuitiveDesigns.ShootingRange
             ImpactFX.Instance.PlayClip(clips[UnityEngine.Random.Range(0, clips.Length)], HitCentre, volume);
         }
 
-        private static Transform Head()
+        public static Transform Head()
         {
             var avatar = VRAvatar.Active;
             return avatar == null || avatar.Head == null ? null : avatar.Head.Transform;

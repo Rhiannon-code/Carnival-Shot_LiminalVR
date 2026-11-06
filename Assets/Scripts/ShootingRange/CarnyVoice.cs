@@ -14,10 +14,11 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private SpiderNest spiders;
         [SerializeField] private BatSwarm bats;
 
-        [Header("Welcome, as the guns appear (the second part follows the first)")]
+        [Header("Welcome, as the lights start up (the second part follows the first)")]
         [SerializeField] private AudioClip[] welcome;
         [SerializeField] private AudioClip[] welcomeThen;
-        [SerializeField] private float welcomeAfterSeconds = 1f;
+        [SerializeField, Range(0f, 1f)]
+        private float windUpVolume = 0.5f;
 
         [Header("Between rounds (the second part follows the first)")]
         [SerializeField] private AudioClip[] nextRound;
@@ -35,6 +36,13 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] verdictGreat;
         [SerializeField] private Vector3 verdictSteps = new Vector3(0.25f, 0.5f, 0.8f);
         [SerializeField] private AudioClip[] goodbye;
+
+        [Header("The prize chest at the end: shoot the lock, then what was won, smallest to best")]
+        [SerializeField] private AudioClip[] shootTheLock;
+        [SerializeField] private AudioClip[] prizeSmall;
+        [SerializeField] private AudioClip[] prizeMedium;
+        [SerializeField] private AudioClip[] prizeBig;
+        [SerializeField] private AudioClip[] prizeTop;
 
         [Header("Warnings, the first time each turns up (they cut in: the spider bites, the bat is coming)")]
         [SerializeField] private AudioClip[] spiderWarning;
@@ -56,8 +64,12 @@ namespace IntuitiveDesigns.ShootingRange
         /// Mid-line, or with lines still waiting their turn
         public bool Talking { get { return Time.unscaledTime < _busyUntil || _queue.Count > 0; } }
 
+        /// What the skeleton barker's jaw follows
+        public AudioSource Speaker { get { return _audio; } }
+
         private readonly Queue<AudioClip> _queue = new Queue<AudioClip>();
         private AudioSource _audio;
+        private MusicBed _music;
         private int _misses;
         private float _busyUntil;
         private float _quietUntil;
@@ -66,9 +78,6 @@ namespace IntuitiveDesigns.ShootingRange
         private bool _warnedOfBats;
 
         public static CarnyVoice Instance { get; private set; }
-
-        /// He has started on his welcome, while the how-to-play panel is up: the lights come up with it
-        public event System.Action Welcoming;
 
         /// A ricochet found a sign (ADR 0063)
         public void TrickShot() { React(trickShot); }
@@ -84,6 +93,7 @@ namespace IntuitiveDesigns.ShootingRange
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
+            _music = FindObjectOfType<MusicBed>();
             if (combo == null) combo = FindObjectOfType<ComboTracker>();
             if (spiders == null) spiders = FindObjectOfType<SpiderNest>();
             if (bats == null) bats = FindObjectOfType<BatSwarm>();
@@ -127,20 +137,25 @@ namespace IntuitiveDesigns.ShootingRange
             if (bats != null) bats.Launched -= OnBatLaunched;
         }
 
-        private IEnumerator Start()
+        /// The coin has dropped and the lights are coming up (CarnivalLights). Not if a grab in the dark has already
+        /// started the countdown
+        public void Welcome()
         {
-            yield return new WaitForSecondsRealtime(welcomeAfterSeconds);
-
-            // A grab inside that first second has already started the countdown
             if (game != null && game.Current != RangeGame.State.HowToPlay &&
-                game.Current != RangeGame.State.WaitingForPickup) yield break;
+                game.Current != RangeGame.State.WaitingForPickup) return;
+
             Queue(welcome);
             Queue(welcomeThen);
-            if (Welcoming != null) Welcoming();
         }
 
         private void Update()
         {
+            if (_music != null)
+            {
+                _audio.pitch = _music.Pitch;
+                _audio.volume = Mathf.Lerp(windUpVolume, 1f, _music.WindUpThrough);
+            }
+
             if (_queue.Count > 0 && Time.unscaledTime >= _busyUntil) Play(_queue.Dequeue());
         }
 
@@ -194,8 +209,19 @@ namespace IntuitiveDesigns.ShootingRange
             return verdictTerrible;
         }
 
+        /// With a prize to give, the goodbye waits until it has been won
         private void OnFinalScore(int total)
         {
+            if (PrizeChest.Instance == null) Queue(goodbye);
+        }
+
+        public void AskForTheLock() { Queue(shootTheLock); }
+
+        /// 0 smallest to 3 best
+        public void Prize(int tier)
+        {
+            var lines = tier >= 3 ? prizeTop : tier == 2 ? prizeBig : tier == 1 ? prizeMedium : prizeSmall;
+            Interrupt(Pick(lines));
             Queue(goodbye);
         }
 
@@ -266,7 +292,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Play(AudioClip clip)
         {
             _audio.PlayOneShot(clip, volume);
-            _busyUntil = Time.unscaledTime + clip.length;
+            _busyUntil = Time.unscaledTime + clip.length / Mathf.Max(0.1f, _audio.pitch);
         }
 
         private static AudioClip Pick(AudioClip[] lines)

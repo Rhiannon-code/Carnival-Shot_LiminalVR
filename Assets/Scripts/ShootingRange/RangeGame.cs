@@ -19,7 +19,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private CarnyVoice barker;
 
         [Header("Session (data)")]
-        [SerializeField] private float[] secondsPerRound = { 30f, 30f, 45f, 45f, 60f };
         [SerializeField] private float controlsSeconds = 5f;
         [SerializeField] private int countdownFrom = 3;
         [SerializeField] private int betweenRoundsCountdownFrom = 3;
@@ -34,20 +33,16 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Clearing (data)")]
         [SerializeField] private int clearBonus = 200;
-        [SerializeField] private bool endRoundOnClear = true;
 
         public State Current { get; private set; } = State.HowToPlay;
-        public float TimeRemaining { get; private set; }
         public int RoundScore { get; private set; }
         public int TotalScore { get; private set; }
         public int RoundNumber { get; private set; }
-        public int MaxRounds { get { return secondsPerRound.Length; } }
-        public float RoundSeconds { get { return SecondsFor(RoundNumber); } }
+        public int MaxRounds { get { return director != null ? director.Rounds : 0; } }
         public bool IsFinalRound { get { return MaxRounds > 0 && RoundNumber >= MaxRounds; } }
         public int NextRoundNumber { get { return RoundNumber + 1; } }
 
         public event Action<int> ScoreChanged;
-        public event Action<float> TimeChanged;
         public event Action<State> StateChanged;
         public event Action<int> CountdownTick;
         public event Action CountdownGo;
@@ -74,7 +69,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Start()
         {
-            TimeRemaining = SecondsFor(1);
             if (barker == null) barker = FindObjectOfType<CarnyVoice>();
 
             if (requirePickupToStart && FindObjectOfType<PistolPickup>() == null)
@@ -187,38 +181,17 @@ namespace IntuitiveDesigns.ShootingRange
         private IEnumerator RunRound()
         {
             RoundScore = 0;
-            TimeRemaining = RoundSeconds;
 
             if (arena != null) arena.PresentRound(RoundNumber);
             if (combo != null) combo.Reset(true);
 
             SetState(State.Playing);
             if (RoundStarted != null) RoundStarted(RoundNumber);
-            if (TimeChanged != null) TimeChanged(TimeRemaining);
 
-            bool shelfCleared = false;
+            // A round is its signs: it ends when the last has been shot or got away and its reaction has played
+            while (director != null && !director.RoundOver) yield return null;
 
-            while (TimeRemaining > 0f)
-            {
-                TimeRemaining -= Time.unscaledDeltaTime;
-                if (TimeChanged != null) TimeChanged(Mathf.Max(0f, TimeRemaining));
-
-                // A practice shelf can end on its plates. A range with traffic always runs to the bell:
-                // its signs are paced to the clock and the last one drops away as it goes
-                if (director == null && endRoundOnClear && arena != null && arena.IsCleared)
-                {
-                    shelfCleared = true;
-                    break;
-                }
-
-                yield return null;
-            }
-
-            TimeRemaining = Mathf.Max(0f, TimeRemaining);
-
-            bool everySign = director != null
-                           ? director.WaveSize > 0 && director.Killed >= director.WaveSize
-                           : shelfCleared;
+            bool everySign = director != null && director.WaveSize > 0 && director.Killed >= director.WaveSize;
             if (everySign)
             {
                 AddScore(clearBonus);
@@ -231,17 +204,14 @@ namespace IntuitiveDesigns.ShootingRange
             if (RoundEnded != null) RoundEnded(RoundNumber, RoundScore);
         }
 
-        private float SecondsFor(int round)
-        {
-            if (MaxRounds == 0) return 0f;
-            return secondsPerRound[Mathf.Clamp(round - 1, 0, MaxRounds - 1)];
-        }
-
         private IEnumerator EndExperience()
         {
             SetState(State.Ended);
             if (SlowMotion.Instance != null) SlowMotion.Instance.Restore();
             if (FinalScore != null) FinalScore(TotalScore);
+
+            // The prize: the chest waits for its lock to be shot, then shows what was won
+            while (PrizeChest.Instance != null && PrizeChest.Instance.Busy) yield return null;
 
             yield return StartCoroutine(Pause(endHoldSeconds));
 

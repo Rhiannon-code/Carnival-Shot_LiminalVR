@@ -21,7 +21,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private int maxBounces = 1;
         [SerializeField, Range(0f, 1f)] private float bounceSpeedKept = 0.6f;
         [SerializeField] private AudioClip[] ricochetClips;
-        [SerializeField, Range(0f, 1f)] private float ricochetVolume = 0.7f;
+        [SerializeField, Range(0f, 1f)] private float ricochetVolume = 0.3f;
+        [SerializeField, Range(0f, 1f), Tooltip("Share of bounces that whine; every one doing it gets tiresome fast")] private float ricochetWhine = 0.35f;
+        [SerializeField, Range(0f, 1f), Tooltip("How loud a bounced round lands, as a share of a straight hit")] private float bouncedLoudness = 0.4f;
         [SerializeField, Tooltip("The tracer after a bounce, so a ricochet can be followed by eye")]
         private Color ricochetTracer = new Color(1f, 0.95f, 0.6f, 1f);
 
@@ -84,6 +86,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             Vector3 from = transform.position;
             Vector3 along = step / length;
+            ClothAir.Passing(from, along, length);
             int count = Physics.SphereCastNonAlloc(from, radius, along, Hits, length, hitMask, QueryTriggerInteraction.Ignore);
             SortNearestFirst(count);
 
@@ -162,13 +165,14 @@ namespace IntuitiveDesigns.ShootingRange
             // Signs and bats bring their own puff and their own sound, the dust and the thud are for the room. Loose
             // pieces get neither: a round through a spray of shards would be a burst of thuds
             bool target = shootable is TrackMover || shootable is Bat;
-            if (!target && !IsLoose(hit, shootable) && ImpactFX.Instance != null) ImpactFX.Instance.PlayImpact(hit.point, hit.normal, hit.collider);
+            if (!target && !IsLoose(hit, shootable) && ImpactFX.Instance != null)
+                ImpactFX.Instance.PlayImpact(hit.point, hit.normal, hit.collider, _bounces > 0 ? bouncedLoudness : 1f);
             if (!target) TrackMover.NearMiss(hit.point);
         }
 
         private void Ricochet(Vector3 at)
         {
-            if (ricochetClips != null && ricochetClips.Length > 0 && ImpactFX.Instance != null)
+            if (ricochetClips != null && ricochetClips.Length > 0 && ImpactFX.Instance != null && Random.value < ricochetWhine)
                 ImpactFX.Instance.PlayClip(ricochetClips[Random.Range(0, ricochetClips.Length)], at, ricochetVolume);
 
             if (_trail == null) return;

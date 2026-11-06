@@ -19,7 +19,7 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Copy (data)")]
         [SerializeField] private string pickupPrompt = "TAKE THE PISTOL";
         [SerializeField] private string clearedMessage = "WAVE CLEARED";
-        [SerializeField] private string timeUpMessage = "TIME UP";
+        [SerializeField] private string roundOverMessage = "ROUND OVER";
         [SerializeField] private string slainLabel = "SLAIN";
         [SerializeField] private string finalScoreLabel = "FINAL SCORE";
 
@@ -100,7 +100,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private string RoundResult()
         {
-            string headline = _cleared ? clearedMessage : timeUpMessage;
+            string headline = _cleared ? clearedMessage : roundOverMessage;
             if (director == null) return headline;
 
             return headline + "\n" + director.Killed + " / " + director.WaveSize + " " + slainLabel;

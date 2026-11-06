@@ -314,6 +314,9 @@ GameObject:
   - component: {fileID: 5465035754655860925}
   - component: {fileID: 2766882888699382202}
   - component: {fileID: 3979945506846920587}
+  - component: {fileID: 9219145913501456680}
+  - component: {fileID: 2519155880298777129}
+  - component: {fileID: 6374203092963145672}
   m_Layer: 8
   m_Name: TrackMover
   m_TagString: Untagged
@@ -427,13 +430,21 @@ MonoBehaviour:
   rockSpacing: 0.6
   rockStiffness: 120
   rockDamping: 9
-  scorchEvery: 0.5
-  scorchSmoke: 0.35
-  scorchKick: 220
+  burnSeconds: 1
+  flameEvery: 0.1
+  charred: {r: 0.1, g: 0.08, b: 0.07, a: 1}
+  igniteClips:
+  - {fileID: 8300000, guid: 55538264f8daa978489a60b1ca7fc6f2, type: 3}
+  - {fileID: 8300000, guid: 98de9e82ecbcd4a7a850b24547942bc1, type: 3}
+  - {fileID: 8300000, guid: eca605b71ddc75f64a09e53625c892de, type: 3}
   tauntDegrees: 12
   tauntCycles: 3
   tauntSeconds: 0.4
   tauntClips: []
+  vampireNames:
+  - vampire
+  - vimpire
+  reactionDelay: 0.3
   spinTurns: 4
   spinSeconds: 0.5
   fragments: 30
@@ -635,6 +646,54 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &9219145913501456680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8132794347174009250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4edc51a9877dffe6978c0ac228a54ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  material: {fileID: 2100000, guid: 63a66a669d83741eca9c1bca90868a8e, type: 2}
+  reach: 0.5
+--- !u!114 &2519155880298777129
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8132794347174009250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca65bae511edf84948ccaf7917b954e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  minSize: 0.18
+  maxSize: 0.24
+--- !u!114 &6374203092963145672
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8132794347174009250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 90e19757c1845fa58aef57e873da35a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  faces:
+  - {fileID: 2800000, guid: 6b71cec63845169a4b77d0e6ff4cb2cd, type: 3}
+  - {fileID: 2800000, guid: 7bc93e17af848c7f792a916ed24091b0, type: 3}
+  - {fileID: 2800000, guid: daa404d6d264201f1af475030ad37f1c, type: 3}
+  scared:
+  - {fileID: 2800000, guid: b2ce86fb39306578c969108f0b9e9d18, type: 3}
+  - {fileID: 2800000, guid: 475e57e01516ad4eabbde242c2149357, type: 3}
+  - {fileID: 2800000, guid: 298f77533fa7ca64a86235083f24a8d7, type: 3}
 --- !u!1001 &3428794099297332149
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -855,15 +914,15 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 6c4bc416624bb2b2b99ac0205a04569f, type: 2}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: de020f59550c71c8aa5527dea6a2c7d5, type: 3}
---- !u!1 &3654316831944586266 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: -927199367670048503, guid: de020f59550c71c8aa5527dea6a2c7d5,
-    type: 3}
-  m_PrefabInstance: {fileID: 4726335233174465811}
-  m_PrefabAsset: {fileID: 0}
 --- !u!4 &355190724332832265 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -4216859302048453862, guid: de020f59550c71c8aa5527dea6a2c7d5,
+    type: 3}
+  m_PrefabInstance: {fileID: 4726335233174465811}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &3654316831944586266 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -927199367670048503, guid: de020f59550c71c8aa5527dea6a2c7d5,
     type: 3}
   m_PrefabInstance: {fileID: 4726335233174465811}
   m_PrefabAsset: {fileID: 0}

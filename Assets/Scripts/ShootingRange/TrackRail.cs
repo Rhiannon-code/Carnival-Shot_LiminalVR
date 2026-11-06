@@ -46,6 +46,11 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("The bulbs that run toward the launch point as a sign comes up (optional)")]
         [SerializeField] private RailBulbs bulbs;
 
+        [Header("Where a sign that stands still comes up (data, metres)")]
+        [SerializeField, Tooltip("Stays this far from both ends of the rail")] private float spotMargin = 0.5f;
+        [SerializeField, Tooltip("How far off the rail to check the player can see: about the middle of a sign")] private float sightHeight = 0.8f;
+        [SerializeField, Tooltip("How far either side of that to check, so half a sign can't be behind a pillar")] private float sightWidth = 0.3f;
+
         [Header("Difficulty (1 = from the start, 2.5 = halfway through round 2)")]
         [SerializeField] private float fromRound = 1f;
 
@@ -64,14 +69,20 @@ namespace IntuitiveDesigns.ShootingRange
 
         /// A booking on this rail. A sign stands at the origin while it swings into view, so a pass is
         /// parked from Depart until Moving and only travels after that. One that never travels keeps a
-        /// Speed of zero and holds the origin until it Clears
+        /// Speed of zero and holds its Spot, metres along the rail, until it Clears
         public struct Pass
         {
             public float Depart;
             public float Moving;
             public float Speed;
             public float Clear;
+            public float Spot;
         }
+
+        private const int SpotTries = 6;
+        private const int NoSpot = -1;
+        private const float IgnoreNearHead = 0.5f;
+        private static readonly RaycastHit[] SightHits = new RaycastHit[16];
 
         private readonly List<Pass> _passes = new List<Pass>();
 
@@ -98,21 +109,57 @@ namespace IntuitiveDesigns.ShootingRange
             if (bulbs != null) bulbs.Chase(seconds);
         }
 
+        /// A random spot for a sign that stands still, metres along the rail, that the player can see from head. Below
+        /// zero when none turned up, so it can travel instead of standing hidden. Only floor and roof rails: a side
+        /// sign's place is on its pillar, so it stays at 0
+        public float OpenSpot(Vector3 head)
+        {
+            if (hinge != Hinge.Up && hinge != Hinge.Down) return 0f;
+
+            Vector3 toSign = (hinge == Hinge.Up ? Vector3.up : Vector3.down) * sightHeight;
+            for (int i = 0; i < SpotTries; i++)
+            {
+                float spot = UnityEngine.Random.Range(spotMargin, Mathf.Max(spotMargin, length - spotMargin));
+                Vector3 middle = PointAt(spot) + toSign;
+                if (InSight(head, middle) && InSight(head, middle + Direction * sightWidth) && InSight(head, middle - Direction * sightWidth))
+                    return spot;
+            }
+
+            return NoSpot;
+        }
+
+        /// Only solid room counts: rounds go on through props and other signs, and the guns in the hands don't block anything
+        private static bool InSight(Vector3 from, Vector3 to)
+        {
+            Vector3 line = to - from;
+            float distance = line.magnitude;
+            int count = Physics.RaycastNonAlloc(from, line / distance, SightHits, distance, ~0, QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                var hit = SightHits[i];
+                if (hit.distance < IgnoreNearHead || hit.rigidbody != null) continue;
+                if (hit.collider.GetComponentInParent<IShootable>() == null) return false;
+            }
+
+            return true;
+        }
+
         public Vector3 PointAt(float distance)
         {
             return Origin + Direction * Mathf.Clamp(distance, 0f, length);
         }
 
-        /// holdSeconds above zero is one that stands still instead of travelling. Either way the sign
+        /// holdSeconds above zero is one that stands still at spot instead of travelling. Either way the sign
         /// drops out of sight where it stops, and the spot is not free until it has
-        public Pass Book(float departTime, float speed, float settleSeconds, float holdSeconds, float fallSeconds)
+        public Pass Book(float departTime, float speed, float settleSeconds, float holdSeconds, float fallSeconds, float spot)
         {
             float moving = departTime + Mathf.Max(0f, settleSeconds);
             float fall = Mathf.Max(0f, fallSeconds);
 
             if (holdSeconds > 0f)
                 return new Pass { Depart = departTime, Moving = moving, Speed = 0f,
-                                  Clear = moving + holdSeconds + fall };
+                                  Clear = moving + holdSeconds + fall, Spot = spot };
 
             float safe = Mathf.Max(0.01f, speed);
             return new Pass { Depart = departTime, Moving = moving, Speed = safe,
@@ -196,6 +243,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private float Offset(Pass pass, float time)
         {
+            if (pass.Speed <= 0f) return pass.Spot;
+
             return time <= pass.Moving ? 0f : Mathf.Min(length, (time - pass.Moving) * pass.Speed);
         }
 

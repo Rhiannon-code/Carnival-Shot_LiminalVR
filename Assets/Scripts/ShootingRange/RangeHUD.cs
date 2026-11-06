@@ -13,19 +13,15 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Panel pieces")]
         [SerializeField] private CanvasGroup playPanel;
         [SerializeField] private TMP_Text roundText;
-        [SerializeField] private TMP_Text timerText;
         [SerializeField] private TMP_Text targetsText;
         [SerializeField] private TMP_Text comboText;
         [SerializeField] private TMP_Text scoreText;
-
-        private int _lastSecondShown = -1;
 
         private void OnEnable()
         {
             if (game != null)
             {
                 game.StateChanged += OnStateChanged;
-                game.TimeChanged += OnTimeChanged;
                 game.RoundStarted += OnRoundStarted;
                 game.ScoreChanged += OnScoreChanged;
             }
@@ -39,7 +35,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (game != null)
             {
                 game.StateChanged -= OnStateChanged;
-                game.TimeChanged -= OnTimeChanged;
                 game.RoundStarted -= OnRoundStarted;
                 game.ScoreChanged -= OnScoreChanged;
             }
@@ -61,22 +56,9 @@ namespace IntuitiveDesigns.ShootingRange
             ShowPlayPanel(state == RangeGame.State.Playing || state == RangeGame.State.RoundEnd);
         }
 
-        private void OnTimeChanged(float remaining)
-        {
-            if (timerText == null) return;
-
-            int seconds = Mathf.CeilToInt(remaining);
-            if (seconds == _lastSecondShown) return;
-
-            _lastSecondShown = seconds;
-            timerText.text = seconds / 60 + ":" + (seconds % 60).ToString("00");
-        }
-
         private void OnRoundStarted(int round)
         {
             if (roundText != null && game != null) roundText.text = "ROUND " + round + " / " + game.MaxRounds;
-
-            _lastSecondShown = -1;
         }
 
         private void OnTargetsLeftChanged(int left)

@@ -38,12 +38,11 @@ namespace IntuitiveDesigns.ShootingRange
             _game.CountdownGo -= OnGo;
         }
 
-        /// The beat with n left lights the skull n from the end, so the last one is left for GO however long
-        /// the count is
+        /// Red on 3, orange on 2, green on 1. Green stays lit through GO
         private void OnTick(int n)
         {
             Protect(true);
-            Light(eyes.Length - 1 - n);
+            Light(eyes.Length - n);
             _darkAt = -1f;
         }
 

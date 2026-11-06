@@ -12,6 +12,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             public PhysicMaterial material;
             public AudioClip[] clips;
+            public DebrisKind debris;
         }
 
         [Header("Impact burst")]
@@ -22,10 +23,15 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Impact audio")]
         [SerializeField] private AudioClip[] impactClips;
         [SerializeField] private Surface[] surfaces;
-        [SerializeField, Range(0f, 1f)] private float impactVolume = 0.55f;
+        [SerializeField, Range(0f, 1f)] private float impactVolume = 0.35f;
+        [SerializeField, Tooltip("Seconds between one room hit's sound and the next: full auto and scattershot otherwise make a wall of thuds")]
+        private float impactSoundGap = 0.06f;
 
         [Header("Bullet holes on the room (optional)")]
         [SerializeField] private ShotDecals decals;
+        [SerializeField, Tooltip("Only colliders with these names, before any \" (n)\", take a hole. Flat architecture whose " +
+                                 "collider sits on its surface; on anything else the mark floats")]
+        private string[] holeSurfaces = { "step", "wall", "floor", "floor1", "carpet1", "pillar", "backdrop" };
 
         [Header("Shared voices")]
         [SerializeField] private int voices = 12;
@@ -47,6 +53,7 @@ namespace IntuitiveDesigns.ShootingRange
         private readonly List<Playing> _playing = new List<Playing>();
         private AudioSource[] _voices;
         private int _nextVoice;
+        private float _nextImpactSound;
 
         private void Awake()
         {
@@ -102,34 +109,50 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        public void PlayImpact(Vector3 point, Vector3 normal, Collider struck)
+        /// loudness is a share of the impact volume: less for a round that has already bounced once
+        public void PlayImpact(Vector3 point, Vector3 normal, Collider struck, float loudness = 1f)
         {
             PlayBurst(point, normal);
-            PlayClip(Pick(ClipsFor(struck)), point, impactVolume);
-            if (decals != null && StaysPut(struck)) decals.Place(point, normal);
+            if (Time.unscaledTime >= _nextImpactSound)
+            {
+                _nextImpactSound = Time.unscaledTime + impactSoundGap;
+                PlayClip(Pick(ClipsFor(struck)), point, impactVolume * loudness);
+            }
+            if (FogStir.Instance != null) FogStir.Instance.Stir(point);
+            if (decals != null && TakesAHole(struck)) decals.Place(point, normal, struck);
+
+            var surface = SurfaceOf(struck);
+            if (surface != null && Debris.Instance != null) Debris.Instance.Play(surface.debris, point, normal);
         }
 
-        /// A hole only goes on what never moves: not a prop that can be knocked about, anything shootable,
-        /// or the coffin, whose lid swings open and would leave the mark in the air
-        private static bool StaysPut(Collider struck)
+        private bool TakesAHole(Collider struck)
         {
-            return struck != null && struck.attachedRigidbody == null &&
-                   struck.GetComponentInParent<IShootable>() == null && struck.GetComponentInParent<Coffin>() == null;
+            if (struck == null || holeSurfaces == null) return false;
+
+            string name = struck.gameObject.name;
+            int copy = name.IndexOf(" (", System.StringComparison.Ordinal);
+            if (copy >= 0) name = name.Substring(0, copy);
+
+            return System.Array.IndexOf(holeSurfaces, name) >= 0;
         }
 
         private AudioClip[] ClipsFor(Collider struck)
         {
+            var surface = SurfaceOf(struck);
+            return surface != null && surface.clips != null && surface.clips.Length > 0 ? surface.clips : impactClips;
+        }
+
+        private Surface SurfaceOf(Collider struck)
+        {
             var material = struck != null ? struck.sharedMaterial : null;
-            if (material == null || surfaces == null) return impactClips;
+            if (material == null || surfaces == null) return null;
 
             for (int i = 0; i < surfaces.Length; i++)
             {
-                if (surfaces[i] != null && surfaces[i].material == material && surfaces[i].clips != null &&
-                    surfaces[i].clips.Length > 0)
-                    return surfaces[i].clips;
+                if (surfaces[i] != null && surfaces[i].material == material) return surfaces[i];
             }
 
-            return impactClips;
+            return null;
         }
 
         public void PlayClip(AudioClip clip, Vector3 point, float volume)

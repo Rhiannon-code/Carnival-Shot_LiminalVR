@@ -52,18 +52,21 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float BulbBelowCeiling = 0.4f;
 
         private static readonly Color GlowColour = new Color(1f, 0.15f, 0.1f);
-        private const float GlowIntensity = 2.5f;
-        private const float GlowRange = 1.8f;
+        private const float GlowIntensity = 3f;
+        private const float GlowRange = 1.6f;
+        private const float GlowBounce = 0.1f;
         private const float GlowSoftness = 0.2f;
         private const float GlowSpacing = 2f;
-        private const float GlowAboveRail = 0.15f;
+        // High enough to clear the step in front of the rail: at 1 cm over it, the step took nearly all the light and threw it round
+        private const float GlowAboveRail = 0.35f;
+        private const float GlowTowardPlayer = 0.25f;
         private const float GlowStripHeight = 0.4f;
         private const float GlowStripBehindRail = 0.12f;
         private const float LevelTolerance = 0.25f;
 
         private const float ProbeSpacing = 1.5f;
         private static readonly float[] ProbeHeights = { 0.3f, 1.1f, 1.9f, 2.7f, 3.4f };
-        private static readonly float[] RailProbeHeights = { 0.25f, 0.75f };
+        private static readonly float[] RailProbeHeights = { 0.25f, 0.75f, 1.25f };
 
         private const int UnityDefaultBakeResolution = 40;
         private const int QuestBakeResolution = 15;
@@ -315,8 +318,10 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 int lights = Mathf.Max(1, Mathf.RoundToInt(rail.Length / GlowSpacing));
                 for (int i = 0; i < lights; i++)
                 {
-                    var at = rail.PointAt((i + 0.5f) * rail.Length / lights) + Vector3.up * GlowAboveRail;
-                    BakedLight(glow, "Red", at, GlowColour, GlowIntensity, GlowRange, GlowSoftness);
+                    // In front of the signs' plane, or it only grazes the faces the player sees
+                    var at = rail.PointAt((i + 0.5f) * rail.Length / lights) + Vector3.up * GlowAboveRail -
+                             AwayFromEye(rail, eye) * GlowTowardPlayer;
+                    BakedLight(glow, "Red", at, GlowColour, GlowIntensity, GlowRange, GlowSoftness).bounceIntensity = GlowBounce;
                     count++;
 
                     if (Physics.CheckSphere(at, 0.05f, ~0, QueryTriggerInteraction.Ignore)) buried.Add(rail.name);
@@ -334,7 +339,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                     ". A light inside a mesh bakes nothing; lift those a little");
         }
 
-        private static void BakedLight(Transform parent, string name, Vector3 position, Color colour,
+        private static Light BakedLight(Transform parent, string name, Vector3 position, Color colour,
                                        float intensity, float range, float softness)
         {
             var go = new GameObject(name);
@@ -349,17 +354,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             light.lightmapBakeType = LightmapBakeType.Baked;
             light.shadows = LightShadows.Soft;
             light.shadowRadius = softness;
+            return light;
         }
 
         /// Stands along the rail just behind the sign's plane, so a rising sign comes up in front of its glow,
         /// and the cover in front hides all but what spills over the top
         private static void GlowStrip(Transform parent, TrackRail rail, Vector3 eye, Material material)
         {
-            var across = Vector3.Cross(rail.Direction, Vector3.up).normalized;
+            var across = AwayFromEye(rail, eye);
             var middle = rail.PointAt(rail.Length * 0.5f);
-            var away = middle - eye;
-            away.y = 0f;
-            if (Vector3.Dot(across, away) < 0f) across = -across;
 
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             Object.DestroyImmediate(quad.GetComponent<Collider>());
@@ -375,6 +378,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             renderer.receiveShadows = false;
             renderer.lightProbeUsage = LightProbeUsage.Off;
             renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        }
+
+        /// Flat, square to the rail, on the side away from the player
+        private static Vector3 AwayFromEye(TrackRail rail, Vector3 eye)
+        {
+            var across = Vector3.Cross(rail.Direction, Vector3.up).normalized;
+            var away = rail.PointAt(rail.Length * 0.5f) - eye;
+            away.y = 0f;
+            return Vector3.Dot(across, away) < 0f ? -across : across;
         }
 
         private static Material GlowStripMaterial()
