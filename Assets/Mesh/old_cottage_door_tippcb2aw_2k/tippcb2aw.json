@@ -1,0 +1,577 @@
+{
+  "assetCategories": {
+    "decal": {
+      "door": {
+        "wood": {}
+      }
+    }
+  },
+  "averageColor": "#6F5B4F",
+  "categories": [
+    "atlas",
+    "Decals",
+    "Wood"
+  ],
+  "comp_version": 1,
+  "description": "",
+  "displacementBias": 0.395806,
+  "displacementCalibrationAccuracy": 0.97256,
+  "displacementScale": 1.740941,
+  "environment": {
+    "biome": "undefined",
+    "region": "undefined"
+  },
+  "highest_available_res": 8192,
+  "id": "tippcb2aw",
+  "json": {
+    "contentLength": 12331,
+    "uri": "tippcb2aw.json"
+  },
+  "maps": [
+    {
+      "averageColor": "#F3F3F3",
+      "bitDepth": 32,
+      "colorSpace": "sRGB",
+      "contentLength": 148666061,
+      "maxIntensity": 255,
+      "mimeType": "image/x-exr",
+      "minIntensity": 9,
+      "name": "AO",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "ao",
+      "uri": "tippcb2aw_8K_AO.exr"
+    },
+    {
+      "averageColor": "#F3F3F3",
+      "bitDepth": 8,
+      "colorSpace": "sRGB",
+      "contentLength": 17933887,
+      "maxIntensity": 255,
+      "mimeType": "image/jpeg",
+      "minIntensity": 9,
+      "name": "AO",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "ao",
+      "uri": "tippcb2aw_8K_AO.jpg"
+    },
+    {
+      "averageColor": "#6F5B4F",
+      "bitDepth": 16,
+      "colorSpace": "sRGB",
+      "contentLength": 556185418,
+      "maxIntensity": 177,
+      "mimeType": "image/x-exr",
+      "minIntensity": 38,
+      "name": "Basecolor",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "basecolor",
+      "uri": "tippcb2aw_8K_Basecolor.exr"
+    },
+    {
+      "averageColor": "#6F5B4F",
+      "bitDepth": 8,
+      "colorSpace": "sRGB",
+      "contentLength": 50706850,
+      "maxIntensity": 177,
+      "mimeType": "image/jpeg",
+      "minIntensity": 38,
+      "name": "Basecolor",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "basecolor",
+      "uri": "tippcb2aw_8K_Basecolor.jpg"
+    },
+    {
+      "averageColor": "#808080",
+      "bitDepth": 32,
+      "colorSpace": "Linear",
+      "contentLength": 165987031,
+      "maxIntensity": 255,
+      "mimeType": "image/x-exr",
+      "minIntensity": 0,
+      "name": "Bump",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "bump",
+      "uri": "tippcb2aw_8K_Bump.exr"
+    },
+    {
+      "averageColor": "#808080",
+      "bitDepth": 8,
+      "colorSpace": "Linear",
+      "contentLength": 12273963,
+      "maxIntensity": 255,
+      "mimeType": "image/jpeg",
+      "minIntensity": 0,
+      "name": "Bump",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "bump",
+      "uri": "tippcb2aw_8K_Bump.jpg"
+    },
+    {
+      "averageColor": "#FFFFFF",
+      "bitDepth": 32,
+      "colorSpace": "sRGB",
+      "contentLength": 176447347,
+      "maxIntensity": 255,
+      "mimeType": "image/x-exr",
+      "minIntensity": 255,
+      "name": "Cavity",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "cavity",
+      "uri": "tippcb2aw_8K_Cavity.exr"
+    },
+    {
+      "averageColor": "#FFFFFF",
+      "bitDepth": 8,
+      "colorSpace": "sRGB",
+      "contentLength": 39629269,
+      "maxIntensity": 255,
+      "mimeType": "image/jpeg",
+      "minIntensity": 255,
+      "name": "Cavity",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "cavity",
+      "uri": "tippcb2aw_8K_Cavity.jpg"
+    },
+    {
+      "averageColor": "#CECECE",
+      "bitDepth": 32,
+      "colorSpace": "Linear",
+      "contentLength": 208726964,
+      "maxIntensity": 255,
+      "mimeType": "image/x-exr",
+      "minIntensity": 153,
+      "name": "Displacement",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "displacement",
+      "uri": "tippcb2aw_8K_Displacement.exr"
+    },
+    {
+      "averageColor": "#CECECE",
+      "bitDepth": 8,
+      "colorSpace": "Linear",
+      "contentLength": 2622471,
+      "maxIntensity": 255,
+      "mimeType": "image/jpeg",
+      "minIntensity": 153,
+      "name": "Displacement",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "displacement",
+      "uri": "tippcb2aw_8K_Displacement.jpg"
+    },
+    {
+      "averageColor": "#171717",
+      "bitDepth": 32,
+      "colorSpace": "Linear",
+      "contentLength": 184201003,
+      "maxIntensity": 54,
+      "mimeType": "image/x-exr",
+      "minIntensity": 0,
+      "name": "Gloss",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "gloss",
+      "uri": "tippcb2aw_8K_Gloss.exr"
+    },
+    {
+      "averageColor": "#171717",
+      "bitDepth": 8,
+      "colorSpace": "Linear",
+      "contentLength": 19922380,
+      "maxIntensity": 54,
+      "mimeType": "image/jpeg",
+      "minIntensity": 0,
+      "name": "Gloss",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "gloss",
+      "uri": "tippcb2aw_8K_Gloss.jpg"
+    },
+    {
+      "averageColor": "#8282FB",
+      "bitDepth": 16,
+      "colorSpace": "Linear",
+      "contentLength": 507938421,
+      "maxIntensity": 196,
+      "mimeType": "image/x-exr",
+      "minIntensity": 83,
+      "name": "Normal",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "normal",
+      "uri": "tippcb2aw_8K_Normal.exr"
+    },
+    {
+      "averageColor": "#8282FB",
+      "bitDepth": 8,
+      "colorSpace": "Linear",
+      "contentLength": 64033980,
+      "maxIntensity": 196,
+      "mimeType": "image/jpeg",
+      "minIntensity": 83,
+      "name": "Normal",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "normal",
+      "uri": "tippcb2aw_8K_Normal.jpg"
+    },
+    {
+      "averageColor": "#CACACA",
+      "bitDepth": 32,
+      "colorSpace": "Linear",
+      "contentLength": 4826015,
+      "maxIntensity": 255,
+      "mimeType": "image/x-exr",
+      "minIntensity": 0,
+      "name": "Opacity",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "opacity",
+      "uri": "tippcb2aw_8K_Opacity.exr"
+    },
+    {
+      "averageColor": "#CACACA",
+      "bitDepth": 8,
+      "colorSpace": "Linear",
+      "contentLength": 979898,
+      "maxIntensity": 255,
+      "mimeType": "image/jpeg",
+      "minIntensity": 0,
+      "name": "Opacity",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "opacity",
+      "uri": "tippcb2aw_8K_Opacity.jpg"
+    },
+    {
+      "averageColor": "#E8E8E8",
+      "bitDepth": 32,
+      "colorSpace": "sRGB",
+      "contentLength": 171646158,
+      "maxIntensity": 255,
+      "mimeType": "image/x-exr",
+      "minIntensity": 201,
+      "name": "Roughness",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "roughness",
+      "uri": "tippcb2aw_8K_Roughness.exr"
+    },
+    {
+      "averageColor": "#E8E8E8",
+      "bitDepth": 8,
+      "colorSpace": "sRGB",
+      "contentLength": 18640351,
+      "maxIntensity": 255,
+      "mimeType": "image/jpeg",
+      "minIntensity": 201,
+      "name": "Roughness",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "roughness",
+      "uri": "tippcb2aw_8K_Roughness.jpg"
+    },
+    {
+      "averageColor": "#383838",
+      "bitDepth": 16,
+      "colorSpace": "sRGB",
+      "contentLength": 515313963,
+      "maxIntensity": 56,
+      "mimeType": "image/x-exr",
+      "minIntensity": 56,
+      "name": "Specular",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "specular",
+      "uri": "tippcb2aw_8K_Specular.exr"
+    },
+    {
+      "averageColor": "#383838",
+      "bitDepth": 8,
+      "colorSpace": "sRGB",
+      "contentLength": 23934009,
+      "maxIntensity": 56,
+      "mimeType": "image/jpeg",
+      "minIntensity": 56,
+      "name": "Specular",
+      "physicalSize": "1x1",
+      "resolution": "8192x8192",
+      "type": "specular",
+      "uri": "tippcb2aw_8K_Specular.jpg"
+    }
+  ],
+  "meta": [
+    {
+      "key": "scanArea",
+      "name": "Scan Area",
+      "value": "1x1 m"
+    },
+    {
+      "key": "height",
+      "name": "Height",
+      "value": "0.02 m"
+    },
+    {
+      "key": "tileable",
+      "name": "Tileable",
+      "value": false
+    },
+    {
+      "key": "texelDensity",
+      "name": "Texel Density",
+      "value": "8192 px/m"
+    },
+    {
+      "key": "calibration",
+      "name": "Calibration",
+      "value": "GretagMacbeth ColorChecker Color Rendition Chart"
+    },
+    {
+      "key": "scanner",
+      "name": "Scanner",
+      "value": "MKX"
+    }
+  ],
+  "models": [],
+  "name": "Old Cottage Door",
+  "pack": {
+    "_id": "medieval-village",
+    "name": "Medieval Village"
+  },
+  "physicalSize": null,
+  "points": 1,
+  "previews": {
+    "images": [
+      {
+        "contentLength": 227720,
+        "resolution": "360x360",
+        "tags": [
+          "thumb"
+        ],
+        "uri": "tippcb2aw_Grid_360.png"
+      },
+      {
+        "contentLength": 304781,
+        "resolution": "420x420",
+        "tags": [
+          "thumb"
+        ],
+        "uri": "tippcb2aw_Grid_420.png"
+      },
+      {
+        "contentLength": 877331,
+        "resolution": "720x720",
+        "tags": [
+          "thumb",
+          "retina"
+        ],
+        "uri": "tippcb2aw_Grid_720.png"
+      },
+      {
+        "contentLength": 1189050,
+        "resolution": "840x840",
+        "tags": [
+          "thumb",
+          "retina"
+        ],
+        "uri": "tippcb2aw_Grid_840.png"
+      },
+      {
+        "contentLength": 2137269,
+        "resolution": "1440x768",
+        "tags": [
+          "preview",
+          "clay"
+        ],
+        "uri": "tippcb2aw_PopupClay_1440.png"
+      },
+      {
+        "contentLength": 3999328,
+        "resolution": "1920x1080",
+        "tags": [
+          "preview",
+          "clay"
+        ],
+        "uri": "tippcb2aw_PopupClay_1920.png"
+      },
+      {
+        "contentLength": 8429236,
+        "resolution": "2880x1536",
+        "tags": [
+          "preview",
+          "clay",
+          "retina"
+        ],
+        "uri": "tippcb2aw_PopupClay_2880.png"
+      },
+      {
+        "contentLength": 15399147,
+        "resolution": "3840x2160",
+        "tags": [
+          "preview",
+          "clay",
+          "retina"
+        ],
+        "uri": "tippcb2aw_PopupClay_3840.png"
+      },
+      {
+        "contentLength": 2235438,
+        "resolution": "1440x768",
+        "tags": [
+          "preview"
+        ],
+        "uri": "tippcb2aw_Popup_1440.png"
+      },
+      {
+        "contentLength": 4219733,
+        "resolution": "1920x1080",
+        "tags": [
+          "preview"
+        ],
+        "uri": "tippcb2aw_Popup_1920.png"
+      },
+      {
+        "contentLength": 8823982,
+        "resolution": "2880x1536",
+        "tags": [
+          "preview",
+          "retina"
+        ],
+        "uri": "tippcb2aw_Popup_2880.png"
+      },
+      {
+        "contentLength": 16645243,
+        "resolution": "3840x2160",
+        "tags": [
+          "preview",
+          "retina"
+        ],
+        "uri": "tippcb2aw_Popup_3840.png"
+      }
+    ],
+    "relativeSize": "1x1",
+    "scaleReferences": []
+  },
+  "process_date": "2024-04-18 13:43:53",
+  "properties": [],
+  "referencePreviews": {
+    "maps": [],
+    "models": []
+  },
+  "references": [],
+  "revised": false,
+  "revision": 0,
+  "semanticTags": {
+    "3d_mesh": [],
+    "architectural_style": {},
+    "asset_type": "decal",
+    "color": [
+      "brown"
+    ],
+    "contains": [
+      "door",
+      "wooden door",
+      "hinges"
+    ],
+    "descriptive": [
+      "worn",
+      " chipped",
+      " faded",
+      " scratched"
+    ],
+    "environment": [
+      "rural"
+    ],
+    "industry": [
+      "archviz",
+      "games",
+      "VFX"
+    ],
+    "interior_exterior": [
+      "exterior"
+    ],
+    "latin_name": [],
+    "locations": {
+      "Europe": {
+        "Slovakia": {}
+      }
+    },
+    "maxSize": 1,
+    "minSize": 1,
+    "name": "Old Cottage Door",
+    "orientation": [
+      "wall"
+    ],
+    "resolution": 8192,
+    "season": [],
+    "state": [
+      "old"
+    ],
+    "subject_matter": "manmade",
+    "theme": [
+      "hut",
+      " cottage",
+      " house",
+      " cabin",
+      " Medieval village"
+    ]
+  },
+  "tags": [
+    "decal",
+    "brown",
+    "door",
+    "wooden",
+    "wood",
+    "slovakia",
+    "archviz",
+    "hut",
+    "cottage",
+    "old"
+  ],
+  "texelDensity": 8192,
+  "texture_type": "basic",
+  "ue_plugin_archives": [
+    {
+      "contentLength": 252917746,
+      "gltfVersion": "2.0",
+      "tier": 0,
+      "type": "gltf",
+      "uri": "ue_plugin_archives/tier_0/tippcb2aw_tier_0.zip",
+      "version": 1
+    },
+    {
+      "contentLength": 74638663,
+      "gltfVersion": "2.0",
+      "tier": 1,
+      "type": "gltf",
+      "uri": "ue_plugin_archives/tier_1/tippcb2aw_tier_1.zip",
+      "version": 1
+    },
+    {
+      "contentLength": 19244029,
+      "gltfVersion": "2.0",
+      "tier": 2,
+      "type": "gltf",
+      "uri": "ue_plugin_archives/tier_2/tippcb2aw_tier_2.zip",
+      "version": 1
+    },
+    {
+      "contentLength": 2760013,
+      "gltfVersion": "2.0",
+      "tier": 3,
+      "type": "gltf",
+      "uri": "ue_plugin_archives/tier_3/tippcb2aw_tier_3.zip",
+      "version": 1
+    }
+  ],
+  "version": 2
+}
