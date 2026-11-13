@@ -245,6 +245,34 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
         }
 
+        [MenuItem("Shooting Range/Setup/45 - Clear The Rail Boxes", false, 68)]
+        public static void ClearTheRailBoxesMenu()
+        {
+            if (!EditorUtility.DisplayDialog("Clear the rail boxes",
+                    "This unticks the solid box collider on every rail that has one. They are invisible, 1 m wide at each rail's " +
+                    "origin, and stop rounds aimed at a sign there. Nothing is deleted. The scene is saved afterwards; no bake needed.",
+                    "Untick them", "Cancel"))
+                return;
+
+            Begin("Rail boxes");
+            int cleared = 0;
+            foreach (var rail in Object.FindObjectsOfType<TrackRail>())
+            {
+                foreach (var box in rail.GetComponents<BoxCollider>())
+                {
+                    if (!box.enabled) continue;
+
+                    box.enabled = false;
+                    cleared++;
+                    Did("Unticked the box collider on " + rail.name);
+                }
+            }
+
+            if (cleared > 0) Dirty();
+            else Say("No rail has a box collider switched on");
+            End();
+        }
+
         /// The underglow is laid once from the rails and then left alone, so after a move it is laid again
         private static void RelayTheUnderglow()
         {

@@ -115,7 +115,7 @@ namespace IntuitiveDesigns.ShootingRange
             var box = new Bounds();
             foreach (var filter in _pistol.Visual.GetComponentsInChildren<MeshFilter>())
             {
-                if (filter.sharedMesh == null) continue;
+                if (filter.sharedMesh == null || filter.GetComponent<AmmoCounter>() != null) continue;
 
                 var mesh = filter.sharedMesh.bounds;
                 for (int corner = 0; corner < 8; corner++)

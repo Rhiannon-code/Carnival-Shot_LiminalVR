@@ -7,6 +7,7 @@ Shader "IntuitiveDesigns/Shot Decal"
     Properties
     {
         _MainTex ("Holes (RGBA)", 2D) = "white" {}
+        _DarkShare ("Brightness in a blackout, as a share of lit", Range(0, 1)) = 0.12
     }
 
     SubShader
@@ -47,6 +48,8 @@ Shader "IntuitiveDesigns/Shot Decal"
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
+            half _DarkShare;
+            half _RoomLight;
 
             v2f vert (appdata v)
             {
@@ -64,6 +67,9 @@ Shader "IntuitiveDesigns/Shot Decal"
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_MainTex, i.uv) * i.color;
+
+                // Unlit, so the pale rims would glow in a blackout. _RoomLight is set by CarnivalLights
+                col.rgb *= lerp(_DarkShare, 1, _RoomLight);
                 UNITY_APPLY_FOG(i.fogCoord, col);
                 return col;
             }

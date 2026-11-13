@@ -10,17 +10,19 @@ namespace IntuitiveDesigns.ShootingRange
     {
         public static RangeGame Instance { get; private set; }
 
-        public enum State { HowToPlay, WaitingForPickup, Intro, Playing, RoundEnd, Ended }
+        public enum State { HowToPlay, Intro, Playing, RoundEnd, Ended }
 
         [Header("Refs")]
         [SerializeField] private Arena arena;
         [SerializeField] private ComboTracker combo;
         [SerializeField] private TrackDirector director;
         [SerializeField] private CarnyVoice barker;
+        [SerializeField] private CarnivalLights lights;
+        [SerializeField] private MusicBed music;
 
         [Header("Session (data)")]
-        [SerializeField] private float[] secondsPerRound = { 30f, 30f, 45f, 45f, 60f };
-        [SerializeField] private float controlsSeconds = 5f;
+        [SerializeField, Tooltip("Seconds after the triggers go live before the game starts by itself, if nobody shoots the card")]
+        private float autoStartSeconds = 45f;
         [SerializeField] private int countdownFrom = 3;
         [SerializeField] private int betweenRoundsCountdownFrom = 3;
         [SerializeField] private float countdownStep = 1f;
@@ -29,26 +31,25 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float longestPauseSeconds = 12f;
         [SerializeField] private float endFadeSeconds = 2f;
 
-        [Header("Start")]
-        [SerializeField] private bool requirePickupToStart = true;
-
         [Header("Clearing (data)")]
         [SerializeField] private int clearBonus = 200;
-        [SerializeField] private bool endRoundOnClear = true;
 
         public State Current { get; private set; } = State.HowToPlay;
-        public float TimeRemaining { get; private set; }
         public int RoundScore { get; private set; }
         public int TotalScore { get; private set; }
         public int RoundNumber { get; private set; }
-        public int MaxRounds { get { return secondsPerRound.Length; } }
-        public float RoundSeconds { get { return SecondsFor(RoundNumber); } }
+        public int MaxRounds { get { return director != null ? director.Rounds : 0; } }
         public bool IsFinalRound { get { return MaxRounds > 0 && RoundNumber >= MaxRounds; } }
         public int NextRoundNumber { get { return RoundNumber + 1; } }
 
+        /// The guns are in hand from the start but fire nothing until the carnival has wound up (user, 2026-11-10)
+        public bool TriggersLive { get; private set; }
+
         public event Action<int> ScoreChanged;
-        public event Action<float> TimeChanged;
+        public event Action<int, Vector3> SignScored;
         public event Action<State> StateChanged;
+        /// The wind-up is over: the triggers work and the controls card can be shot to start
+        public event Action ReadyToStart;
         public event Action<int> CountdownTick;
         public event Action CountdownGo;
         public event Action<int> RoundStarted;
@@ -74,32 +75,30 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Start()
         {
-            TimeRemaining = SecondsFor(1);
             if (barker == null) barker = FindObjectOfType<CarnyVoice>();
-
-            if (requirePickupToStart && FindObjectOfType<PistolPickup>() == null)
-            {
-                Debug.LogWarning("[RangeGame] requirePickupToStart is on but there is no active " +
-                                 "PistolPickup in the scene. Starting immediately instead.");
-                requirePickupToStart = false;
-            }
-
+            if (lights == null) lights = FindObjectOfType<CarnivalLights>();
+            if (music == null) music = FindObjectOfType<MusicBed>();
             StartCoroutine(HowToPlay());
         }
 
-        /// The controls card has the board through the barker's welcome, then the guns come up to be taken
+        /// The controls card is up from the start. Once the lights are on and the music has wound up, the triggers
+        /// work, and a shot on the card starts the game; nobody shooting it still starts it, later
         private IEnumerator HowToPlay()
         {
             SetState(State.HowToPlay);
-            yield return StartCoroutine(Pause(controlsSeconds));
+            while ((lights != null && !lights.On) || (music != null && !music.WoundUp)) yield return null;
 
-            if (requirePickupToStart) SetState(State.WaitingForPickup);
-            else BeginFromPickup();
+            TriggersLive = true;
+            if (ReadyToStart != null) ReadyToStart();
+
+            for (float waited = 0f; waited < autoStartSeconds && !_begun; waited += Time.unscaledDeltaTime) yield return null;
+            Begin();
         }
 
-        public void BeginFromPickup()
+        /// The controls card was shot
+        public void Begin()
         {
-            if (_begun) return;
+            if (_begun || !TriggersLive) return;
 
             _begun = true;
             StartCoroutine(RunSession());
@@ -113,8 +112,10 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (combo != null && linksCombo) combo.Register(chained);
             float multiplier = combo != null ? combo.Multiplier : 1f;
+            int scored = Mathf.RoundToInt(points * multiplier);
 
-            AddScore(Mathf.RoundToInt(points * multiplier));
+            AddScore(scored);
+            if (linksCombo && SignScored != null) SignScored(scored, where);
         }
 
         /// A vampire or a bat got to the player. It costs the combo and nothing else
@@ -187,38 +188,17 @@ namespace IntuitiveDesigns.ShootingRange
         private IEnumerator RunRound()
         {
             RoundScore = 0;
-            TimeRemaining = RoundSeconds;
 
             if (arena != null) arena.PresentRound(RoundNumber);
             if (combo != null) combo.Reset(true);
 
             SetState(State.Playing);
             if (RoundStarted != null) RoundStarted(RoundNumber);
-            if (TimeChanged != null) TimeChanged(TimeRemaining);
 
-            bool shelfCleared = false;
+            // A round is its signs: it ends when the last has been shot or got away and its reaction has played
+            while (director != null && !director.RoundOver) yield return null;
 
-            while (TimeRemaining > 0f)
-            {
-                TimeRemaining -= Time.unscaledDeltaTime;
-                if (TimeChanged != null) TimeChanged(Mathf.Max(0f, TimeRemaining));
-
-                // A practice shelf can end on its plates. A range with traffic always runs to the bell:
-                // its signs are paced to the clock and the last one drops away as it goes
-                if (director == null && endRoundOnClear && arena != null && arena.IsCleared)
-                {
-                    shelfCleared = true;
-                    break;
-                }
-
-                yield return null;
-            }
-
-            TimeRemaining = Mathf.Max(0f, TimeRemaining);
-
-            bool everySign = director != null
-                           ? director.WaveSize > 0 && director.Killed >= director.WaveSize
-                           : shelfCleared;
+            bool everySign = director != null && director.WaveSize > 0 && director.Killed >= director.WaveSize;
             if (everySign)
             {
                 AddScore(clearBonus);
@@ -231,17 +211,14 @@ namespace IntuitiveDesigns.ShootingRange
             if (RoundEnded != null) RoundEnded(RoundNumber, RoundScore);
         }
 
-        private float SecondsFor(int round)
-        {
-            if (MaxRounds == 0) return 0f;
-            return secondsPerRound[Mathf.Clamp(round - 1, 0, MaxRounds - 1)];
-        }
-
         private IEnumerator EndExperience()
         {
             SetState(State.Ended);
             if (SlowMotion.Instance != null) SlowMotion.Instance.Restore();
             if (FinalScore != null) FinalScore(TotalScore);
+
+            // The prize: the chest waits for its lock to be shot, then shows what was won
+            while (PrizeChest.Instance != null && PrizeChest.Instance.Busy) yield return null;
 
             yield return StartCoroutine(Pause(endHoldSeconds));
 

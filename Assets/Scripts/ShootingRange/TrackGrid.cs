@@ -94,7 +94,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (pass.Speed <= 0f)
             {
                 window = new Window { Enter = pass.Depart, Exit = pass.Clear };
-                return distance <= half;
+                return Mathf.Abs(distance - pass.Spot) <= half;
             }
 
             window = new Window

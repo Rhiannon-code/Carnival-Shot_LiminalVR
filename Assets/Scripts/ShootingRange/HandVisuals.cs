@@ -31,7 +31,6 @@ namespace IntuitiveDesigns.ShootingRange
             [NonSerialized] public bool wasArmed;
             [NonSerialized] public GloveFingers ghostFingers;
             [NonSerialized] public GloveFingers armedFingers;
-            [NonSerialized] public PistolPickup pickup;
             [NonSerialized] public bool onGlove;
             [NonSerialized] public Vector3 gloveOffset;
             [NonSerialized] public Quaternion gloveTurn;
@@ -73,7 +72,6 @@ namespace IntuitiveDesigns.ShootingRange
 
                 hand.ghostFingers = hand.ghost != null ? hand.ghost.GetComponent<GloveFingers>() : null;
                 hand.armedFingers = hand.armed != null ? hand.armed.GetComponent<GloveFingers>() : null;
-                hand.pickup = hand.pistol != null ? hand.pistol.GetComponent<PistolPickup>() : null;
                 hand.tint = hand.pistol != null ? hand.pistol.GetComponent<PowerUpTint>() : null;
 
                 // Measured off the gun on the bench, before anything has moved it
@@ -88,8 +86,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void LateUpdate()
         {
-            bool waiting = game == null || game.Current == RangeGame.State.HowToPlay ||
-                           game.Current == RangeGame.State.WaitingForPickup;
+            bool waiting = game == null || game.Current == RangeGame.State.HowToPlay;
 
             for (int i = 0; i < hands.Length; i++)
             {
@@ -115,8 +112,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (empty)
             {
-                bool over = hand.pickup != null &&
-                            Vector3.Distance(rig.Transform.position, hand.pistol.GripPosition) <= hand.pickup.GrabRadius;
+                bool over = false;
                 Snap(hand, over);
 
                 if (hand.onGlove) Haunt(hand, rig.Transform);
@@ -149,7 +145,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (hand.ghostFingers == null) return;
 
             var device = rig.InputDevice;
-            bool grip = device != null && device.GetButton(PistolPickup.GripButton);
+            bool grip = device != null && device.GetButton(Pistol.GripButton);
             bool trigger = device != null && device.GetButton(VRButton.Trigger);
 
             hand.ghostFingers.Hold(grip || over ? 1f : 0f, trigger ? 1f : 0f, over ? hand.armedFingers : null);

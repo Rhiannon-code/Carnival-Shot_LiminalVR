@@ -29,8 +29,17 @@ namespace IntuitiveDesigns.CrystalCatch
         private float _worstMs;
         private int _overBudget;
         private string _lastLine = "-- fps";
+        private int _collections;
+        private long _heap;
 
         private float BudgetMs { get { return 1000f / Mathf.Max(1f, targetFps); } }
+
+        /// Not in the field initialisers: they run while the scene loads, where Unity refuses Profiler calls and the load errors
+        private void Awake()
+        {
+            _collections = System.GC.CollectionCount(0);
+            _heap = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong();
+        }
 
         private void Update()
         {
@@ -56,6 +65,14 @@ namespace IntuitiveDesigns.CrystalCatch
             if (showWorstFrame) sb.Append("\nworst ").Append(_worstMs.ToString("0.0")).Append(" ms");
             if (showOverBudgetCount) sb.Append("   over ").Append(_overBudget);
 
+            // Garbage collection is the usual cause of a stutter with no pattern, so the log says how often it ran and how
+            // much the window allocated
+            int collections = System.GC.CollectionCount(0);
+            long heap = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong();
+            string garbage = "   gc " + (collections - _collections) + "   +" + ((heap - _heap) / 1024) + " KB";
+            _collections = collections;
+            _heap = heap;
+
             _lastLine = sb.ToString();
 
             if (text != null)
@@ -66,7 +83,7 @@ namespace IntuitiveDesigns.CrystalCatch
 
             // Deliberately not [Conditional] like the gameplay logs. This one only exists to be read
             // off the device, and it is opt in and off by default
-            if (logEachSample) Debug.Log("[Perf] " + _lastLine.Replace("\n", "  "));
+            if (logEachSample) Debug.Log("[Perf] " + _lastLine.Replace("\n", "  ") + garbage);
 
             _elapsed = 0f;
             _frames = 0;

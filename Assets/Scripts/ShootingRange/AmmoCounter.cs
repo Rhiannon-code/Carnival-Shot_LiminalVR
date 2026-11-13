@@ -11,6 +11,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Copy (data)")]
         [SerializeField] private string reloadPrompt = "RELOAD · GRIP";
+        [SerializeField, Tooltip("Shown while a power-up gives the gun a bottomless magazine")] private string bottomless = "\u221E";
         [SerializeField] private Color countColour = new Color(1f, 0.92f, 0.75f);
         [SerializeField] private Color promptColour = new Color(1f, 0.3f, 0.2f);
 
@@ -35,6 +36,18 @@ namespace IntuitiveDesigns.ShootingRange
         private void Start()
         {
             Show();
+            if (PowerUps.Instance != null) PowerUps.Instance.Expired += OnPowerUpExpired;
+        }
+
+        private void OnDestroy()
+        {
+            if (PowerUps.Instance != null) PowerUps.Instance.Expired -= OnPowerUpExpired;
+        }
+
+        /// A grant refills the gun, which already redraws the count; the end of one changes nothing on the gun
+        private void OnPowerUpExpired(PowerUpKind kind)
+        {
+            Show();
         }
 
         private void OnAmmoChanged(int rounds, int size)
@@ -51,6 +64,14 @@ namespace IntuitiveDesigns.ShootingRange
                 return;
             }
 
+            var powerUps = PowerUps.Instance;
+            if (powerUps != null && powerUps.BottomlessMagazine)
+            {
+                _text.color = countColour;
+                _text.text = bottomless;
+                return;
+            }
+
             bool empty = pistol.IsEmpty;
             _text.color = empty ? promptColour : countColour;
             _text.text = empty ? reloadPrompt : pistol.RoundsLeft.ToString();
@@ -58,8 +79,11 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Update()
         {
-            // Picking the gun up raises no ammo event, so the count appears on the first held frame
-            if (pistol != null && pistol.IsHeld && _text.text.Length == 0 && !pistol.IsReloading) Show();
+            // Being held or not raises no ammo event, so the count follows the hold here
+            if (pistol == null || pistol.IsReloading) return;
+
+            bool showing = _text.text.Length > 0;
+            if (pistol.IsHeld != showing) Show();
         }
     }
 }
