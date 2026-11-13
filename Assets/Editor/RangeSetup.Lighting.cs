@@ -69,7 +69,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private static readonly float[] RailProbeHeights = { 0.25f, 0.75f, 1.25f };
 
         private const int UnityDefaultBakeResolution = 40;
-        private const int QuestBakeResolution = 15;
+        // Raised from 15 when the room looked soft and blotchy (user, 2026-11-10)
+        private const int QuestBakeResolution = 25;
 
         private static void LightTheRange()
         {

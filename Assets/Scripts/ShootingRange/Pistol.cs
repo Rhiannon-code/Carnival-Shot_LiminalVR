@@ -91,6 +91,14 @@ namespace IntuitiveDesigns.ShootingRange
         public Transform Muzzle { get { return muzzle != null ? muzzle : transform; } }
         /// The model as posed: recoil, reload tilt and the reload's jolts all move this, not the gun's own transform
         public Transform Visual { get { return visual != null ? visual : transform; } }
+        /// The grip: VRButton.Three on the OVR path, but Three is thumbstick touch on UnityXR, where a
+        /// resting thumb would fire it (ADR 0015)
+#if UNITY_XR
+        public static readonly string GripButton = VRButton.Seconday;
+#else
+        public static readonly string GripButton = VRButton.Three;
+#endif
+
         public int RoundsLeft { get { return magazineSize > 0 ? _rounds : -1; } }
         public int MagazineSize { get { return magazineSize; } }
         public bool IsReloading { get { return _reloadRemaining > 0f; } }
@@ -98,6 +106,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         public event Action<int, int> AmmoChanged;
         public event Action Fired;
+        public event Action ReloadStarted;
 
         private AudioSource _audio;
         private AimSight _sight;
@@ -159,6 +168,26 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Start()
         {
+            RaiseAmmo();
+            if (PowerUps.Instance != null) PowerUps.Instance.Granted += OnPowerUpGranted;
+        }
+
+        private void OnDestroy()
+        {
+            if (PowerUps.Instance != null) PowerUps.Instance.Granted -= OnPowerUpGranted;
+        }
+
+        /// Any power-up tops the magazine up, so the gun comes out of it full rather than dry (user, 2026-11-10)
+        private void OnPowerUpGranted(PowerUpKind kind, float seconds, bool stacked)
+        {
+            Refill();
+        }
+
+        public void Refill()
+        {
+            if (magazineSize <= 0) return;
+            _reloadRemaining = 0f;
+            _rounds = magazineSize;
             RaiseAmmo();
         }
 
@@ -442,7 +471,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             var rig = HandRig();
             var device = rig != null ? rig.InputDevice : null;
-            if (device != null && device.GetButtonDown(PistolPickup.GripButton)) return true;
+            if (device != null && device.GetButtonDown(GripButton)) return true;
 
             return mouseFires && Input.GetMouseButtonDown(1);
         }
@@ -483,9 +512,12 @@ namespace IntuitiveDesigns.ShootingRange
         private void TryFire()
         {
             if (_cooldown > 0f || _reloadRemaining > 0f || Time.unscaledTime < _lockedUntil) return;
+            if (RangeGame.Instance != null && !RangeGame.Instance.TriggersLive) return;
 
             var powerUps = PowerUps.Instance;
-            bool bottomless = powerUps != null && powerUps.BottomlessMagazine;
+            // Shots before the game starts, at the controls card, are free (user, 2026-11-10)
+            bool bottomless = (powerUps != null && powerUps.BottomlessMagazine) ||
+                              (RangeGame.Instance != null && RangeGame.Instance.Current == RangeGame.State.HowToPlay);
 
             // Dry. Reloading is the player's job, the click tells them so
             if (magazineSize > 0 && _rounds <= 0 && !bottomless)
@@ -508,7 +540,9 @@ namespace IntuitiveDesigns.ShootingRange
 
             for (int i = 0; i < pellets; i++)
             {
-                if (pool != null && pool.Fire(from.position, Scatter(aim, spread), 1f, colour)) fired++;
+                // The first pellet keeps the gun's own accuracy, so what's on the reticle is always hit
+                float cone = i == 0 ? spreadDegrees : spread;
+                if (pool != null && pool.Fire(from.position, Scatter(aim, cone), 1f, colour)) fired++;
             }
 
             _cooldown = fireInterval;
@@ -559,6 +593,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (_reloadRemaining > 0f || magazineSize <= 0 || _rounds >= magazineSize) return;
 
             _reloadRemaining = reloadSeconds;
+            if (ReloadStarted != null) ReloadStarted();
             RaiseAmmo();
         }
 

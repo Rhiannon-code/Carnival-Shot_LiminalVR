@@ -19,8 +19,9 @@ namespace IntuitiveDesigns.ShootingRange
             public float seconds = 8f;
             public Color colour = Color.white;
 
-            // Off for slow motion, or a steady hit rate would hold the world slowed indefinitely
             public bool extendsOnCombo = true;
+            [Tooltip("Longest it can be kept going by hits, seconds. 0 uses seconds x the shared max length multiple")]
+            public float maxSeconds;
         }
 
         public static PowerUps Instance { get; private set; }
@@ -38,7 +39,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             new Tuning { kind = PowerUpKind.FullAuto,    seconds = 8f, colour = new Color(1f, 0.55f, 0.05f) },
             new Tuning { kind = PowerUpKind.Scattershot, seconds = 8f, colour = new Color(0.35f, 1f, 0.2f) },
-            new Tuning { kind = PowerUpKind.SlowMotion,  seconds = 3f, colour = new Color(0.7f, 0.45f, 1f), extendsOnCombo = false },
+            new Tuning { kind = PowerUpKind.SlowMotion,  seconds = 3f, colour = new Color(0.7f, 0.45f, 1f), maxSeconds = 6f },
         };
 
         [Header("Kept alive by the combo (data)")]
@@ -241,7 +242,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void AddTime(int index, float seconds)
         {
-            float cap = BaseSeconds((PowerUpKind)index) * maxLengthMultiple;
+            var entry = Find((PowerUpKind)index);
+            float cap = entry != null && entry.maxSeconds > 0f ? entry.maxSeconds : BaseSeconds((PowerUpKind)index) * maxLengthMultiple;
             _remaining[index] = Mathf.Min(Mathf.Max(0f, _remaining[index]) + seconds, cap);
         }
 

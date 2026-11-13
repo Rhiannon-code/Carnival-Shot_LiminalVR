@@ -33,6 +33,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float[] goingOut = { 0.25f, 0.1f, 0.15f, 0.08f, 0.4f, 0.06f };
         [SerializeField] private float[] blackoutLeadIn = { 0.1f, 0.2f, 0.06f, 0.3f, 0.08f, 0.15f, 0.05f, 0.4f };
         [SerializeField, Range(0f, 1f)] private float darkGlow = 0.04f;
+        [Header("When the prize chest opens: the strings blink in turn, like a theatre marquee (data)")]
+        [SerializeField] private float celebrateSeconds = 6f;
+        [SerializeField] private float marqueeStepsPerSecond = 6f;
 
         [Header("Start-up (data, seconds): dark, the coin goes in, then the strings stutter on one after another, each bringing its share of the room's light")]
         [SerializeField] private float darkHoldSeconds = 3f;
@@ -124,12 +127,32 @@ namespace IntuitiveDesigns.ShootingRange
             _voice = CarnyVoice.Instance;
             _music = FindObjectOfType<MusicBed>();
             if (game != null) game.RoundStarted += OnRoundStarted;
+            PrizeChest.Opened += Celebrate;
             StartCoroutine(StartUp());
         }
 
         private void OnDestroy()
         {
             if (game != null) game.RoundStarted -= OnRoundStarted;
+            PrizeChest.Opened -= Celebrate;
+        }
+
+        private void Celebrate()
+        {
+            if (_on) Run(Marquee());
+        }
+
+        private IEnumerator Marquee()
+        {
+            for (float t = 0f; t < celebrateSeconds; t += Time.unscaledDeltaTime)
+            {
+                int step = Mathf.FloorToInt(t * marqueeStepsPerSecond);
+                for (int i = 0; bulbs != null && i < bulbs.Length; i++) Glow(bulbs[i], (i + step) % 2 == 0 ? 1f : darkGlow);
+                yield return null;
+            }
+
+            foreach (var bulb in bulbs) Glow(bulb, 1f);
+            _flicker = null;
         }
 
         /// The player sits in the dark with the red and the hum, then a coin drops and the carnival starts up: the
@@ -154,7 +177,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private bool StillWelcoming()
         {
-            return game == null || game.Current == RangeGame.State.HowToPlay || game.Current == RangeGame.State.WaitingForPickup;
+            return game == null || game.Current == RangeGame.State.HowToPlay;
         }
 
         /// On for every round, even if a quick grab skipped the welcome

@@ -8,6 +8,11 @@ using Random = UnityEngine.Random;
 
 namespace IntuitiveDesigns.ShootingRange
 {
+    /// The skeleton barker (user, 2026-11-10). He flops: limp on his joints while the stand shoves him out of the coffin and
+    /// yanks him back. Once out, his servos catch: he stiffens into his pose and moves like an animatronic, each move at a
+    /// steady motor speed that stops dead with a small overshoot and a shake, now and then catching with a clunk. He looks
+    /// at the player, and after a good round tips his hat with the hand going out round his side, never through him. During
+    /// rounds an arm reaches sideways out of the cracked lid and waves
     public class SkeletonBarker : RoomReaction
     {
         [Header("Laid out by setup steps 64 and 65")]
@@ -20,48 +25,53 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Rigidbody hat;
         [SerializeField, Tooltip("Flat, toward the player, set by step 65")] private Vector3 outward = Vector3.forward;
 
-        [Header("The stand (data)")]
+        [Header("In and out of the coffin (data): limp, so he flops")]
         [SerializeField] private float reachOut = 1f;
         [SerializeField] private float shoveSeconds = 0.45f;
         [SerializeField] private float yankSeconds = 0.35f;
+        [SerializeField, Tooltip("Seconds he swings once out, before his servos catch")] private float settleSeconds = 0.6f;
+        [SerializeField, Tooltip("Seconds his servos take to pull him back into his pose")] private float engageSeconds = 0.5f;
+        [SerializeField] private float holdStrength = 150f;
+        [SerializeField] private float holdDamping = 18f;
+        [SerializeField, Tooltip("Degrees he leans toward the player once his servos have him")] private float leanDegrees = 8f;
 
-        [Header("Animatronic (data): moves catch for a moment, like a sticking servo")]
-        [SerializeField] private Vector2Int hitchesPerMove = new Vector2Int(1, 2);
+        [Header("Servo (data): steady motor speed, a dead stop with a little overshoot, a shake while it runs")]
+        [SerializeField, Range(0f, 0.2f), Tooltip("Share of the move it overshoots by before settling")] private float overshoot = 0.05f;
+        [SerializeField, Range(0f, 0.05f), Tooltip("Share of the move it shakes by while the motor runs")] private float motorShake = 0.008f;
+        [SerializeField] private Vector2Int hitchesPerMove = new Vector2Int(0, 1);
         [SerializeField, Tooltip("Seconds")] private Vector2 hitchSeconds = new Vector2(0.06f, 0.18f);
         [SerializeField] private Vector2 hitchBetween = new Vector2(0.15f, 0.85f);
         [SerializeField] private AudioClip[] clunkClips;
         [SerializeField, Range(0f, 1f)] private float clunkVolume = 0.5f;
 
-        [Header("Holding his pose (data): stiff enough that a shot is a short, snappy knock")]
-        [SerializeField] private float holdStrength = 150f;
-        [SerializeField] private float holdDamping = 18f;
-
         [Header("Looking at the player (data)")]
-        [SerializeField] private float lookStrength = 150f;
+        [SerializeField] private float lookEverySeconds = 0.8f;
+        [SerializeField, Tooltip("Degrees a second, a steady servo turn that stops dead")] private float lookSpeed = 140f;
+        [SerializeField] private float lookLimit = 45f;
+        [SerializeField, Tooltip("Metres below the player's eyes he looks at, so he looks down at them a little (user, 2026-11-10)")]
+        private float lookBelow = 0.25f;
+        [SerializeField, Tooltip("While limp, the torque that turns his skull to the player")] private float lookStrength = 150f;
         [SerializeField] private float lookDamping = 18f;
 
         [Header("Hat tip (data): only after a good round")]
         [SerializeField, Range(0f, 1f)] private float tipShare = 0.75f;
-        [SerializeField, Tooltip("Seconds he swings before the string pulls")] private float settleSeconds = 0.6f;
-        [SerializeField] private float pullRate = 8f;
-        [SerializeField, Tooltip("Metres a second, at most")] private float pullSpeed = 2.5f;
-        [SerializeField, Range(0f, 1f)]
-        private float pullGrip = 0.3f;
-        [SerializeField] private float grabReach = 0.12f;
-        [SerializeField] private float reachTimeout = 1.5f;
+        [SerializeField] private float reachSeconds = 0.6f;
         [SerializeField] private float sweepSeconds = 0.6f;
         [SerializeField] private float holdSeconds = 0.6f;
-        [SerializeField]
+        [SerializeField, Tooltip("Metres the hand stays out to his side and above the brim on its way, so it never goes through him")]
+        private Vector2 clearOfHim = new Vector2(0.18f, 0.15f);
+        [SerializeField, Tooltip("Where the hat is held out: metres to his side, up from the skull, and toward the player")]
         private Vector3 sweepTo = new Vector3(0.25f, -0.35f, 0.4f);
+        [SerializeField] private float bowDegrees = 15f;
 
-        [Header("Mid-round gag (data): a hand out of the cracked lid, waving")]
+        [Header("Mid-round gag (data): an arm out sideways through the cracked lid, waving")]
         [SerializeField, Range(0f, 1f)] private float waveChance = 0.6f;
-        [SerializeField] private float waveLift = 70f;
-        [SerializeField] private float waveBend = 50f;
-        [SerializeField] private float waveDegrees = 25f;
+        [SerializeField, Range(0.5f, 1f), Tooltip("How straight the arm is, as a share of its length")] private float waveReach = 0.95f;
+        [SerializeField, Tooltip("Metres the hand is also brought toward the player and up")] private Vector2 waveLean = new Vector2(0.15f, 0.15f);
+        [SerializeField] private float waveDegrees = 40f;
         [SerializeField] private int waves = 3;
-        [SerializeField] private float waveSeconds = 0.35f;
-        [SerializeField] private float waveReachSeconds = 0.4f;
+        [SerializeField] private float waveSeconds = 0.4f;
+        [SerializeField] private float waveReachSeconds = 0.5f;
 
         [Header("Miming (data)")]
         [SerializeField] private float jawOpenDegrees = 22f;
@@ -69,90 +79,111 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Tooltip("Seconds")] private float jawSmoothing = 0.05f;
 
         [Header("Shot (data)")]
-        [SerializeField] private float shotImpulse = 0.8f;
+        [SerializeField, Tooltip("Limp: the push on the piece hit")] private float shotImpulse = 0.8f;
+        [SerializeField, Tooltip("Stiff: a hard twitch at the waist")] private float joltDegrees = 6f;
+        [SerializeField] private float joltSeconds = 0.25f;
         [SerializeField] private AudioClip[] hitClips;
         [SerializeField, Range(0f, 1f)] private float hitVolume = 0.6f;
 
         private const int Samples = 256;
+        // An explicit spring blows up once a step overshoots: damping past about 2/dt, or stiffness past about 1/dt². These
+        // keep the hold and the look well inside both at whatever step the physics runs (0.03 s here, less in slow motion)
+        private const float SafeDamping = 0.8f;
+        private const float SafeStiffness = 0.5f;
+
+        private class Arm
+        {
+            public Transform Shoulder, Elbow, Wrist, Hand;
+            public Quaternion ShoulderRest, ElbowRest, WristRest;
+            public float Upper, Fore;
+            public float Side;
+            /// Where the wrist is in the built pose this frame: set each frame before the arm is posed
+            public Vector3 RestWrist;
+        }
 
         private readonly float[] _samples = new float[Samples];
         private readonly List<Rigidbody> _bones = new List<Rigidbody>();
-        private Vector3[] _bonePositions;
-        private Quaternion[] _boneRotations;
+        private Vector3[] _boneLocalPositions;
+        private Quaternion[] _boneLocalRotations;
+        private Vector3[] _engageFromPositions;
+        private Quaternion[] _engageFromRotations;
+        private float _engage = 1f;
         private Collider[] _colliders;
-        private Vector3 _standRest;
-        private Quaternion _jawRest;
-        private Vector3 _face;
-        private Rigidbody _hand;
-        private float _side;
-        private Vector3 _brim;
+        private CharacterJoint[] _joints;
+        private Rigidbody[] _jointBodies;
+        private Quaternion[] _restInParent;
+        private Transform _body, _waist, _neck;
+        private Transform[] _markers;
+        private Quaternion[] _markerRest;
+        private Vector3 _bodyRest, _standRest;
+        private Quaternion _waistRest, _neckRest, _jawRest;
+        private Vector3 _faceInNeck, _faceInSkull;
+        private Arm _tipArm, _waveArm;
+        private Vector3 _brimInSkull;
         private Vector3 _hatPosition;
         private Quaternion _hatRotation;
         private bool _hatOn = true;
         private bool _hatInHand;
-        private Func<Vector3> _pullTo;
-        private float _pull;
-        private float _shove;
-        private float _mouth;
-        private float _mouthSpeed;
-        private bool _out;
-        private bool _didWell;
+        private float _shove, _bow, _wave, _waveRock;
+        private Func<Vector3> _handTo;
+        private Quaternion _look = Quaternion.identity, _lookTarget = Quaternion.identity;
+        private float _nextLook;
+        private Vector3 _joltAxis = Vector3.right;
+        private float _joltAt = -1f;
+        private float _mouth, _mouthSpeed;
+        private bool _out, _limp, _didWell, _waving;
         private Transform _head;
         private Coroutine _act;
-        private CharacterJoint[] _joints;
-        private Rigidbody[] _jointBodies;
-        private Quaternion[] _restInParent;
-        private Rigidbody[] _arm;
-        private Rigidbody[] _waveArm;
-        private Vector3[] _waveRestPositions;
-        private Quaternion[] _waveRestRotations;
-        private Vector3 _waveShoulder;
-        private Vector3 _waveElbow;
-        private Vector3 _waveLiftAxis;
-        private float _waveOut;
-        private float _waveRock;
-        private bool _waving;
 
         private void Awake()
         {
-            if (stand == null || skull == null || hat == null || jaw == null)
+            _body = Marker("Body");
+            _waist = Marker("Waist");
+            _neck = Marker("Neck");
+            if (stand == null || skull == null || hat == null || jaw == null || _body == null || _waist == null || _neck == null)
             {
-                Debug.LogWarning("[SkeletonBarker] No stand, skull, hat or jaw wired. Attach his stand and run setup step 65", this);
+                Debug.LogWarning("[SkeletonBarker] Missing his stand, skull, hat, jaw or joint markers. Run setup steps 64 and 65", this);
                 enabled = false;
                 return;
             }
 
             foreach (var body in GetComponentsInChildren<Rigidbody>(true))
                 if (body != stand && body != hat) _bones.Add(body);
+            _boneLocalPositions = _bones.Select(b => b.transform.localPosition).ToArray();
+            _boneLocalRotations = _bones.Select(b => b.transform.localRotation).ToArray();
+            _engageFromPositions = new Vector3[_bones.Count];
+            _engageFromRotations = new Quaternion[_bones.Count];
 
-            _bonePositions = new Vector3[_bones.Count];
-            _boneRotations = new Quaternion[_bones.Count];
-            for (int i = 0; i < _bones.Count; i++)
-            {
-                _bonePositions[i] = _bones[i].transform.localPosition;
-                _boneRotations[i] = _bones[i].transform.localRotation;
-            }
+            // Every joint marker step 64 made, to put back when he's shut away
+            _markers = new[] { "Waist", "Neck", "Shoulder L", "Elbow L", "Wrist L", "Shoulder R", "Elbow R", "Wrist R" }
+                       .Select(Marker).Where(m => m != null).ToArray();
+            _markerRest = _markers.Select(m => m.localRotation).ToArray();
 
-            _standRest = stand.position;
+            _standRest = stand.transform.position;
+            _bodyRest = _body.position;
+            _waistRest = _waist.localRotation;
+            _neckRest = _neck.localRotation;
             _jawRest = jaw.localRotation;
-            _face = skull.transform.InverseTransformDirection(transform.forward);
+            _faceInNeck = _neck.InverseTransformDirection(transform.forward);
+            _faceInSkull = skull.transform.InverseTransformDirection(transform.forward);
             _hatPosition = hat.transform.localPosition;
             _hatRotation = hat.transform.localRotation;
             WearTheHat();
 
-            // Measured in his built pose, which every joint is pulled back to while he's out
+            // Measured in his built pose, which every joint is pulled back to while he's limp
             _joints = GetComponentsInChildren<CharacterJoint>(true).Where(j => j.connectedBody != null).ToArray();
             _jointBodies = _joints.Select(j => j.GetComponent<Rigidbody>()).ToArray();
             _restInParent = _joints.Select(j => Quaternion.Inverse(j.connectedBody.rotation) * j.transform.rotation).ToArray();
 
-            _hand = NearerHand();
-            _arm = ArmOf(_hand);
-            ReadyTheWave();
-            _side = _hand != null ? Mathf.Sign(Vector3.Dot(_hand.position - skull.position, transform.right)) : 1f;
-            _brim = skull.transform.InverseTransformPoint(BrimAtRest());
+            var left = ArmOf("L");
+            var right = ArmOf("R");
+            // The tipping hand is the one nearer the player; the waving one is out by the lid's free edge, away from its hinge
+            _tipArm = Nearer(left, right, stand.position + outward * 10f);
+            _waveArm = coffin != null ? (Nearer(left, right, coffin.Hinge) == left ? right : left) : null;
+            _brimInSkull = skull.transform.InverseTransformPoint(BrimAtRest());
 
-            // He passes through the coffin and his own pieces: the joints hold him together, and colliding inside a
-            // coffin this tight would only make him jitter. Shots are raycasts, so they still find him
+            // He passes through the coffin and his own pieces: colliding inside a coffin this tight would only make him
+            // jitter. Shots are raycasts, so they still find him
             _colliders = GetComponentsInChildren<Collider>(true);
             var coffinColliders = coffin != null ? coffin.GetComponentsInChildren<Collider>(true) : new Collider[0];
             for (int i = 0; i < _colliders.Length; i++)
@@ -161,36 +192,49 @@ namespace IntuitiveDesigns.ShootingRange
                 foreach (var shell in coffinColliders) Physics.IgnoreCollision(_colliders[i], shell);
             }
 
-            Stiffen(true);
+            Stiffen();
         }
 
-        /// The hand on the side nearer the player's seat, out along outward: the one that can tip the hat to them
-        private Rigidbody NearerHand()
+        private Transform Marker(string name)
         {
-            Rigidbody best = null;
-            float nearest = float.MaxValue;
-            foreach (var body in _bones)
-            {
-                if (!body.name.StartsWith("Hand", StringComparison.Ordinal)) continue;
-
-                float distance = (body.position - (stand.position + outward * 10f)).sqrMagnitude;
-                if (distance < nearest)
-                {
-                    nearest = distance;
-                    best = body;
-                }
-            }
-
-            return best;
+            foreach (var item in GetComponentsInChildren<Transform>(true))
+                if (item.name == name) return item;
+            return null;
         }
 
-        /// The hat's rim on the hand's side, at the bottom of the brim
+        private Arm ArmOf(string side)
+        {
+            var arm = new Arm
+            {
+                Shoulder = Marker("Shoulder " + side), Elbow = Marker("Elbow " + side), Wrist = Marker("Wrist " + side),
+                Hand = Marker("Hand " + side),
+            };
+            if (arm.Shoulder == null || arm.Elbow == null || arm.Wrist == null) return null;
+
+            arm.ShoulderRest = arm.Shoulder.localRotation;
+            arm.ElbowRest = arm.Elbow.localRotation;
+            arm.WristRest = arm.Wrist.localRotation;
+            arm.Upper = Vector3.Distance(arm.Shoulder.position, arm.Elbow.position);
+            arm.Fore = Vector3.Distance(arm.Elbow.position, arm.Wrist.position);
+            arm.Side = Mathf.Sign(Vector3.Dot(arm.Shoulder.position - _waist.position, transform.right));
+            arm.RestWrist = arm.Wrist.position;
+            return arm;
+        }
+
+        private static Arm Nearer(Arm a, Arm b, Vector3 point)
+        {
+            if (a == null) return b;
+            if (b == null) return a;
+            return (a.Wrist.position - point).sqrMagnitude <= (b.Wrist.position - point).sqrMagnitude ? a : b;
+        }
+
+        /// The hat's rim on the tipping hand's side, at the bottom of the brim
         private Vector3 BrimAtRest()
         {
             var filter = hat.GetComponentInChildren<MeshFilter>();
             var box = filter.sharedMesh.bounds;
             Vector3 middle = filter.transform.TransformPoint(box.center);
-            Vector3 side = transform.right * _side;
+            Vector3 side = transform.right * (_tipArm != null ? _tipArm.Side : 1f);
             float reach = 0f, low = 0f;
             for (int corner = 0; corner < 8; corner++)
             {
@@ -201,46 +245,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             return middle + side * reach + transform.up * low;
-        }
-
-        /// The arm on the side of the lid's free edge, where the gap opens, measured in his built pose. It swings up and out
-        /// toward the gap and the player
-        private void ReadyTheWave()
-        {
-            if (coffin == null) return;
-
-            Rigidbody hand = null;
-            float farthest = -1f;
-            foreach (var body in _bones)
-            {
-                if (!body.name.StartsWith("Hand", StringComparison.Ordinal)) continue;
-
-                float distance = (body.position - coffin.Hinge).sqrMagnitude;
-                if (distance > farthest)
-                {
-                    farthest = distance;
-                    hand = body;
-                }
-            }
-
-            var arm = ArmOf(hand);
-            if (arm.Length < 3) return;
-
-            _waveArm = arm;
-            _waveRestPositions = arm.Select(b => b.position).ToArray();
-            _waveRestRotations = arm.Select(b => b.rotation).ToArray();
-            _waveShoulder = Pivot(arm[2]);
-            _waveElbow = Pivot(arm[1]);
-
-            Vector3 down = (_waveElbow - _waveShoulder).normalized;
-            Vector3 gap = Vector3.ProjectOnPlane(hand.position - coffin.Hinge, transform.up).normalized;
-            _waveLiftAxis = Vector3.Cross(down, (outward + gap).normalized).normalized;
-        }
-
-        private static Vector3 Pivot(Rigidbody body)
-        {
-            var joint = body.GetComponent<CharacterJoint>();
-            return joint.transform.TransformPoint(joint.anchor);
         }
 
         protected override void Start()
@@ -270,13 +274,13 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_out && _waveArm != null && Random.value < waveChance) Run(Wave());
         }
 
-        /// Holds the lid open while his hand comes out of the gap, waves, and goes back in
+        /// Holds the lid open while his arm reaches out sideways through the gap, waves, and goes back in
         private IEnumerator Wave()
         {
             _waving = true;
             coffin.KeepPeeking = true;
             yield return new WaitForSeconds(Coffin.PeekSwingSeconds);
-            yield return Tween(waveReachSeconds, t => _waveOut = t);
+            yield return Tween(waveReachSeconds, t => _wave = t);
 
             for (float t = 0f; t < waves * waveSeconds; t += Time.deltaTime)
             {
@@ -285,46 +289,19 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             _waveRock = 0f;
-            yield return Tween(waveReachSeconds, t => _waveOut = 1f - t);
+            yield return Tween(waveReachSeconds, t => _wave = 1f - t);
             StopWaving();
             _act = null;
         }
 
-        /// The arm back in its built pose and the lid let go, finished or cut short by the round ending
         private void StopWaving()
         {
             if (!_waving) return;
 
             _waving = false;
-            _waveOut = 0f;
+            _wave = 0f;
             _waveRock = 0f;
             coffin.KeepPeeking = false;
-            Stiffen(true);
-        }
-
-        /// Kinematic while he's shut away, so the arm is posed outright: swung up and out at the shoulder, bent at the
-        /// elbow, and rocked side to side
-        private void PoseTheWave()
-        {
-            var lift = Quaternion.AngleAxis(waveLift * _waveOut, _waveLiftAxis);
-            var turn = Quaternion.AngleAxis(waveDegrees * _waveRock * _waveOut, outward) *
-                       Quaternion.AngleAxis(waveBend * _waveOut, _waveLiftAxis);
-            Vector3 elbow = _waveShoulder + lift * (_waveElbow - _waveShoulder);
-
-            // Hand, forearm, upper arm: the first two turn at the elbow as well
-            for (int i = 0; i < _waveArm.Length; i++)
-            {
-                Vector3 position = _waveShoulder + lift * (_waveRestPositions[i] - _waveShoulder);
-                Quaternion rotation = lift * _waveRestRotations[i];
-                if (i < 2)
-                {
-                    position = elbow + turn * (position - elbow);
-                    rotation = turn * rotation;
-                }
-
-                _waveArm[i].MovePosition(position);
-                _waveArm[i].MoveRotation(rotation);
-            }
         }
 
         /// Every round's end, the last included, where he stays out for the final score
@@ -345,65 +322,33 @@ namespace IntuitiveDesigns.ShootingRange
             _act = StartCoroutine(act);
         }
 
-        /// Speeding up all the way and stopping dead, so his own weight carries him on and he flops
+        /// Limp, shoved out speeding up all the way and stopped dead so he flops on; then his servos catch him
         private IEnumerator ComeOut()
         {
             StopWaving();
             _out = true;
             if (coffin != null) yield return new WaitForSeconds(coffin.HoldOpen(true));
 
-            Stiffen(false);
-            yield return Tween(shoveSeconds, t => _shove = t * t);
-            if (!_didWell || _hand == null) { _act = null; yield break; }
-
+            GoLimp();
+            yield return Shove(shoveSeconds, t => _shove = t * t);
             yield return new WaitForSeconds(settleSeconds);
-            yield return TipTheHat();
+            yield return Engage();
+
+            if (_didWell && _tipArm != null) yield return TipTheHat();
             _act = null;
         }
 
-        /// The string pulls his hand to the brim, he takes the hat off and holds it out to the player, then puts it back.
-        /// A hat shot off on the way ends it
-        private IEnumerator TipTheHat()
-        {
-            _pullTo = Brim;
-            yield return Tween(sweepSeconds, t => _pull = t);
-            yield return HandReaches(Brim);
-            if (!_hatOn) { yield return LetGo(); yield break; }
-
-            TakeTheHat();
-            yield return Tween(sweepSeconds, t => _pullTo = () => Vector3.Lerp(Brim(), Swept(), t));
-            _pullTo = Swept;
-            yield return new WaitForSeconds(holdSeconds);
-            if (!_hatInHand) { yield return LetGo(); yield break; }
-
-            yield return Tween(sweepSeconds, t => _pullTo = () => Vector3.Lerp(Swept(), Brim(), t));
-            _pullTo = Brim;
-            yield return HandReaches(Brim);
-            if (_hatInHand) WearTheHat();
-            yield return LetGo();
-        }
-
-        private IEnumerator HandReaches(Func<Vector3> target)
-        {
-            for (float waited = 0f; waited < reachTimeout && (_hand.position - target()).sqrMagnitude > grabReach * grabReach; waited += Time.deltaTime)
-                yield return null;
-        }
-
-        private IEnumerator LetGo()
-        {
-            yield return Tween(sweepSeconds, t => _pull = 1f - t);
-            _pullTo = null;
-        }
-
-        /// Yanked in from wherever the stand got to, the coffin rocking with the knock. Stiffened once the lid hides him
+        /// Limp again and yanked in from wherever the stand got to, the coffin rocking with the knock. Stiffened once the lid
+        /// hides him
         private IEnumerator GoBack()
         {
             if (_hatInHand) WearTheHat();
-            _pull = 0f;
-            _pullTo = null;
+            _handTo = null;
+            _bow = 0f;
 
+            GoLimp();
             float from = _shove;
-            yield return Tween(yankSeconds, t => _shove = from * (1f - t * t));
+            yield return Shove(yankSeconds, t => _shove = from * (1f - t * t));
 
             if (coffin != null)
             {
@@ -411,12 +356,95 @@ namespace IntuitiveDesigns.ShootingRange
                 yield return new WaitForSeconds(coffin.HoldOpen(false));
             }
 
-            Stiffen(true);
+            Stiffen();
             _out = false;
             _act = null;
         }
 
-        /// Linear from 0 to 1, catching once or twice on the way with a clunk. The caller eases it
+        /// The servos take him back from wherever the flop left each piece to his pose, with a clunk
+        private IEnumerator Engage()
+        {
+            for (int i = 0; i < _bones.Count; i++)
+            {
+                _engageFromPositions[i] = _bones[i].position;
+                _engageFromRotations[i] = _bones[i].rotation;
+                _bones[i].isKinematic = true;
+                _bones[i].interpolation = RigidbodyInterpolation.None;
+            }
+
+            _limp = false;
+            stand.interpolation = RigidbodyInterpolation.None;
+            _engage = 0f;
+            _look = Quaternion.identity;
+            PlayOne(clunkClips, stand.position, clunkVolume);
+            yield return Tween(engageSeconds, t => _engage = t);
+            _engage = 1f;
+            for (int i = 0; i < _bones.Count; i++)
+            {
+                _bones[i].transform.localPosition = _boneLocalPositions[i];
+                _bones[i].transform.localRotation = _boneLocalRotations[i];
+            }
+        }
+
+        /// Out to his side, up past the outside of the brim, in to it; the hat comes off and is held out with a bow; then
+        /// the same way back. A hat shot off on the way ends it
+        private IEnumerator TipTheHat()
+        {
+            yield return Reach(SideOf, reachSeconds);
+            yield return Reach(AboveBrim, reachSeconds);
+            yield return Reach(Brim, reachSeconds * 0.5f);
+            if (!_hatOn) { yield return PutTheArmDown(); yield break; }
+
+            TakeTheHat();
+            yield return Reach(AboveBrim, reachSeconds * 0.5f);
+            yield return Both(Reach(Swept, sweepSeconds), Tween(sweepSeconds, t => _bow = t));
+            yield return new WaitForSeconds(holdSeconds);
+            if (!_hatInHand) { yield return PutTheArmDown(); yield break; }
+
+            yield return Both(Reach(AboveBrim, sweepSeconds), Tween(sweepSeconds, t => _bow = 1f - t));
+            yield return Reach(Brim, reachSeconds * 0.5f);
+            if (_hatInHand) WearTheHat();
+            yield return PutTheArmDown();
+        }
+
+        private IEnumerator PutTheArmDown()
+        {
+            yield return Reach(AboveBrim, reachSeconds * 0.5f);
+            yield return Reach(SideOf, reachSeconds);
+            yield return Reach(() => _tipArm.RestWrist, reachSeconds);
+            _handTo = null;
+            _bow = 0f;
+        }
+
+        /// The hand goes from wherever it is to target on the servo
+        private IEnumerator Reach(Func<Vector3> target, float seconds)
+        {
+            Vector3 from = _handTo != null ? _handTo() : _tipArm.RestWrist;
+            yield return Tween(seconds, t => _handTo = () => Vector3.LerpUnclamped(from, target(), t));
+            _handTo = target;
+        }
+
+        private IEnumerator Both(IEnumerator a, IEnumerator b)
+        {
+            var other = StartCoroutine(b);
+            yield return a;
+            yield return other;
+        }
+
+        /// For the limp shove and yank: the caller's own curve, no servo, so his weight carries him on
+        private IEnumerator Shove(float seconds, Action<float> apply)
+        {
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, seconds))
+            {
+                apply(t);
+                yield return null;
+            }
+
+            apply(1f);
+        }
+
+        /// A servo move from 0 to 1: steady motor speed, a dead stop that overshoots a little and settles, a shake while it
+        /// runs, and now and then a catch with a clunk
         private IEnumerator Tween(float seconds, Action<float> apply)
         {
             var hitches = new float[Random.Range(hitchesPerMove.x, hitchesPerMove.y + 1)];
@@ -426,7 +454,7 @@ namespace IntuitiveDesigns.ShootingRange
             int next = 0;
             for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, seconds))
             {
-                apply(t);
+                apply(Servo(t));
                 if (next < hitches.Length && t >= hitches[next])
                 {
                     next++;
@@ -440,36 +468,46 @@ namespace IntuitiveDesigns.ShootingRange
             apply(1f);
         }
 
-        private Vector3 Brim() { return skull.transform.TransformPoint(_brim); }
+        private const float Running = 0.8f;
+
+        private float Servo(float t)
+        {
+            if (t < Running)
+            {
+                float run = t / Running;
+                return run * (1f + overshoot) + Random.Range(-motorShake, motorShake);
+            }
+
+            float settle = (t - Running) / (1f - Running);
+            return 1f + overshoot * Mathf.Cos(settle * 2.5f * Mathf.PI) * Mathf.Exp(-settle * 4f);
+        }
+
+        private Vector3 Side { get { return transform.right * _tipArm.Side; } }
+        private Vector3 Brim() { return skull.transform.TransformPoint(_brimInSkull); }
+        private Vector3 AboveBrim() { return Brim() + Side * clearOfHim.x + Vector3.up * clearOfHim.y; }
+
+        /// Straight out to his side at shoulder height, a little forward: the arm's first move, clear of his ribs
+        private Vector3 SideOf()
+        {
+            float reach = (_tipArm.Upper + _tipArm.Fore) * 0.9f;
+            return _tipArm.Shoulder.position + Side * reach + outward * 0.1f;
+        }
 
         private Vector3 Swept()
         {
-            return skull.position + transform.right * (_side * sweepTo.x) + Vector3.up * sweepTo.y + outward * sweepTo.z;
+            return skull.position + Side * sweepTo.x + Vector3.up * sweepTo.y + outward * sweepTo.z;
         }
 
-        /// Forces in the physics step: the stand moves so the joints feel how fast it went and how hard it stopped, the head
-        /// turns to the player, and the string pulls the hand
+        /// While he's limp the physics has him: the stand moves so the joints feel how fast it went and how hard it stopped,
+        /// each joint is pulled toward his pose, and the head turns to the player
         private void FixedUpdate()
         {
+            if (!_limp) return;
+
             stand.MovePosition(_standRest + outward * (reachOut * _shove));
-            if (_waving) PoseTheWave();
-            if (!_out) return;
-
             Hold();
-            Look();
-            if (_pullTo == null || _pull <= 0f) return;
-
-            // Steering the hand's speed by a share of what's wrong each step can't overshoot at any step size, where the
-            // force spring it replaces flung him apart on the headset. The arm floats meanwhile, so the hand doesn't sag
-            Vector3 wanted = Vector3.ClampMagnitude((_pullTo() - _hand.worldCenterOfMass) * pullRate, pullSpeed);
-            _hand.AddForce((wanted - _hand.velocity) * (pullGrip * _pull), ForceMode.VelocityChange);
-            foreach (var body in _arm) body.AddForce(-Physics.gravity * _pull, ForceMode.Acceleration);
+            LookLimp();
         }
-
-        // An explicit spring blows up once a step overshoots: damping past about 2/dt, or stiffness past about 1/dt². These
-        // keep the hold and the look well inside both at whatever step the physics runs (0.03 s here, less in slow motion)
-        private const float SafeDamping = 0.8f;
-        private const float SafeStiffness = 0.5f;
 
         private static float Damping(float wanted) { return Mathf.Min(wanted, SafeDamping / Time.fixedDeltaTime); }
 
@@ -478,8 +516,7 @@ namespace IntuitiveDesigns.ShootingRange
             return Mathf.Min(wanted, SafeStiffness / (Time.fixedDeltaTime * Time.fixedDeltaTime));
         }
 
-        /// Each joint turned back toward his built pose against its parent, damped, so a knock is short and snaps back. Not
-        /// the skull, which the look turns, and the string's arm gives way as the string takes it
+        /// Each joint turned back toward his built pose against its parent, damped, so he flops and then hangs as built
         private void Hold()
         {
             float stiffness = Stiffness(holdStrength), damping = Damping(holdDamping);
@@ -487,9 +524,6 @@ namespace IntuitiveDesigns.ShootingRange
             {
                 var body = _jointBodies[i];
                 if (body == skull) continue;
-
-                float share = Array.IndexOf(_arm, body) >= 0 ? 1f - _pull : 1f;
-                if (share <= 0f) continue;
 
                 var parent = _joints[i].connectedBody;
                 float angle;
@@ -499,38 +533,129 @@ namespace IntuitiveDesigns.ShootingRange
 
                 Vector3 spin = body.angularVelocity - parent.angularVelocity;
                 Vector3 torque = Mathf.Abs(angle) > 0.01f ? axis * (angle * Mathf.Deg2Rad * stiffness) - spin * damping : -spin * damping;
-                body.AddTorque(torque * share, ForceMode.Acceleration);
+                body.AddTorque(torque, ForceMode.Acceleration);
             }
         }
 
-        /// The hand, its forearm and its upper arm: what the string lifts
-        private static Rigidbody[] ArmOf(Rigidbody hand)
-        {
-            var arm = new List<Rigidbody>();
-            for (var body = hand; body != null && arm.Count < 3; )
-            {
-                arm.Add(body);
-                var joint = body.GetComponent<CharacterJoint>();
-                body = joint != null ? joint.connectedBody : null;
-            }
-
-            return arm.ToArray();
-        }
-
-        private void Look()
+        private void LookLimp()
         {
             if (_head == null && !FindTheHead()) return;
 
-            Vector3 face = skull.transform.TransformDirection(_face);
-            Vector3 toPlayer = _head.position - skull.position;
+            Vector3 face = skull.transform.TransformDirection(_faceInSkull);
             float angle;
             Vector3 axis;
-            Quaternion.FromToRotation(face, toPlayer).ToAngleAxis(out angle, out axis);
+            Quaternion.FromToRotation(face, LookPoint() - skull.position).ToAngleAxis(out angle, out axis);
             if (angle > 180f) angle -= 360f;
 
             skull.AddTorque(axis * (angle * Mathf.Deg2Rad * Stiffness(lookStrength)) - skull.angularVelocity * Damping(lookDamping),
                             ForceMode.Acceleration);
         }
+
+        private void LateUpdate()
+        {
+            if (!_limp) Pose();
+            Listen();
+            jaw.localRotation = _jawRest * Quaternion.AngleAxis(jawOpenDegrees * _mouth, Vector3.right);
+        }
+
+        /// His servos have him: stand and body out together, the lean and any knock at the waist, the head, the arms, and
+        /// while they're catching him, each piece pulled from where the flop left it
+        private void Pose()
+        {
+            Vector3 offset = outward * (reachOut * _shove);
+            stand.transform.position = _standRest + offset;
+            _body.position = _bodyRest + offset;
+
+            // Turned in the parent's frame, so the lean is toward the player whatever the waist's own axes are
+            Vector3 leanAxis = _waist.parent.InverseTransformDirection(Vector3.Cross(Vector3.up, outward));
+            float lean = (_out ? leanDegrees * _engage : 0f) + bowDegrees * _bow;
+            _waist.localRotation = Quaternion.AngleAxis(lean, leanAxis) * Jolt() * _waistRest;
+
+            _neck.localRotation = _neckRest;
+            if (_out) Look();
+
+            if (_tipArm != null) PoseArm(_tipArm, _handTo, 0f);
+            if (_waveArm != null && (_waveArm != _tipArm || _waving)) PoseArm(_waveArm, _waving ? (Func<Vector3>)WaveTarget : null, _waveRock);
+
+            if (_engage >= 1f) return;
+            for (int i = 0; i < _bones.Count; i++)
+            {
+                var piece = _bones[i].transform;
+                Vector3 to = piece.parent.TransformPoint(_boneLocalPositions[i]);
+                Quaternion turn = piece.parent.rotation * _boneLocalRotations[i];
+                piece.position = Vector3.LerpUnclamped(_engageFromPositions[i], to, _engage);
+                piece.rotation = Quaternion.SlerpUnclamped(_engageFromRotations[i], turn, _engage);
+            }
+        }
+
+        private Quaternion Jolt()
+        {
+            if (_joltAt < 0f) return Quaternion.identity;
+
+            float t = (Time.time - _joltAt) / Mathf.Max(0.01f, joltSeconds);
+            if (t >= 1f) { _joltAt = -1f; return Quaternion.identity; }
+
+            // Out and back in two hard ticks, not a spring
+            float amount = t < 0.3f ? 1f : t < 0.6f ? -0.4f : 0f;
+            return Quaternion.AngleAxis(joltDegrees * amount, _joltAxis);
+        }
+
+        /// The head turns at a steady servo speed to a fresh aim at the player every so often, and stops dead there
+        private void Look()
+        {
+            if (_head == null && !FindTheHead()) return;
+
+            if (Time.time >= _nextLook)
+            {
+                _nextLook = Time.time + lookEverySeconds;
+                Vector3 face = _neck.TransformDirection(_faceInNeck);
+                var turn = Quaternion.FromToRotation(face, LookPoint() - skull.position);
+                _lookTarget = Quaternion.RotateTowards(Quaternion.identity, turn, lookLimit);
+            }
+
+            _look = Quaternion.RotateTowards(_look, _lookTarget, lookSpeed * Time.deltaTime);
+            _neck.rotation = _look * _neck.rotation;
+        }
+
+        /// The arm back in its built pose, or reaching for a point: a two-bone solve with the elbow kept out to his side and
+        /// down, so the arm folds outside him. wristShare tips the hand at the wrist, toward and away from the player
+        private void PoseArm(Arm arm, Func<Vector3> target, float wristShare)
+        {
+            arm.Shoulder.localRotation = arm.ShoulderRest;
+            arm.Elbow.localRotation = arm.ElbowRest;
+            arm.Wrist.localRotation = arm.WristRest;
+            arm.RestWrist = arm.Wrist.position;
+            if (target == null) return;
+
+            Vector3 shoulder = arm.Shoulder.position;
+            Vector3 toTarget = target() - shoulder;
+            float reach = Mathf.Clamp(toTarget.magnitude, 0.05f, (arm.Upper + arm.Fore) * 0.98f);
+            Vector3 along = toTarget.normalized;
+
+            Vector3 side = transform.right * arm.Side;
+            Vector3 pole = Vector3.ProjectOnPlane(side - Vector3.up * 0.4f, along).normalized;
+            float cos = (arm.Upper * arm.Upper + reach * reach - arm.Fore * arm.Fore) / (2f * arm.Upper * reach);
+            float angle = Mathf.Acos(Mathf.Clamp(cos, -1f, 1f));
+            Vector3 elbow = shoulder + (along * Mathf.Cos(angle) + pole * Mathf.Sin(angle)) * arm.Upper;
+            Vector3 wrist = shoulder + along * reach;
+
+            arm.Shoulder.rotation = Quaternion.FromToRotation(arm.Elbow.position - shoulder, elbow - shoulder) * arm.Shoulder.rotation;
+            arm.Elbow.rotation = Quaternion.FromToRotation(arm.Wrist.position - arm.Elbow.position, wrist - arm.Elbow.position) * arm.Elbow.rotation;
+            if (wristShare != 0f) arm.Wrist.rotation = Quaternion.AngleAxis(waveDegrees * wristShare, outward) * arm.Wrist.rotation;
+        }
+
+        /// Straight out to his side through the lid's gap, a little toward the player and up, so it's well clear of the
+        /// coffin and easy to see (user, 2026-11-10)
+        private Vector3 WaveTarget()
+        {
+            Vector3 rest = _waveArm.RestWrist;
+            Vector3 side = transform.right * _waveArm.Side;
+            Vector3 reached = _waveArm.Shoulder.position + side * ((_waveArm.Upper + _waveArm.Fore) * waveReach) +
+                              outward * waveLean.x + Vector3.up * waveLean.y;
+            return Vector3.LerpUnclamped(rest, reached, _wave);
+        }
+
+        private Vector3 LookPoint() { return _head.position - Vector3.up * lookBelow; }
 
         /// The avatar's head once the SDK has spawned the rig, or the camera before it has. Not ?. on VRAvatar: it's a
         /// UnityEngine.Object, and null propagation would sail past a destroyed one
@@ -548,22 +673,36 @@ namespace IntuitiveDesigns.ShootingRange
             return _head != null;
         }
 
-        /// Hanging free while he's out; stiff in his built pose, stand home, while he's shut away
-        private void Stiffen(bool stiff)
+        /// Limp: every piece on its joints, so the stand's shove and yank fling him about
+        private void GoLimp()
         {
-            if (stiff)
+            _limp = true;
+            _engage = 1f;
+            stand.interpolation = RigidbodyInterpolation.Interpolate;
+            foreach (var bone in _bones)
             {
-                _shove = 0f;
-                stand.position = _standRest;
+                bone.interpolation = RigidbodyInterpolation.Interpolate;
+                bone.isKinematic = false;
             }
+        }
+
+        /// Shut away: kinematic, every piece and joint marker back in his built pose, stand home
+        private void Stiffen()
+        {
+            _limp = false;
+            _engage = 1f;
+            _shove = 0f;
+            stand.interpolation = RigidbodyInterpolation.None;
+            stand.transform.position = _standRest;
+            _body.position = _bodyRest;
+            for (int i = 0; i < _markers.Length; i++) _markers[i].localRotation = _markerRest[i];
 
             for (int i = 0; i < _bones.Count; i++)
             {
-                _bones[i].isKinematic = stiff;
-                if (!stiff) continue;
-
-                _bones[i].transform.localPosition = _bonePositions[i];
-                _bones[i].transform.localRotation = _boneRotations[i];
+                _bones[i].isKinematic = true;
+                _bones[i].interpolation = RigidbodyInterpolation.None;
+                _bones[i].transform.localPosition = _boneLocalPositions[i];
+                _bones[i].transform.localRotation = _boneLocalRotations[i];
             }
         }
 
@@ -587,7 +726,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void TakeTheHat()
         {
-            Carry(_hand.transform);
+            Carry(_tipArm.Hand != null ? _tipArm.Hand : _tipArm.Wrist);
             _hatInHand = true;
         }
 
@@ -601,12 +740,6 @@ namespace IntuitiveDesigns.ShootingRange
             hat.interpolation = RigidbodyInterpolation.Interpolate;
             hat.isKinematic = false;
             hat.velocity = velocity;
-        }
-
-        private void LateUpdate()
-        {
-            Listen();
-            jaw.localRotation = _jawRest * Quaternion.AngleAxis(jawOpenDegrees * _mouth, Vector3.right);
         }
 
         /// The jaw opens with how loud the barker is, only while he's out where he can be seen
@@ -630,13 +763,19 @@ namespace IntuitiveDesigns.ShootingRange
             if (!enabled) return;
 
             PlayOne(hitClips, point, hitVolume);
-
             var struck = BodyNearest(point);
-            if (struck == null) return;
-
             Vector3 push = direction.normalized * shotImpulse;
-            if (struck == hat && _hatOn) ThrowTheHat(push / Mathf.Max(0.01f, hat.mass));
-            else if (!struck.isKinematic) struck.AddForceAtPosition(push, point, ForceMode.Impulse);
+            if (struck == hat && _hatOn) { ThrowTheHat(push / Mathf.Max(0.01f, hat.mass)); return; }
+
+            if (_limp)
+            {
+                if (struck != null && !struck.isKinematic) struck.AddForceAtPosition(push, point, ForceMode.Impulse);
+                return;
+            }
+
+            PlayOne(clunkClips, point, clunkVolume);
+            _joltAxis = _waist.parent.InverseTransformDirection(Vector3.Cross(Vector3.up, direction).normalized);
+            _joltAt = Time.time;
         }
 
         private Rigidbody BodyNearest(Vector3 point)

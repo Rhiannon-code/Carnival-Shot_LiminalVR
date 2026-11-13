@@ -10,16 +10,19 @@ namespace IntuitiveDesigns.ShootingRange
     {
         public static RangeGame Instance { get; private set; }
 
-        public enum State { HowToPlay, WaitingForPickup, Intro, Playing, RoundEnd, Ended }
+        public enum State { HowToPlay, Intro, Playing, RoundEnd, Ended }
 
         [Header("Refs")]
         [SerializeField] private Arena arena;
         [SerializeField] private ComboTracker combo;
         [SerializeField] private TrackDirector director;
         [SerializeField] private CarnyVoice barker;
+        [SerializeField] private CarnivalLights lights;
+        [SerializeField] private MusicBed music;
 
         [Header("Session (data)")]
-        [SerializeField] private float controlsSeconds = 5f;
+        [SerializeField, Tooltip("Seconds after the triggers go live before the game starts by itself, if nobody shoots the card")]
+        private float autoStartSeconds = 45f;
         [SerializeField] private int countdownFrom = 3;
         [SerializeField] private int betweenRoundsCountdownFrom = 3;
         [SerializeField] private float countdownStep = 1f;
@@ -27,9 +30,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float endHoldSeconds = 3f;
         [SerializeField] private float longestPauseSeconds = 12f;
         [SerializeField] private float endFadeSeconds = 2f;
-
-        [Header("Start")]
-        [SerializeField] private bool requirePickupToStart = true;
 
         [Header("Clearing (data)")]
         [SerializeField] private int clearBonus = 200;
@@ -42,8 +42,14 @@ namespace IntuitiveDesigns.ShootingRange
         public bool IsFinalRound { get { return MaxRounds > 0 && RoundNumber >= MaxRounds; } }
         public int NextRoundNumber { get { return RoundNumber + 1; } }
 
+        /// The guns are in hand from the start but fire nothing until the carnival has wound up (user, 2026-11-10)
+        public bool TriggersLive { get; private set; }
+
         public event Action<int> ScoreChanged;
+        public event Action<int, Vector3> SignScored;
         public event Action<State> StateChanged;
+        /// The wind-up is over: the triggers work and the controls card can be shot to start
+        public event Action ReadyToStart;
         public event Action<int> CountdownTick;
         public event Action CountdownGo;
         public event Action<int> RoundStarted;
@@ -70,30 +76,29 @@ namespace IntuitiveDesigns.ShootingRange
         private void Start()
         {
             if (barker == null) barker = FindObjectOfType<CarnyVoice>();
-
-            if (requirePickupToStart && FindObjectOfType<PistolPickup>() == null)
-            {
-                Debug.LogWarning("[RangeGame] requirePickupToStart is on but there is no active " +
-                                 "PistolPickup in the scene. Starting immediately instead.");
-                requirePickupToStart = false;
-            }
-
+            if (lights == null) lights = FindObjectOfType<CarnivalLights>();
+            if (music == null) music = FindObjectOfType<MusicBed>();
             StartCoroutine(HowToPlay());
         }
 
-        /// The controls card has the board through the barker's welcome, then the guns come up to be taken
+        /// The controls card is up from the start. Once the lights are on and the music has wound up, the triggers
+        /// work, and a shot on the card starts the game; nobody shooting it still starts it, later
         private IEnumerator HowToPlay()
         {
             SetState(State.HowToPlay);
-            yield return StartCoroutine(Pause(controlsSeconds));
+            while ((lights != null && !lights.On) || (music != null && !music.WoundUp)) yield return null;
 
-            if (requirePickupToStart) SetState(State.WaitingForPickup);
-            else BeginFromPickup();
+            TriggersLive = true;
+            if (ReadyToStart != null) ReadyToStart();
+
+            for (float waited = 0f; waited < autoStartSeconds && !_begun; waited += Time.unscaledDeltaTime) yield return null;
+            Begin();
         }
 
-        public void BeginFromPickup()
+        /// The controls card was shot
+        public void Begin()
         {
-            if (_begun) return;
+            if (_begun || !TriggersLive) return;
 
             _begun = true;
             StartCoroutine(RunSession());
@@ -107,8 +112,10 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (combo != null && linksCombo) combo.Register(chained);
             float multiplier = combo != null ? combo.Multiplier : 1f;
+            int scored = Mathf.RoundToInt(points * multiplier);
 
-            AddScore(Mathf.RoundToInt(points * multiplier));
+            AddScore(scored);
+            if (linksCombo && SignScored != null) SignScored(scored, where);
         }
 
         /// A vampire or a bat got to the player. It costs the combo and nothing else

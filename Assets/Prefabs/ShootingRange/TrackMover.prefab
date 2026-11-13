@@ -175,7 +175,6 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 22c728befb807a8449a6b7bccd7180dc, type: 3}
   - {fileID: 8300000, guid: 33103953ec5110540bef8355c75b308d, type: 3}
   - {fileID: 8300000, guid: 6dda4357bd966d83f8fdb8aa73736ef6, type: 3}
-  - {fileID: 8300000, guid: 00d7c6fb7834f7430a39af0c74b5bfe9, type: 3}
 --- !u!65 &5783952124275586216
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -453,6 +452,9 @@ MonoBehaviour:
   specialGlow: {fileID: 2100000, guid: 1ec258a20b9208fbc820d6aab5f54d57, type: 2}
   specialBorder: 0.035
   specialStrength: 1.8
+  rimColour: {r: 1, g: 0.88, b: 0.66, a: 1}
+  rimBorder: 0.015
+  rimStrength: 0.15
   riseClips: []
   fallClips: []
   hitClips:

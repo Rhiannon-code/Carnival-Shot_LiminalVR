@@ -42,11 +42,13 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("How many stand still instead of travelling (data, 0-1)")]
         [SerializeField, Range(0f, 1f)] private float stationaryShare = 0.4f;
 
-        [Header("Special power-up signs (data): how many each round, spread through it, never two at once")]
-        [SerializeField] private int[] specialsPerRound = { 1, 2, 3, 4, 5 };
+        [Header("Special power-up signs (data): how many each round, round 1 first, spread through it, never two out at once")]
+        [SerializeField, Tooltip("A shorter list repeats its last entry. 0 is a round with no power-ups")]
+        private int[] specialsPerRound = { 0, 0, 2, 2, 3 };
         [SerializeField, Range(0f, 0.5f), Tooltip("How far each can wander from its even spacing, as a share of the gap between them")]
         private float specialJitter = 0.3f;
-        [SerializeField] private float specialSpeed = 1.6f;
+        [SerializeField, Tooltip("A special's speed over an ordinary sign's, round 1 first. Falls as the rounds speed up, so late specials stay hittable")]
+        private float[] specialSpeedPerRound = { 1.6f, 1.5f, 1.4f, 1.3f, 1.2f };
 
         [Header("Refusals (data)")]
         [SerializeField] private float retrySeconds = 0.75f;
@@ -100,6 +102,8 @@ namespace IntuitiveDesigns.ShootingRange
         private int _resolved;
         private int _killed;
         private int _nextSpecial;
+        private int _owedSpecials;
+        private float _specialSpeed = 1f;
 
         private void Awake()
         {
@@ -158,6 +162,9 @@ namespace IntuitiveDesigns.ShootingRange
             _pending.Clear();
             _nextWave = Time.time;
             SpreadTheSpecials(steps);
+            _specialSpeed = specialSpeedPerRound != null && specialSpeedPerRound.Length > 0
+                          ? specialSpeedPerRound[Mathf.Min(steps, specialSpeedPerRound.Length - 1)]
+                          : 1f;
             RaiseTargetsLeft();
 
             if (Debug.isDebugBuild)
@@ -172,10 +179,10 @@ namespace IntuitiveDesigns.ShootingRange
         {
             _specialAt.Clear();
             _nextSpecial = 0;
+            _owedSpecials = 0;
 
-            int count = specialsPerRound != null && specialsPerRound.Length > 0
-                      ? specialsPerRound[Mathf.Min(steps, specialsPerRound.Length - 1)]
-                      : 0;
+            int last = specialsPerRound != null ? specialsPerRound.Length - 1 : -1;
+            int count = last >= 0 ? Mathf.Min(specialsPerRound[Mathf.Min(steps, last)], _waveSize) : 0;
             if (count <= 0) return;
 
             float gap = (float)_waveSize / count;
@@ -186,14 +193,13 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Due by the count, and nothing else powered up: not one running, and no other power-up sign out. One held
-        /// back goes on the next launch that's free
+        /// Due by the count, or owed for one that got away, and no other power-up sign out. One held back goes on
+        /// the next launch that's free
         private bool SpecialDue()
         {
-            if (_nextSpecial >= _specialAt.Count || _launched < _specialAt[_nextSpecial]) return false;
-
-            var powerUps = PowerUps.Instance;
-            if (powerUps == null || powerUps.AnyActive) return false;
+            bool scheduled = _nextSpecial < _specialAt.Count && _launched >= _specialAt[_nextSpecial];
+            if (!scheduled && _owedSpecials <= 0) return false;
+            if (PowerUps.Instance == null) return false;
 
             for (int i = 0; i < _pool.Length; i++)
             {
@@ -333,7 +339,7 @@ namespace IntuitiveDesigns.ShootingRange
                 PowerUpKind? special = null;
                 if (SpecialDue()) special = PowerUps.Instance.RollSpecial();
 
-                float speed = (special.HasValue ? due.Speed * specialSpeed : due.Speed) * due.Rail.SpeedScale;
+                float speed = (special.HasValue ? due.Speed * _specialSpeed : due.Speed) * due.Rail.SpeedScale;
                 float hold = !special.HasValue && UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
 
                 // Somewhere new each time, in the player's sight. With nowhere to be seen from, it travels instead of hiding
@@ -359,7 +365,11 @@ namespace IntuitiveDesigns.ShootingRange
 
                 _pending.RemoveAt(i);
                 _launched++;
-                if (special.HasValue) _nextSpecial++;
+                if (special.HasValue)
+                {
+                    if (_owedSpecials > 0) _owedSpecials--;
+                    else _nextSpecial++;
+                }
                 mover.Launch(due.Rail, speed, hold, special, spot);
             }
         }
@@ -368,6 +378,8 @@ namespace IntuitiveDesigns.ShootingRange
         {
             _resolved++;
             if (shot) _killed++;
+            // A missed power-up comes back on the next free launch rather than being lost (user, 2026-11-10)
+            else if (mover.WasSpecial) _owedSpecials++;
             RaiseTargetsLeft();
             if (TargetResolved != null) TargetResolved(shot);
         }

@@ -76,7 +76,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             // Waits out of sight until a round puts it up; left showing, it sits at the room's origin in the Scene view
             keg.gameObject.SetActive(false);
-            new Fields(root.AddComponent<PowderKeg>()).Set("keg", keg).Set("hitBox", box)
+            new Fields(root.AddComponent<PowderKeg>()).Set("keg", keg).Set("hitBox", box).Set("blastFx", KegBlast(root.transform))
                 .SetArray("blastClips", blasts).Set("liftClip", Sound("World/keg_lift_01")).Set("settleClip", Sound("World/keg_hatch_01"))
                 .Apply();
             return root.GetComponent<PowderKeg>();

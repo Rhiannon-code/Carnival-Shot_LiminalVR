@@ -4,66 +4,53 @@ using TMPro;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// How to play, on the announcer board before the guns come up, through the barker's welcome. Both controllers side on, the trigger and
-    /// then the grip pressing and glowing in turn as their labels light, bulbs chasing round the edge,
-    /// and one-line hints scrolling along the bottom. Step 24 builds it
-    public class ControlsCard : MonoBehaviour
+    /// How to play, painted as a carnival sign on the announcer board (user, 2026-11-10). Everything is on it at once: the
+    /// controller with its trigger and grip glowing, the three hints, and a bullseye. The bullseye wakes once the carnival
+    /// has wound up, and shooting it starts the game. Step 24 builds it
+    public class ControlsCard : MonoBehaviour, IShootable
     {
         [Header("Refs")]
         [SerializeField] private RangeGame game;
         [SerializeField] private GameObject content;
         [SerializeField] private CanvasGroup group;
-        [SerializeField] private RectTransform[] triggers;
-        [SerializeField] private RectTransform[] grips;
-        [SerializeField] private Graphic[] triggerGlows;
-        [SerializeField] private Graphic[] gripGlows;
-        [SerializeField] private TMP_Text triggerLabel;
-        [SerializeField] private TMP_Text gripLabel;
+        [SerializeField] private Graphic[] buttonGlows;
         [SerializeField] private Graphic[] bulbs;
-        [SerializeField] private TMP_Text[] hintTexts;
-
-        [Header("Hints (data, each scrolls in from the right in turn)")]
-        [SerializeField] private string[] hints =
-        {
-            "SWAT THE SPIDER AWAY, OR SHOOT IT",
-            "SHOOT GLOWING SIGNS FOR POWER-UPS",
-            "DODGE THE BATS, OR SHOOT 'EM",
-        };
-        [SerializeField] private float hintSeconds = 1.6f;
-        [SerializeField] private float scrollSeconds = 0.3f;
-
-        [Header("Presses (data: each control gets a turn of two taps)")]
-        [SerializeField] private float turnSeconds = 1.25f;
-        [SerializeField] private float triggerPullDegrees = 14f;
-        [SerializeField] private float gripTravel = 5f;
+        [SerializeField] private RectTransform bullseye;
+        [SerializeField] private Graphic bullseyeGlow;
+        [SerializeField] private TMP_Text startLabel;
 
         [Header("Look (data)")]
         [SerializeField] private float fadeSeconds = 0.3f;
-        [SerializeField] private Color labelIdle = new Color(0.96f, 0.92f, 0.83f);
-        [SerializeField] private Color labelLit = new Color(1f, 0.85f, 0.47f);
+        [SerializeField] private float glowPulsesPerSecond = 0.8f;
         [SerializeField] private Color bulbOn = new Color(1f, 0.88f, 0.54f);
         [SerializeField] private Color bulbOff = new Color(0.42f, 0.29f, 0.12f);
         [SerializeField] private int bulbSpacing = 3;
         [SerializeField] private float bulbStepsPerSecond = 6f;
+        [SerializeField, Range(0f, 1f), Tooltip("How much of the start label shows before the triggers are live")]
+        private float startLabelAsleep = 0.35f;
+        [SerializeField] private float bullseyePulseScale = 0.06f;
+        [SerializeField] private float bullseyePulsesPerSecond = 1.5f;
+        [SerializeField, Tooltip("How far the bullseye jumps when it's shot, as a share of its size")] private float hitPunch = 0.25f;
 
-        private Quaternion[] _triggerRest;
-        private Vector2[] _gripRest;
+        [Header("Audio")]
+        [SerializeField] private AudioClip shotClip;
+        [SerializeField, Range(0f, 1f)] private float volume = 0.8f;
+
+        private Collider _hitBox;
         private float _shownAt;
         private float _alpha;
+        private float _shotAt = -1f;
         private bool _showing;
-        private int _hint = -1;
         private int _bulbStep = -1;
 
         private void Awake()
         {
-            _triggerRest = new Quaternion[triggers.Length];
-            for (int i = 0; i < triggers.Length; i++) _triggerRest[i] = triggers[i].localRotation;
-
-            _gripRest = new Vector2[grips.Length];
-            for (int i = 0; i < grips.Length; i++) _gripRest[i] = grips[i].anchoredPosition;
-
             content.SetActive(false);
             group.alpha = 0f;
+
+            // It hangs in front of the range, so once it's gone it must not catch the rounds meant for the signs
+            _hitBox = GetComponent<Collider>();
+            if (_hitBox != null) _hitBox.enabled = false;
         }
 
         private void OnEnable()
@@ -82,16 +69,26 @@ namespace IntuitiveDesigns.ShootingRange
             if (game != null) OnStateChanged(game.Current);
         }
 
+        public void OnShot(Vector3 point, Vector3 direction, float impulse)
+        {
+            if (!_showing || game == null || !game.TriggersLive || _shotAt >= 0f) return;
+
+            _shotAt = Time.unscaledTime;
+            if (shotClip != null && ImpactFX.Instance != null) ImpactFX.Instance.PlayClip(shotClip, point, volume);
+            game.Begin();
+        }
+
         private void OnStateChanged(RangeGame.State state)
         {
             bool show = state == RangeGame.State.HowToPlay;
             if (show == _showing) return;
 
             _showing = show;
+            if (_hitBox != null) _hitBox.enabled = show;
             if (!show) return;
 
             _shownAt = Time.unscaledTime;
-            _hint = -1;
+            _shotAt = -1f;
             _bulbStep = -1;
             content.SetActive(true);
         }
@@ -105,33 +102,32 @@ namespace IntuitiveDesigns.ShootingRange
             if (_alpha <= 0f && !_showing) { content.SetActive(false); return; }
 
             float t = Time.unscaledTime - _shownAt;
-            Press(t);
             Chase(t);
-            Scroll(t);
+            SetAlpha(buttonGlows, 0.75f + 0.25f * Mathf.Sin(t * glowPulsesPerSecond * 2f * Mathf.PI));
+            WakeTheBullseye();
         }
 
-        /// The trigger has a turn, then the grip: its label lights, it glows and taps twice
-        private void Press(float t)
+        /// Asleep through the wind-up, then pulsing to be shot; a hit makes it jump
+        private void WakeTheBullseye()
         {
-            int turn = Mathf.FloorToInt(t / turnSeconds);
-            float u = t / turnSeconds - turn;
-            bool triggerTurn = turn % 2 == 0;
-            float tap = Mathf.Max(Bump(u, 0.1f, 0.4f), Bump(u, 0.55f, 0.85f));
+            bool live = game != null && game.TriggersLive;
+            float now = Time.unscaledTime;
+            float pulse = Mathf.Sin(now * bullseyePulsesPerSecond * 2f * Mathf.PI);
 
-            float pull = triggerTurn ? tap : 0f;
-            float squeeze = triggerTurn ? 0f : tap;
+            if (startLabel != null)
+            {
+                var colour = startLabel.color;
+                colour.a = live ? 1f : startLabelAsleep;
+                startLabel.color = colour;
+            }
 
-            for (int i = 0; i < triggers.Length; i++)
-                triggers[i].localRotation = _triggerRest[i] * Quaternion.Euler(0f, 0f, -triggerPullDegrees * pull);
+            SetAlpha(bullseyeGlow, live ? 0.6f + 0.4f * pulse : 0f);
+            if (bullseye == null) return;
 
-            for (int i = 0; i < grips.Length; i++)
-                grips[i].anchoredPosition = _gripRest[i] + Vector2.right * gripTravel * squeeze;
-
-            SetAlpha(triggerGlows, triggerTurn ? 0.45f + 0.55f * tap : 0f);
-            SetAlpha(gripGlows, triggerTurn ? 0f : 0.45f + 0.55f * tap);
-
-            triggerLabel.color = triggerTurn ? labelLit : labelIdle;
-            gripLabel.color = triggerTurn ? labelIdle : labelLit;
+            float scale = 1f;
+            if (_shotAt >= 0f) scale += hitPunch * Mathf.Exp(-(now - _shotAt) * 8f);
+            else if (live) scale += bullseyePulseScale * pulse;
+            bullseye.localScale = Vector3.one * scale;
         }
 
         /// Every bulbSpacing-th bulb is lit and the lit ones step round the edge
@@ -146,45 +142,17 @@ namespace IntuitiveDesigns.ShootingRange
                 bulbs[i].color = (i + step) % spacing == 0 ? bulbOn : bulbOff;
         }
 
-        /// One hint at a time. Near the end of its turn it slides out to the left as the next comes in
-        /// from the right, so two texts take turns being the one leaving
-        private void Scroll(float t)
-        {
-            if (hints == null || hints.Length == 0 || hintTexts.Length < 2) return;
-
-            int index = Mathf.FloorToInt(t / hintSeconds);
-            float into = t - index * hintSeconds;
-            var leaving = hintTexts[index % 2];
-            var coming = hintTexts[(index + 1) % 2];
-
-            if (index != _hint)
-            {
-                _hint = index;
-                leaving.text = hints[index % hints.Length];
-                coming.text = hints[(index + 1) % hints.Length];
-            }
-
-            float width = ((RectTransform)leaving.transform.parent).rect.width;
-            float slide = Mathf.Clamp01((into - (hintSeconds - scrollSeconds)) / Mathf.Max(0.01f, scrollSeconds));
-            slide = slide * slide * (3f - 2f * slide);
-
-            leaving.rectTransform.anchoredPosition = new Vector2(-width * slide, 0f);
-            coming.rectTransform.anchoredPosition = new Vector2(width * (1f - slide), 0f);
-        }
-
-        private static float Bump(float u, float from, float to)
-        {
-            return u <= from || u >= to ? 0f : Mathf.Sin(Mathf.PI * (u - from) / (to - from));
-        }
-
         private static void SetAlpha(Graphic[] graphics, float alpha)
         {
-            for (int i = 0; i < graphics.Length; i++)
-            {
-                var colour = graphics[i].color;
-                colour.a = alpha;
-                graphics[i].color = colour;
-            }
+            for (int i = 0; i < graphics.Length; i++) SetAlpha(graphics[i], alpha);
+        }
+
+        private static void SetAlpha(Graphic graphic, float alpha)
+        {
+            if (graphic == null) return;
+            var colour = graphic.color;
+            colour.a = alpha;
+            graphic.color = colour;
         }
     }
 }

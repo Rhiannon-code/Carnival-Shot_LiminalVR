@@ -43,10 +43,13 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] prizeMedium;
         [SerializeField] private AudioClip[] prizeBig;
         [SerializeField] private AudioClip[] prizeTop;
+        [SerializeField, Tooltip("As the score counts up once the chest is open. Waiting on the tally (not built yet)")]
+        private AudioClip[] scoreTally;
 
         [Header("Warnings, the first time each turns up (they cut in: the spider bites, the bat is coming)")]
         [SerializeField] private AudioClip[] spiderWarning;
         [SerializeField] private AudioClip[] batWarning;
+        [SerializeField, Tooltip("The first time a gun runs dry in play, naming the grip")] private AudioClip[] firstReload;
 
         [Header("Reactions (only while he is quiet)")]
         [SerializeField] private AudioClip[] missStreak;
@@ -76,6 +79,8 @@ namespace IntuitiveDesigns.ShootingRange
         private bool _cleared;
         private bool _warnedOfSpiders;
         private bool _warnedOfBats;
+        private bool _toldToReload;
+        private Pistol[] _guns;
 
         public static CarnyVoice Instance { get; private set; }
 
@@ -116,6 +121,10 @@ namespace IntuitiveDesigns.ShootingRange
             if (combo != null) combo.Changed += OnComboChanged;
             if (spiders != null) spiders.Dropped += OnSpiderDropped;
             if (bats != null) bats.Launched += OnBatLaunched;
+
+            PrizeChest.Opened += OnChestOpened;
+            _guns = FindObjectsOfType<Pistol>();
+            foreach (var gun in _guns) gun.AmmoChanged += OnAmmoChanged;
         }
 
         private void OnDisable()
@@ -133,16 +142,16 @@ namespace IntuitiveDesigns.ShootingRange
             if (director != null) director.TargetResolved -= OnTargetResolved;
             if (powerUps != null) powerUps.Granted -= OnGranted;
             if (combo != null) combo.Changed -= OnComboChanged;
+            if (_guns != null) foreach (var gun in _guns) if (gun != null) gun.AmmoChanged -= OnAmmoChanged;
+            PrizeChest.Opened -= OnChestOpened;
             if (spiders != null) spiders.Dropped -= OnSpiderDropped;
             if (bats != null) bats.Launched -= OnBatLaunched;
         }
 
-        /// The coin has dropped and the lights are coming up (CarnivalLights). Not if a grab in the dark has already
-        /// started the countdown
+        /// The coin has dropped and the lights are coming up (CarnivalLights), while the controls card is still up
         public void Welcome()
         {
-            if (game != null && game.Current != RangeGame.State.HowToPlay &&
-                game.Current != RangeGame.State.WaitingForPickup) return;
+            if (game != null && game.Current != RangeGame.State.HowToPlay) return;
 
             Queue(welcome);
             Queue(welcomeThen);
@@ -218,10 +227,14 @@ namespace IntuitiveDesigns.ShootingRange
         public void AskForTheLock() { Queue(shootTheLock); }
 
         /// 0 smallest to 3 best
-        public void Prize(int tier)
+        /// Small, medium, big and top: how many sets of prize lines he has
+        public const int PrizeBands = 4;
+
+        public void Prize(int band)
         {
-            var lines = tier >= 3 ? prizeTop : tier == 2 ? prizeBig : tier == 1 ? prizeMedium : prizeSmall;
-            Interrupt(Pick(lines));
+            var lines = band >= 3 ? prizeTop : band == 2 ? prizeBig : band == 1 ? prizeMedium : prizeSmall;
+            // After his tally line, not over it
+            Queue(lines);
             Queue(goodbye);
         }
 
@@ -233,6 +246,20 @@ namespace IntuitiveDesigns.ShootingRange
 
             _misses = 0;
             React(missStreak);
+        }
+
+        /// The score counts up on the board as the lid flies open
+        private void OnChestOpened()
+        {
+            Interrupt(Pick(scoreTally));
+        }
+
+        private void OnAmmoChanged(int rounds, int size)
+        {
+            if (_toldToReload || rounds > 0 || size <= 0 || game == null || game.Current != RangeGame.State.Playing) return;
+
+            _toldToReload = true;
+            Interrupt(Pick(firstReload));
         }
 
         private void OnSpiderDropped()

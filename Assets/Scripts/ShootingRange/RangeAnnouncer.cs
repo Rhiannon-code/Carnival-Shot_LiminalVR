@@ -17,13 +17,16 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private ParticleSystem finalBurst;
 
         [Header("Copy (data)")]
-        [SerializeField] private string pickupPrompt = "TAKE THE PISTOL";
         [SerializeField] private string clearedMessage = "WAVE CLEARED";
         [SerializeField] private string roundOverMessage = "ROUND OVER";
         [SerializeField] private string slainLabel = "SLAIN";
         [SerializeField] private string finalScoreLabel = "FINAL SCORE";
+        [SerializeField, Tooltip("On the board while the prize chest waits to be shot; the score shows once it's open")]
+        private string shootTheLock = "SHOOT THE LOCK!";
+        [SerializeField, Tooltip("Seconds the final score takes to count up once the chest is open")] private float tallySeconds = 2.5f;
 
         private bool _cleared;
+        private int _total;
 
         private void OnEnable()
         {
@@ -37,6 +40,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.RoundEnded += OnRoundEnded;
                 game.FinalScore += OnFinalScore;
             }
+            PrizeChest.Opened += OnChestOpened;
         }
 
         private void OnDisable()
@@ -51,6 +55,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.RoundEnded -= OnRoundEnded;
                 game.FinalScore -= OnFinalScore;
             }
+            PrizeChest.Opened -= OnChestOpened;
         }
 
         private void Start()
@@ -60,9 +65,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnStateChanged(RangeGame.State state)
         {
-            if (state == RangeGame.State.WaitingForPickup) Show(pickupPrompt);
-
-            // The controls card has the board first; later the guns are in hand and the prompt is done
+            // The controls card has the board until the game starts
             if (state == RangeGame.State.HowToPlay || state == RangeGame.State.Intro) Show(string.Empty);
         }
 
@@ -92,9 +95,35 @@ namespace IntuitiveDesigns.ShootingRange
             Show(RoundResult());
         }
 
+        /// The score stays a surprise until the chest is shot open (user, 2026-11-10); with no chest it shows straight away
         private void OnFinalScore(int total)
         {
-            Show(finalScoreLabel + "\n<size=200%>" + total + "</size>");
+            _total = total;
+            if (PrizeChest.Instance != null) { Show(shootTheLock); return; }
+            ShowTheScore();
+        }
+
+        private void OnChestOpened()
+        {
+            StartCoroutine(Tally());
+        }
+
+        /// Counts up fast and slows into the total, then the burst
+        private System.Collections.IEnumerator Tally()
+        {
+            for (float t = 0f; t < 1f; t += Time.unscaledDeltaTime / Mathf.Max(0.01f, tallySeconds))
+            {
+                float eased = 1f - (1f - t) * (1f - t);
+                Show(finalScoreLabel + "\n<size=200%>" + Mathf.RoundToInt(_total * eased) + "</size>");
+                yield return null;
+            }
+
+            ShowTheScore();
+        }
+
+        private void ShowTheScore()
+        {
+            Show(finalScoreLabel + "\n<size=200%>" + _total + "</size>");
             if (finalBurst != null) finalBurst.Play(true);
         }
 

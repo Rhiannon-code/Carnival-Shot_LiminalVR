@@ -24,7 +24,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         {
             if (!EditorUtility.DisplayDialog("Rebuild the controls card",
                     "This deletes the ControlsCard under the announcer and builds it again from the art, so any " +
-                    "hand changes to it are lost. Commit first.", "Rebuild", "Cancel"))
+                    "hand changes to it are lost.", "Rebuild", "Cancel"))
                 return;
 
             Begin("Controls card, rebuilt");
@@ -304,27 +304,43 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private const string CardName = "ControlsCard";
         private const string CardArt = "Assets/Textures/ControlsCard/";
-        private static readonly Vector2 CardSize = new Vector2(720f, 500f);
-        private const float ControllerSize = 200f;
-        private const float ControllerX = 230f;
-        private const float ControllerY = 0f;
+        private const string CardFontFile = "Assets/Font/Rye/Rye-Regular.ttf";
+        private const string CardFontAsset = "Assets/Font/Rye/Rye-Regular SDF.asset";
+        // 1.2x the first card (user, 2026-11-10: "the sign is too small"); any bigger and its top reaches the booth top, where
+        // the prize shelf stands
+        private const float CardWidth = 864f;
         private const float BulbSize = 22f;
         private const float BulbGap = 46f;
 
-        // Where the art puts things, as a fraction of its frame: tools/controls-card-art.py draws them there
-        private static readonly Vector2 TriggerHinge = new Vector2(226f / 512f, 1f - 222f / 512f);
-        private const float BorderInset = 48f / 1440f;
-        private const float BorderTop = 200f / 1000f;
-        private const float StripTop = 790f / 1000f;
-        private const float StripHeight = 130f / 1000f;
-        private const float StripInset = 120f / 1440f;
-
+        private static readonly Color CardRed = new Color(0.56f, 0.09f, 0.13f);
         private static readonly Color Gold = new Color(1f, 0.85f, 0.47f);
         private static readonly Color Cream = new Color(0.96f, 0.92f, 0.83f);
         private static readonly Color BrownInk = new Color(0.18f, 0.1f, 0.05f);
 
-        /// The card on the announcer board, hidden until the intro. Built from the art and the
-        /// announcer's font; ControlsCard does the moving
+        [System.Serializable] private class CardRect { public float x, y, w, h; }
+        [System.Serializable] private class CardPoint { public float x, y; }
+        [System.Serializable] private class CardSize { public float w, h; }
+
+        /// Where tools/controls-card-art.py put everything, in its design units, top-left origin. It writes this file
+        /// with the art, so the two can't disagree
+        [System.Serializable]
+        private class CardLayout
+        {
+            public CardSize size;
+            public CardRect frame, title, controller, triggerLabel, gripLabel, bullseye, startLabel;
+            public CardPoint triggerHinge;
+            public CardRect[] hints;
+        }
+
+        private static readonly string[][] CardHints =
+        {
+            new[] { "SWAT THE SPIDER", "OR SHOOT IT" },
+            new[] { "SHOOT GLOWING SIGNS", "FOR POWER-UPS" },
+            new[] { "DODGE THE BATS", "OR SHOOT 'EM" },
+        };
+
+        /// The card on the announcer board, painted as a carnival sign: up from the start, shot to begin. Built from the
+        /// art, its layout file and Rye; ControlsCard does the moving
         private static void BuildTheControlsCard(bool rebuild)
         {
             var centre = AnnouncerCentre();
@@ -340,91 +356,129 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             var art = LoadCardArt();
-            if (art == null) return;
+            var layout = LoadCardLayout();
+            var font = CardFont();
+            if (art == null || layout == null || font == null) return;
 
-            var card = NewRect(CardName, board, CardSize, Vector2.zero);
+            float k = CardWidth / layout.size.w;
+            var size = new Vector2(layout.size.w, layout.size.h) * k;
+            System.Func<CardRect, Vector2> at = r => new Vector2((r.x + r.w * 0.5f - layout.size.w * 0.5f) * k,
+                                                                 (layout.size.h * 0.5f - r.y - r.h * 0.5f) * k);
+            System.Func<CardRect, Vector2> span = r => new Vector2(r.w, r.h) * k;
+
+            var card = NewRect(CardName, board, size, Vector2.zero);
             var group = card.gameObject.AddComponent<CanvasGroup>();
             group.interactable = false;
             group.blocksRaycasts = false;
 
-            var content = NewRect("Content", card, CardSize, Vector2.zero);
-            NewImage("Board", content, art["card_board"], CardSize, Vector2.zero);
+            // The whole card takes the shot, not only the bullseye: a forgiving target in VR. Rounds skip only NoShoot
+            var hitBox = card.gameObject.AddComponent<BoxCollider>();
+            hitBox.size = new Vector3(size.x, size.y, 20f);
 
-            var bulbs = LayBulbs(content, art["card_bulb"]);
+            var content = NewRect("Content", card, size, Vector2.zero);
+            NewImage("Board", content, art["card_board"], size, Vector2.zero);
+            var bulbs = LayBulbs(content, art["card_bulb"], layout, k);
 
-            var title = NewText("Title", content, centre, 52f);
-            Place(title.rectTransform, new Vector2(CardSize.x - 120f, 60f), new Vector2(0f, 112f));
+            var title = CardText("Title", content, font, 36f, CardRed, layout.title, at, span);
             title.text = "HOW TO PLAY";
-            title.color = Gold;
 
-            var triggers = new List<Object>();
-            var grips = new List<Object>();
-            var triggerGlows = new List<Object>();
-            var gripGlows = new List<Object>();
-            for (int side = 0; side < 2; side++)
+            var controller = NewRect("Controller", content, span(layout.controller), at(layout.controller));
+            var csize = span(layout.controller);
+            var glows = new List<Object>
             {
-                bool left = side == 0;
-                var holder = NewRect(left ? "LeftController" : "RightController", content,
-                                     Vector2.one * ControllerSize, new Vector2(left ? -ControllerX : ControllerX, ControllerY));
+                NewImage("TriggerGlow", controller, art["controller_trigger_glow"], csize, Vector2.zero),
+                NewImage("GripGlow", controller, art["controller_grip_glow"], csize, Vector2.zero),
+            };
+            NewImage("Body", controller, art["controller_body"], csize, Vector2.zero);
+            var trigger = NewImage("Trigger", controller, art["controller_trigger"], csize, Vector2.zero).rectTransform;
+            var hinge = new Vector2(layout.triggerHinge.x, layout.triggerHinge.y);
+            trigger.pivot = hinge;
+            trigger.anchoredPosition = (hinge - Vector2.one * 0.5f) * csize.x;
+            NewImage("Grip", controller, art["controller_grip"], csize, Vector2.zero);
 
-                // The art is the right controller, front to the left; mirrored it is the left one, front
-                // to the right, so both point in at the labels between them
-                if (left) holder.localScale = new Vector3(-1f, 1f, 1f);
+            CardText("TriggerLabel", content, font, 28f, BrownInk, layout.triggerLabel, at, span).text = "TRIGGER\n<size=58%>TO SHOOT</size>";
+            CardText("GripLabel", content, font, 28f, BrownInk, layout.gripLabel, at, span).text = "GRIP\n<size=58%>TO RELOAD</size>";
+            for (int i = 0; i < CardHints.Length && i < layout.hints.Length; i++)
+                CardText("Hint" + i, content, font, 13f, BrownInk, layout.hints[i], at, span).text = CardHints[i][0] + "\n" + CardHints[i][1];
 
-                NewImage("Body", holder, art["controller_body"], Vector2.one * ControllerSize, Vector2.zero);
-                triggerGlows.Add(NewImage("TriggerGlow", holder, art["controller_trigger_glow"], Vector2.one * ControllerSize, Vector2.zero));
-                gripGlows.Add(NewImage("GripGlow", holder, art["controller_grip_glow"], Vector2.one * ControllerSize, Vector2.zero));
-
-                var trigger = NewImage("Trigger", holder, art["controller_trigger"], Vector2.one * ControllerSize, Vector2.zero).rectTransform;
-                trigger.pivot = TriggerHinge;
-                trigger.anchoredPosition = (TriggerHinge - Vector2.one * 0.5f) * ControllerSize;
-                triggers.Add(trigger);
-
-                grips.Add(NewImage("Grip", holder, art["controller_grip"], Vector2.one * ControllerSize, Vector2.zero).rectTransform);
-
-                var hand = NewText(left ? "LeftLabel" : "RightLabel", content, centre, 34f);
-                Place(hand.rectTransform, new Vector2(120f, 44f), new Vector2(left ? -ControllerX : ControllerX, ControllerY - ControllerSize * 0.55f));
-                hand.text = left ? "LEFT" : "RIGHT";
-                hand.color = Cream;
-            }
-
-            var triggerLabel = NewText("TriggerLabel", content, centre, 44f);
-            Place(triggerLabel.rectTransform, new Vector2(230f, 100f), new Vector2(0f, 40f));
-            triggerLabel.text = "TRIGGER\n<size=70%>SHOOT</size>";
-
-            var gripLabel = NewText("GripLabel", content, centre, 44f);
-            Place(gripLabel.rectTransform, new Vector2(230f, 100f), new Vector2(0f, -60f));
-            gripLabel.text = "GRIP\n<size=70%>RELOAD</size>";
-
-            var hints = HintStrip(content, centre);
+            var bullseyeGlow = NewImage("BullseyeGlow", content, art["card_bullseye_glow"], span(layout.bullseye) * 1.5f, at(layout.bullseye));
+            var bullseye = NewImage("Bullseye", content, art["card_bullseye"], span(layout.bullseye), at(layout.bullseye)).rectTransform;
+            var start = CardText("StartLabel", content, font, 30f, Cream, layout.startLabel, at, span);
+            start.text = "SHOOT TO START";
 
             var component = card.gameObject.AddComponent<ControlsCard>();
             new Fields(component).Set("game", Object.FindObjectOfType<RangeGame>())
                                  .Set("content", content.gameObject)
                                  .Set("group", group)
-                                 .SetArray("triggers", triggers)
-                                 .SetArray("grips", grips)
-                                 .SetArray("triggerGlows", triggerGlows)
-                                 .SetArray("gripGlows", gripGlows)
-                                 .Set("triggerLabel", triggerLabel)
-                                 .Set("gripLabel", gripLabel)
+                                 .SetArray("buttonGlows", glows)
                                  .SetArray("bulbs", bulbs)
-                                 .SetArray("hintTexts", hints)
+                                 .Set("bullseye", bullseye)
+                                 .Set("bullseyeGlow", bullseyeGlow)
+                                 .Set("startLabel", start)
                                  .Apply();
 
             content.gameObject.SetActive(false);
-            Did(CardName + " on the announcer board, " + CardSize.x + " x " + CardSize.y + " canvas units: both Quest 3 " +
-                "controllers pressing trigger then grip, " + bulbs.Count + " chasing bulbs, three scrolling hints. " +
-                "Hidden until the intro");
+            Did(CardName + " on the announcer board, " + size.x + " x " + size.y + " canvas units: painted sign, controller with " +
+                "trigger and grip glowing, three hints, " + bulbs.Count + " chasing bulbs, shot anywhere to start");
             Dirty();
         }
 
-        /// Every piece of art, imported clamped, with mipmaps for the distance and at its real size
+        private static TextMeshProUGUI CardText(string name, Transform parent, TMP_FontAsset font, float size, Color colour,
+                                                CardRect where, System.Func<CardRect, Vector2> at, System.Func<CardRect, Vector2> span)
+        {
+            var holder = new GameObject(name, typeof(RectTransform));
+            holder.layer = parent.gameObject.layer;
+            holder.transform.SetParent(parent, false);
+            Place((RectTransform)holder.transform, span(where), at(where));
+
+            var text = holder.AddComponent<TextMeshProUGUI>();
+            text.font = font;
+            text.fontSharedMaterial = font.material;
+            text.fontSize = size;
+            text.enableAutoSizing = true;
+            text.fontSizeMax = size;
+            text.fontSizeMin = size * 0.5f;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = colour;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        /// Rye as a TextMesh Pro font, made the way TMP's own Create > TextMeshPro > Font Asset makes it (dynamic, 1024
+        /// atlas, SDFAA), once
+        private static TMP_FontAsset CardFont()
+        {
+            var font = RangeSetupUtil.Load<TMP_FontAsset>(CardFontAsset);
+            if (font != null) return font;
+
+            var source = RangeSetupUtil.Load<Font>(CardFontFile);
+            if (source == null) { Fail("No " + CardFontFile); return null; }
+
+            var selected = Selection.activeObject;
+            Selection.activeObject = source;
+            TMP_FontAsset_CreationMenu.CreateFontAsset();
+            Selection.activeObject = selected;
+
+            font = RangeSetupUtil.Load<TMP_FontAsset>(CardFontAsset);
+            if (font == null) { Fail("TextMesh Pro did not make " + CardFontAsset); return null; }
+            Did("Made " + CardFontAsset + " from Rye (SIL Open Font Licence, OFL.txt beside it)");
+            return font;
+        }
+
+        private static CardLayout LoadCardLayout()
+        {
+            var file = RangeSetupUtil.Load<TextAsset>(CardArt + "card_layout.json");
+            if (file == null) { Fail("No " + CardArt + "card_layout.json. Run tools/controls-card-art.py, click into Unity, run this again"); return null; }
+            return JsonUtility.FromJson<CardLayout>(file.text);
+        }
+
+        /// Every piece of art, clamped, with mipmaps for the distance, at its real size and uncompressed: flat painted
+        /// art bands and blocks when compressed (user, 2026-11-10)
         private static Dictionary<string, Texture2D> LoadCardArt()
         {
             var art = new Dictionary<string, Texture2D>();
-            foreach (var name in new[] { "card_board", "card_bulb", "controller_body", "controller_trigger",
-                                         "controller_grip", "controller_trigger_glow", "controller_grip_glow" })
+            foreach (var name in new[] { "card_board", "card_bulb", "controller_body", "controller_trigger", "controller_grip",
+                                         "controller_trigger_glow", "controller_grip_glow", "card_bullseye", "card_bullseye_glow" })
             {
                 string path = CardArt + name + ".png";
                 var importer = AssetImporter.GetAtPath(path) as TextureImporter;
@@ -435,12 +489,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 }
 
                 if (!importer.alphaIsTransparency || importer.npotScale != TextureImporterNPOTScale.None ||
-                    importer.wrapMode != TextureWrapMode.Clamp)
+                    importer.wrapMode != TextureWrapMode.Clamp || importer.textureCompression != TextureImporterCompression.Uncompressed)
                 {
                     importer.alphaIsTransparency = true;
                     importer.npotScale = TextureImporterNPOTScale.None;
                     importer.wrapMode = TextureWrapMode.Clamp;
                     importer.mipmapEnabled = true;
+                    importer.textureCompression = TextureImporterCompression.Uncompressed;
                     importer.SaveAndReimport();
                 }
 
@@ -450,46 +505,26 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             return art;
         }
 
-        /// Bulbs down both sides and along the bottom, on the gold border. The top is under the awning
-        private static List<Object> LayBulbs(RectTransform content, Texture2D bulb)
+        /// Bulbs round the gold frame, one way round so the chase runs round it, leaving a gap where the ribbon covers the top
+        private static List<Object> LayBulbs(RectTransform content, Texture2D bulb, CardLayout layout, float k)
         {
-            var bulbs = new List<Object>();
-            float left = -CardSize.x * 0.5f + CardSize.x * BorderInset;
-            float right = -left;
-            float top = CardSize.y * 0.5f - CardSize.y * BorderTop;
-            float bottom = -CardSize.y * 0.5f + CardSize.x * BorderInset;
+            var f = layout.frame;
+            float left = (f.x - layout.size.w * 0.5f) * k, right = (f.x + f.w - layout.size.w * 0.5f) * k;
+            float top = (layout.size.h * 0.5f - f.y) * k, bottom = (layout.size.h * 0.5f - f.y - f.h) * k;
+            float ribbonLeft = (layout.title.x - 60f - layout.size.w * 0.5f) * k;
+            float ribbonRight = (layout.title.x + layout.title.w + 60f - layout.size.w * 0.5f) * k;
 
-            // Round the edge in one direction, so the chase runs round it rather than jumping
             var points = new List<Vector2>();
             for (float y = top; y > bottom; y -= BulbGap) points.Add(new Vector2(left, y));
             for (float x = left; x < right; x += BulbGap) points.Add(new Vector2(x, bottom));
-            for (float y = bottom; y <= top; y += BulbGap) points.Add(new Vector2(right, y));
+            for (float y = bottom; y < top; y += BulbGap) points.Add(new Vector2(right, y));
+            for (float x = right; x > left; x -= BulbGap)
+                if (x < ribbonLeft || x > ribbonRight) points.Add(new Vector2(x, top));
 
+            var bulbs = new List<Object>();
             for (int i = 0; i < points.Count; i++)
                 bulbs.Add(NewImage("Bulb" + i, content, bulb, Vector2.one * BulbSize, points[i]));
-
             return bulbs;
-        }
-
-        /// The cream strip along the bottom, masked so a hint scrolling in or out is cut at its ends
-        private static List<Object> HintStrip(RectTransform content, TMP_Text style)
-        {
-            float height = CardSize.y * StripHeight;
-            float y = CardSize.y * 0.5f - CardSize.y * StripTop - height * 0.5f;
-            var strip = NewRect("Hints", content, new Vector2(CardSize.x * (1f - 2f * StripInset) - 40f, height - 10f), new Vector2(0f, y));
-            strip.gameObject.AddComponent<RectMask2D>();
-
-            var texts = new List<Object>();
-            for (int i = 0; i < 2; i++)
-            {
-                var text = NewText("Hint" + i, strip, style, 30f);
-                Place(text.rectTransform, strip.sizeDelta, Vector2.zero);
-                text.color = BrownInk;
-                text.text = "";
-                texts.Add(text);
-            }
-
-            return texts;
         }
 
         private static RectTransform NewRect(string name, Transform parent, Vector2 size, Vector2 at)

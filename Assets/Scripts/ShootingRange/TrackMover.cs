@@ -81,6 +81,9 @@ namespace IntuitiveDesigns.ShootingRange
         /// Up, and handing over a power-up if it's shot
         public bool CarriesPowerUp { get { return _special.HasValue; } }
 
+        /// Launched carrying a power-up, still true after it is resolved
+        public bool WasSpecial { get; private set; }
+
         /// A round struck the room at this point: every sign up close enough to it flinches
         public static void NearMiss(Vector3 at)
         {
@@ -113,6 +116,7 @@ namespace IntuitiveDesigns.ShootingRange
         public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special, float spot)
         {
             _special = special;
+            WasSpecial = special.HasValue;
             _rail = rail;
             _speed = speed;
             _distance = spot;
@@ -140,7 +144,8 @@ namespace IntuitiveDesigns.ShootingRange
 
             target.Present(rail);
             var powerUps = PowerUps.Instance;
-            target.Glow(special.HasValue && powerUps != null ? powerUps.Colour(special.Value) : (Color?)null);
+            if (special.HasValue && powerUps != null) target.Glow(powerUps.Colour(special.Value));
+            else target.Rim();
         }
 
         private void FixedUpdate()

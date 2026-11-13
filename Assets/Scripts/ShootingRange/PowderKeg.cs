@@ -1,4 +1,3 @@
-using System.Collections;
 using IntuitiveDesigns.CrystalCatch;
 using Liminal.SDK.VR.Avatars;
 using UnityEngine;
@@ -21,10 +20,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("The blast (data)")]
         [SerializeField, Tooltip("Metres from the keg that a sign is caught")] private float blastRadius = 1.5f;
-        [SerializeField, Tooltip("Metres across the fireball, in two waves of flame")] private float fireball = 1.8f;
-        [SerializeField] private int firstWave = 6;
-        [SerializeField] private int secondWave = 4;
-        [SerializeField] private float secondWaveAfter = 0.12f;
+        [SerializeField, Tooltip("A flash and a shockwave ring along the ground, in place of the cartoon fireball (client feedback, 2026-11-10). Step 72 builds it")]
+        private ParticleSystem blastFx;
         [SerializeField, Tooltip("Metres out that loose props are thrown, and how hard")] private float throwRadius = 2.5f;
         [SerializeField] private float throwForce = 6f;
         [SerializeField, Range(0f, 1f)] private float rumble = 1f;
@@ -86,7 +83,11 @@ namespace IntuitiveDesigns.ShootingRange
                 _boom.transform.position = centre;
                 _boom.PlayOneShot(blastClips[Random.Range(0, blastClips.Length)], volume);
             }
-            StartCoroutine(Fireball(centre));
+            if (blastFx != null)
+            {
+                blastFx.transform.position = centre;
+                blastFx.Play(true);
+            }
             if (Debris.Instance != null)
             {
                 Debris.Instance.Play(DebrisKind.Splinters, centre, -direction, 10);
@@ -106,16 +107,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             Throw(centre);
-        }
-
-        private IEnumerator Fireball(Vector3 centre)
-        {
-            if (Flames.Instance == null) yield break;
-
-            var ball = new Bounds(centre + Vector3.up * fireball * 0.25f, Vector3.one * fireball);
-            for (int i = 0; i < firstWave; i++) Flames.Instance.Lick(ball);
-            yield return new WaitForSeconds(secondWaveAfter);
-            for (int i = 0; i < secondWave; i++) Flames.Instance.Lick(ball);
         }
 
         /// Loose props fly, and anything near that reacts to a shot gets one from the blast, another keg included

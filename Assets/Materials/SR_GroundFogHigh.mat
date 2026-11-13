@@ -36,3 +36,8 @@ Material:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _DriftA: {r: -0.05, g: 0.02, b: 0, a: 0}
     - _DriftB: {r: 0.03, g: -0.04, b: 0, a: 0}
+    - _Hole0: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Hole1: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Hole2: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Hole3: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Stand: {r: 0, g: 1.568, b: 0, a: 0}

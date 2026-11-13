@@ -717,13 +717,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var game = Object.FindObjectOfType<RangeGame>();
             if (game == null) { Fail("No RangeGame in the scene"); return; }
 
-            var gameFields = new Fields(game);
-            if (!gameFields.Bool("requirePickupToStart"))
-            {
-                gameFields.Set("requirePickupToStart", true).Apply();
-                Did("Require Pickup To Start switched on");
-            }
-
             float benchTop = BenchTop();
 
             foreach (var pistol in Object.FindObjectsOfType<Pistol>())
@@ -744,13 +737,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                     Did(pistol.name + " placed on the bench at " + resting);
                 }
 
-                if (pistol.GetComponent<PistolPickup>() == null)
+                // The guns start in hand; there is no pickup any more (user, 2026-11-10)
+                if (!fields.Bool("startHeld"))
                 {
-                    var pickup = pistol.gameObject.AddComponent<PistolPickup>();
-                    new Fields(pickup).Set("game", game).Set("pistol", pistol)
-                                      .Set("onlyItsOwnHand", true).Apply();
-                    Did("Pistol Pickup added to " + pistol.name + " (" + pistol.Hand + " only)");
+                    fields.Set("startHeld", true).Apply();
+                    Did(pistol.name + ": Start Held on");
                 }
+
+                int stale = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(pistol.gameObject);
+                if (stale > 0) Did(pistol.name + ": removed " + stale + " component(s) whose script is gone (the old Pistol Pickup)");
             }
 
             var ghostLeft = EnsureGhostHand("GhostHandLeft", LeftGlove);
@@ -1784,29 +1779,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private static void PaceTheRounds()
         {
-            var director = Object.FindObjectOfType<TrackDirector>();
-            if (director != null)
-            {
-                new Fields(director).Set("signsPerRound", new[] { 14, 18, 33, 39, 60 })
-                                    .Set("waveInterval", 1.6f).Set("waveScalePerRound", 0.85f)
-                                    .Set("minSpeed", CrossMinSpeed).Set("maxSpeed", CrossMaxSpeed)
-                                    .Set("speedScalePerRound", 1.07f)
-                                    .Set("concurrentTargets", 4).Set("extraConcurrentPerRound", 1)
-                                    .Set("maxConcurrentTargets", 6).Apply();
-                Did("Track Director: 14 / 18 / 33 / 39 / 60 signs, 4 / 5 / 6 / 6 / 6 up at once, speed x1.07 a round, " +
-                    "waves every 1.6 s x0.85 a round, or a beat after the last sign up has gone");
-            }
-            else Fail("No TrackDirector in the scene");
-
-            var prefab = OpenPrefab();
-            var mover = prefab != null ? prefab.GetComponent<TrackMover>() : null;
-            if (mover != null)
-            {
-                new Fields(mover).Set("minHold", 3f).Set("maxHold", 5f).Apply();
-                ClosePrefab(true);
-                Did("TrackMover.prefab: a sign that stands still is up 3 to 5 s");
-            }
-            else Fail("No TrackMover on " + PrefabPath);
+            PaceTheSigns();
 
             int risers = 0;
             foreach (var rail in Object.FindObjectsOfType<TrackRail>())
@@ -1895,13 +1868,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string PerfName = "PerfReadout";
 
         /// The fps / worst-frame readout for headset testing, small in the HUD's bottom-left corner. It
-        /// sits at the canvas root, not in the play panel, which is hidden between rounds. ADR 0018: an APK
+        /// sits at the canvas root. ADR 0018: an APK
         /// may carry it, a .limapp must not, so it has a Remove twin rather than living in the scene
         private static void AddThePerfReadout()
         {
-            var hud = Object.FindObjectOfType<RangeHUD>();
+            var hud = Object.FindObjectOfType<PowerUpHUD>();
             var canvas = hud != null ? hud.GetComponentInParent<Canvas>() : null;
-            if (canvas == null) { Fail("No RangeHUD on a canvas in the scene"); return; }
+            if (canvas == null) { Fail("No PowerUpHUD on a canvas in the scene"); return; }
 
             if (Object.FindObjectOfType<IntuitiveDesigns.CrystalCatch.PerfReadout>() != null)
             {
@@ -2127,7 +2100,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string FogName = "GroundFog";
         private const string FogNoise = "Assets/Textures/ShootingRange/T_SR_FogNoise.png";
         private const float FogWidth = 7f;
-        private const float FogEndZ = 6f;
+        // The first tier is at z 6; the fog stops short of it so the planes don't show cutting through its front (user, 2026-11-10)
+        private const float FogEndZ = 5.7f;
+        private const float FogHoleMargin = 0.15f;
+        private const float FogHoleSoftness = 0.2f;
+        private const int FogHoles = 4;
 
         private static void LayTheGroundFog()
         {
@@ -2157,9 +2134,44 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             FogLayer(root.transform, "Low", low, floor + 0.05f, start);
             FogLayer(root.transform, "High", high, floor + 0.16f, start);
+            FogAroundThePlayer(low, high);
             Dirty();
             Did("Ground fog: two layers, " + FogWidth + " m wide from z " + start.ToString("0.00") + " to " + FogEndZ +
                 ", 5 and 16 cm over the floor at y " + floor.ToString("0.00") + ". Tune SR_GroundFogLow / High");
+        }
+
+        /// Where the player stands (PlayerFloor, else the bench), so the clear patch stays put however they look; and a hole round
+        /// each prop stack, so the flat fog doesn't cut through them
+        private static void FogAroundThePlayer(params Material[] materials)
+        {
+            var spot = RangeSetupUtil.FindInScene("PlayerFloor");
+            if (spot == null) spot = RangeSetupUtil.FindInScene("ShootingBench");
+            Vector3 stand = spot != null ? spot.transform.position : Vector3.zero;
+
+            var holes = new List<Vector4>();
+            foreach (var builder in Object.FindObjectsOfType<PropStackBuilder>())
+            {
+                var anchors = new Fields(builder).Find("anchors");
+                for (int a = 0; a < anchors.arraySize; a++)
+                {
+                    var at = anchors.GetArrayElementAtIndex(a).objectReferenceValue as Transform;
+                    if (at == null || holes.Count >= FogHoles) continue;
+                    var renderers = at.GetComponentsInChildren<Renderer>();
+                    float radius = renderers.Length > 0 ? Mathf.Max(BoundsOf(renderers).extents.x, BoundsOf(renderers).extents.z) : 0.3f;
+                    holes.Add(new Vector4(at.position.x, at.position.z, radius + FogHoleMargin, FogHoleSoftness));
+                }
+            }
+
+            foreach (var material in materials)
+            {
+                material.SetVector("_Stand", new Vector4(stand.x, stand.z, 0f, 0f));
+                for (int i = 0; i < FogHoles; i++)
+                    material.SetVector("_Hole" + i, i < holes.Count ? holes[i] : new Vector4(0f, 0f, 0f, FogHoleSoftness));
+                EditorUtility.SetDirty(material);
+            }
+
+            Did("Ground fog thins round where the player stands (" + stand.x.ToString("0.00") + ", " + stand.z.ToString("0.00") +
+                "), clears round " + holes.Count + " prop stack(s), and stops at z " + FogEndZ);
         }
 
         private static Material FogMaterial(string path, Shader shader, Texture noise, float density, float scaleA,
@@ -2225,12 +2237,21 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private const string SpiderPath = "Assets/Prefabs/ShootingRange/Spider.prefab";
 
+        private const string SpiderModelPath = "Assets/Models/spider/spider_legs.fbx";
+        private const string SpiderSkinPath = "Assets/Materials/SR_Spider.mat";
+        private const string SpiderAlbedoPath = "Assets/Models/spider/lambert2_Base_color.png";
+        private const string SpiderNormalPath = "Assets/Models/spider/lambert2_Normal_OpenGL.png";
+        // Tip to tip across the legs, as the greybox spider was (user, 2026-11-10)
+        private const float SpiderSpan = 0.6f;
+
+        /// The artist's spider with its legs split off in Blender, each leg on a pivot at its hip so Spider can twitch it.
+        /// Scaled to SpiderSpan, centred, and turned so the end the legs join (the head) faces +Z, whatever the file's units
         private static void BuildTheSpider()
         {
-            var black = UnlitColour("Assets/Materials/SR_SpiderBody.mat", new Color(0.06f, 0.05f, 0.07f));
-            var eye = UnlitColour("Assets/Materials/SR_SpiderEye.mat", new Color(1f, 0.85f, 0.1f));
-            var pupil = UnlitColour("Assets/Materials/SR_SpiderPupil.mat", new Color(0.55f, 0.03f, 0.03f));
-            var fang = UnlitColour("Assets/Materials/SR_SpiderFang.mat", new Color(0.95f, 0.95f, 0.92f));
+            var source = RangeSetupUtil.Load<GameObject>(SpiderModelPath);
+            if (source == null) { Fail(SpiderModelPath + " is missing"); return; }
+            var skin = SpiderSkin();
+            if (skin == null) return;
             var silk = UnlitColour("Assets/Materials/SR_SpiderSilk.mat", new Color(0.85f, 0.85f, 0.88f));
 
             var root = new GameObject("Spider");
@@ -2242,33 +2263,44 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var model = new GameObject("Model").transform;
             model.SetParent(root.transform, false);
 
-            Part(PrimitiveType.Sphere, model, "Body", new Vector3(0f, 0f, 0f), Quaternion.identity, new Vector3(0.17f, 0.15f, 0.16f), black);
-            for (int side = -1; side <= 1; side += 2)
+            var figure = Object.Instantiate(source, model, false);
+            figure.name = "Figure";
+            foreach (var renderer in figure.GetComponentsInChildren<Renderer>(true)) renderer.sharedMaterial = skin;
+            foreach (var collider in figure.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(collider);
+
+            Transform body = null;
+            var legParts = new List<Transform>();
+            foreach (var part in figure.GetComponentsInChildren<MeshRenderer>(true))
             {
-                Part(PrimitiveType.Sphere, model, "Eye", new Vector3(side * 0.036f, 0.02f, 0.066f), Quaternion.identity, Vector3.one * 0.052f, eye);
-                Part(PrimitiveType.Sphere, model, "Pupil", new Vector3(side * 0.036f, 0.022f, 0.091f), Quaternion.identity, Vector3.one * 0.018f, pupil);
-                Part(PrimitiveType.Cube, model, "Fang", new Vector3(side * 0.02f, -0.045f, 0.068f), Quaternion.Euler(0f, 0f, side * 12f), new Vector3(0.012f, 0.03f, 0.01f), fang);
+                if (part.name.StartsWith("Leg")) legParts.Add(part.transform);
+                else if (part.name.StartsWith("Body")) body = part.transform;
             }
-            Part(PrimitiveType.Cube, model, "Grin", new Vector3(0f, -0.032f, 0.072f), Quaternion.identity, new Vector3(0.07f, 0.012f, 0.01f), fang);
+            if (body == null || legParts.Count != 8) { Fail(SpiderModelPath + ": expected Body and 8 Leg parts, found " + legParts.Count + " legs"); Object.DestroyImmediate(root); return; }
+
+            var size = BoundsOf(figure.GetComponentsInChildren<Renderer>()).size;
+            figure.transform.localScale *= SpiderSpan / Mathf.Max(1e-5f, Mathf.Max(size.x, size.z));
+
+            // Each leg's origin is its hip, so the hips' middle is the head: from the body's middle toward it is forward
+            var hips = Vector3.zero;
+            foreach (var leg in legParts) hips += leg.position / legParts.Count;
+            var forward = hips - body.GetComponent<Renderer>().bounds.center;
+            forward.y = 0f;
+            float turned = Vector3.SignedAngle(forward, model.forward, Vector3.up);
+            figure.transform.rotation = Quaternion.AngleAxis(turned, Vector3.up) * figure.transform.rotation;
+            figure.transform.position += model.position - BoundsOf(figure.GetComponentsInChildren<Renderer>()).center;
 
             var legs = new List<Object>();
-            for (int side = -1; side <= 1; side += 2)
+            foreach (var leg in legParts)
             {
-                for (int i = 0; i < 4; i++)
-                {
-                    float angle = (60f - i * 40f) * Mathf.Deg2Rad;
-                    var outward = new Vector3(side * Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-                    var leg = new GameObject("Leg").transform;
-                    leg.SetParent(model, false);
-                    leg.localRotation = Quaternion.LookRotation(outward);
-                    var knee = new Vector3(0f, 0.09f, 0.2f);
-                    Bone(leg, new Vector3(0f, 0f, 0.06f), knee, black);
-                    Bone(leg, knee, new Vector3(0f, -0.13f, 0.29f), black);
-                    legs.Add(leg);
-                }
+                var outward = leg.GetComponent<Renderer>().bounds.center - leg.position;
+                outward.y = 0f;
+                var pivot = new GameObject("Pivot " + leg.name).transform;
+                pivot.SetParent(model, false);
+                pivot.position = leg.position;
+                pivot.rotation = Quaternion.LookRotation(outward, Vector3.up);
+                leg.SetParent(pivot, true);
+                legs.Add(pivot);
             }
-
-            foreach (var collider in model.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(collider);
 
             var thread = Line(root.transform, "Thread", silk, 1f);
             var web = Line(root.transform, "Web", silk, 0.004f);
@@ -2278,7 +2310,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             PrefabUtility.SaveAsPrefabAsset(root, SpiderPath);
             Object.DestroyImmediate(root);
-            Did("Spider.prefab: placeholder body, eyes, fangs, 8 legs, thread and web (" + SpiderPath + ")");
+            Did("Spider.prefab: the artist's spider, " + SpiderSpan + " m across, turned " + turned.ToString("0") +
+                " degrees to face +Z, 8 legs on hip pivots, thread and web (" + SpiderPath + ")");
 
             var game = Object.FindObjectOfType<RangeGame>();
             var nest = Object.FindObjectOfType<SpiderNest>();
@@ -2294,6 +2327,28 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             Did("SpiderNest wired to " + (game != null ? game.name : "NO RangeGame") + " and the spider prefab");
         }
 
+        /// Lit like the signs, so it takes the room's light and keeps a little of its own colour in a blackout
+        private static Material SpiderSkin()
+        {
+            var shader = Shader.Find(SignShader);
+            if (shader == null) { Fail("The " + SignShader + " shader has not compiled. Check the console for shader errors"); return null; }
+
+            var material = RangeSetupUtil.Load<Material>(SpiderSkinPath);
+            if (material == null)
+            {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, SpiderSkinPath);
+            }
+
+            material.shader = shader;
+            material.SetTexture("_MainTex", RangeSetupUtil.Load<Texture2D>(SpiderAlbedoPath));
+            var normal = RangeSetupUtil.Load<Texture2D>(SpiderNormalPath);
+            material.SetTexture("_BumpMap", normal);
+            if (normal != null) material.EnableKeyword("_NORMALMAP");
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         private static Material UnlitColour(string path, Color colour)
         {
             var material = RangeSetupUtil.Load<Material>(path);
@@ -2307,25 +2362,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             material.color = colour;
             EditorUtility.SetDirty(material);
             return material;
-        }
-
-        private static void Part(PrimitiveType type, Transform parent, string name, Vector3 at, Quaternion turn, Vector3 size, Material material)
-        {
-            var part = GameObject.CreatePrimitive(type);
-            part.name = name;
-            part.transform.SetParent(parent, false);
-            part.transform.localPosition = at;
-            part.transform.localRotation = turn;
-            part.transform.localScale = size;
-            part.GetComponent<Renderer>().sharedMaterial = material;
-        }
-
-        /// A thin cylinder from one point to another. Unity's cylinder is 2 units tall
-        private static void Bone(Transform parent, Vector3 from, Vector3 to, Material material)
-        {
-            var along = to - from;
-            Part(PrimitiveType.Cylinder, parent, "Bone", (from + to) * 0.5f, Quaternion.FromToRotation(Vector3.up, along),
-                 new Vector3(0.012f, along.magnitude * 0.5f, 0.012f), material);
         }
 
         private static LineRenderer Line(Transform parent, string name, Material material, float width)
@@ -3321,15 +3357,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var game = Object.FindObjectOfType<RangeGame>();
             if (game == null) { Fail("MISSING: RangeGame"); return; }
 
-            Say(new Fields(game).Bool("requirePickupToStart")
-                ? "OK: the round waits for the guns"
-                : "MISSING: Require Pickup To Start is off, so the round starts on its own (step 7)");
-
-            int pickups = Object.FindObjectsOfType<PistolPickup>().Length;
-            int pistols = Object.FindObjectsOfType<Pistol>().Length;
-            Say(pickups == pistols && pistols > 0
-                ? "OK: " + pickups + " of " + pistols + " guns can be picked up"
-                : "MISSING: " + pickups + " pickups for " + pistols + " guns (step 7)");
+            int pistols = 0, held = 0;
+            foreach (var pistol in Object.FindObjectsOfType<Pistol>())
+            {
+                pistols++;
+                if (new Fields(pistol).Bool("startHeld")) held++;
+            }
+            Say(held == pistols && pistols > 0
+                ? "OK: " + held + " of " + pistols + " guns start in hand"
+                : "MISSING: " + held + " of " + pistols + " guns start in hand (step 7)");
 
             Say(Object.FindObjectOfType<HandVisuals>() == null
                 ? "MISSING: Hand Visuals, so no ghost hands (step 7)"

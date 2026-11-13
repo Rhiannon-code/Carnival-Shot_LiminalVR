@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    public enum DebrisKind { None, Splinters, Sparks, Chips, Embers, Stuffing }
+    public enum DebrisKind { None, Splinters, Sparks, Chips, Embers, Stuffing, Chunks, ImpactStar, ImpactRing, Dust }
 
     /// What flies off whatever a round hits. One particle system a kind, in world space, that moves to each hit and emits,
     /// so a burst costs no pooled object and each kind shares one draw. ImpactFX picks the kind by surface (ADR 0064)
@@ -22,6 +22,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [SerializeField] private Kind[] kinds;
         [SerializeField, Tooltip("Times the usual splinters off a sign, which should hit hardest of all")] private int signTimes = 2;
+        [SerializeField] private DebrisKind[] alsoOnSign = { DebrisKind.Chunks, DebrisKind.ImpactStar, DebrisKind.ImpactRing, DebrisKind.Dust };
 
         private void Awake() { Instance = this; }
 
@@ -30,7 +31,11 @@ namespace IntuitiveDesigns.ShootingRange
             if (Instance == this) Instance = null;
         }
 
-        public void OnSign(Vector3 point, Vector3 towardShooter) { Play(DebrisKind.Splinters, point, towardShooter, signTimes); }
+        public void OnSign(Vector3 point, Vector3 towardShooter)
+        {
+            Play(DebrisKind.Splinters, point, towardShooter, signTimes);
+            foreach (var kind in alsoOnSign) Play(kind, point, towardShooter);
+        }
 
         public void Play(DebrisKind kind, Vector3 point, Vector3 facing, int times = 1)
         {

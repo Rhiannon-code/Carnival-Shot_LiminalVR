@@ -77,6 +77,11 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float spinTurns = 2f;
         [SerializeField] private float spinSeconds = 0.4f;
 
+        [Header("Jolt when hit, before the reaction (data)")]
+        [SerializeField] private float hitShakeDegrees = 6f;
+        [SerializeField] private float hitShakeCycles = 2f;
+        [SerializeField] private float hitShakeSeconds = 0.15f;
+
         [Header("Shatter (data)")]
         [SerializeField] private int fragments = 8;
         [SerializeField] private float fragmentImpulse = 1.4f;
@@ -87,11 +92,16 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Material specialGlow;
         [SerializeField] private float specialBorder = 0.035f;
         [SerializeField] private float specialStrength = 1.8f;
+        [Header("Faint outline on every other sign, so it stands out from the room (data, user 2026-11-10)")]
+        [SerializeField] private Color rimColour = new Color(1f, 0.88f, 0.66f);
+        [SerializeField, Tooltip("Metres of border round the sign")] private float rimBorder = 0.015f;
+        [SerializeField] private float rimStrength = 0.15f;
 
         [Header("Audio (optional)")]
         [SerializeField] private AudioClip[] riseClips;
         [SerializeField] private AudioClip[] fallClips;
         [SerializeField] private AudioClip[] hitClips;
+        [SerializeField, Range(0f, 1f)] private float hitVolume = 0.9f;
         [SerializeField, Range(0f, 1f)] private float clipVolume = 0.6f;
         [SerializeField, Range(0f, 1f)] private float voiceVolume = 0.55f;
 
@@ -143,6 +153,8 @@ namespace IntuitiveDesigns.ShootingRange
         private RiseStyle _rise;
         private float _settleScale = 1f;
         private float _roll;
+        private float _rollAtHit;
+        private float _stunSeconds;
         private float _rollSpeed;
         private Vector3 _lastAt;
         private Vector3 _lastVelocity;
@@ -263,7 +275,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             SetHitBox(false);
             Glow(null);
-            Play(hitClips);
+            Play(hitClips, hitVolume);
             Play(_voice, voiceVolume);
             if (Debris.Instance != null) Debris.Instance.OnSign(point, -direction);
             if (_scaredFace != null && IsVampire) _scaredFace.Show(_sign);
@@ -280,9 +292,9 @@ namespace IntuitiveDesigns.ShootingRange
             _hitAt = point;
             _hitDirection = direction;
 
-            // A vampire holds still with its hole for a moment
-            if (reaction == SignReaction.Spin || !IsVampire) { React(); return; }
-
+            // Every sign jolts before it reacts; a vampire then holds still with its hole for a moment
+            _stunSeconds = reaction == SignReaction.Spin || !IsVampire ? hitShakeSeconds : Mathf.Max(hitShakeSeconds, reactionDelay);
+            _rollAtHit = _roll;
             _timer = 0f;
             _phase = Phase.Stunned;
         }
@@ -351,10 +363,29 @@ namespace IntuitiveDesigns.ShootingRange
         private static readonly int InflateId = Shader.PropertyToID("_Inflate");
         private static readonly int EdgeId = Shader.PropertyToID("_Edge");
         private static readonly int StrengthId = Shader.PropertyToID("_Strength");
+        private static readonly int PulseDepthId = Shader.PropertyToID("_PulseDepth");
 
+        /// The ordinary sign's outline: same border as a special's, fainter, cream and steady. It holds in a blackout
+        public void Rim()
+        {
+            Outline(rimColour, rimBorder, rimStrength, false);
+        }
+
+        /// A special's pulsing glow in its power-up's colour, or null to take any outline off
         public void Glow(Color? colour)
         {
-            if (!colour.HasValue || specialGlow == null || _sign == null)
+            if (!colour.HasValue)
+            {
+                if (_glow != null) _glow.enabled = false;
+                return;
+            }
+
+            Outline(colour.Value, specialBorder, specialStrength, true);
+        }
+
+        private void Outline(Color colour, float border, float strength, bool pulse)
+        {
+            if (specialGlow == null || _sign == null)
             {
                 if (_glow != null) _glow.enabled = false;
                 return;
@@ -376,21 +407,22 @@ namespace IntuitiveDesigns.ShootingRange
 
             _glow.transform.SetParent(source.transform, false);
             _glowMesh.sharedMesh = source.sharedMesh;
-            FitOutline(source.transform, source.sharedMesh.bounds);
+            FitOutline(source.transform, source.sharedMesh.bounds, border);
 
             // Edge 0 lights the whole face of the copy; the sign in front hides all but its rim
             _glowBlock.Clear();
-            _glowBlock.SetColor(ColorId, colour.Value);
+            _glowBlock.SetColor(ColorId, colour);
             _glowBlock.SetFloat(InflateId, 0f);
             _glowBlock.SetFloat(EdgeId, 0f);
-            _glowBlock.SetFloat(StrengthId, specialStrength);
+            _glowBlock.SetFloat(StrengthId, strength);
+            if (!pulse) _glowBlock.SetFloat(PulseDepthId, 0f);
             _glow.SetPropertyBlock(_glowBlock);
             _glow.enabled = true;
         }
 
         /// The mesh's thinnest axis is the way the sign faces. The other two grow by the border, about
         /// the mesh's middle, and the copy steps back along the thin one to sit behind the sign
-        private void FitOutline(Transform mesh, Bounds box)
+        private void FitOutline(Transform mesh, Bounds box, float border)
         {
             Vector3 size = box.size;
             int thin = size.x <= size.y && size.x <= size.z ? 0 : size.y <= size.z ? 1 : 2;
@@ -400,8 +432,8 @@ namespace IntuitiveDesigns.ShootingRange
             for (int axis = 0; axis < 3; axis++)
             {
                 if (axis == thin || size[axis] <= 1e-5f) continue;
-                float border = specialBorder / Mathf.Max(1e-5f, Mathf.Abs(lossy[axis]));
-                scale[axis] = (size[axis] + 2f * border) / size[axis];
+                float local = border / Mathf.Max(1e-5f, Mathf.Abs(lossy[axis]));
+                scale[axis] = (size[axis] + 2f * local) / size[axis];
             }
 
             // Which side faces the player is judged in the upright pose, not the folded one it starts in
@@ -483,9 +515,17 @@ namespace IntuitiveDesigns.ShootingRange
                     break;
 
                 case Phase.Stunned:
+                {
                     _timer += Time.deltaTime;
-                    if (_timer >= reactionDelay) React();
+                    float t = Mathf.Clamp01(_timer / Mathf.Max(0.01f, hitShakeSeconds));
+                    _roll = _rollAtHit + hitShakeDegrees * Mathf.Sin(t * hitShakeCycles * 2f * Mathf.PI) * (1f - t);
+                    Place(_swing);
+                    if (_timer < _stunSeconds) break;
+
+                    _roll = _rollAtHit;
+                    React();
                     break;
+                }
 
                 case Phase.Taunting:
                 {
