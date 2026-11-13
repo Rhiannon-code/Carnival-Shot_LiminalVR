@@ -31,7 +31,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private int fragments = 3;
         [SerializeField] private float fragmentImpulse = 0.8f;
         [SerializeField, Range(0f, 1f)]
-        private float popScale = 0.5f;
+        private float popScale = 0.1f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] launchClips;

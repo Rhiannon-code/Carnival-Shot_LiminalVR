@@ -34,6 +34,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float ring = 75f;
         [SerializeField] private float pinky = 80f;
 
+        [Header("Hand on a pistol (tweak live in Play mode, then copy the values out)")]
+        [SerializeField, Tooltip("Degrees about the glove's own axes, turned about the wrist")] private Vector3 wristTurn;
+        [SerializeField, Tooltip("Metres along the gun: x to its right, y up, z toward the muzzle")] private Vector3 wristShift;
+
         [Header("On a pistol (empty = idle)")]
         [SerializeField] private Pistol pistol;
         [SerializeField] private float triggerSqueeze = 25f;
@@ -41,9 +45,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float squeezeEase = 0.035f;
         [SerializeField] private float reloadLoosen = 30f;
         [SerializeField] private float releasePress = 30f;
-        [SerializeField, Range(0f, 1f)] private float twirlLoose = 0.3f;
-        [SerializeField] private float twirlHook = 30f;
-        [SerializeField] private float regripLag = 0.025f;
 
         [Header("Idle, for the ghost hands")]
         [SerializeField] private float idleSway = 6f;
@@ -59,9 +60,9 @@ namespace IntuitiveDesigns.ShootingRange
         private float _trigger;
         private float _triggerTarget;
         private GloveFingers _foldInto;
-        private Transform _triggerKnuckle;
-        private Vector3 _restPosition;
-        private Quaternion _restRotation;
+        private Quaternion _fitted;
+        private Vector3 _fittedAt;
+        private Vector3 _wrist;
 
         public void SetUp(Joint[] measured, Pistol on, float[] grip)
         {
@@ -74,26 +75,18 @@ namespace IntuitiveDesigns.ShootingRange
             pinky = grip[4];
         }
 
+        /// The pose step 16 fitted, and the wrist bone to turn it about
         private void Awake()
         {
-            _restPosition = transform.localPosition;
-            _restRotation = transform.localRotation;
-            _triggerKnuckle = IndexJoint(1);
-        }
-
-        /// The index finger's second bone, the one that lies on the trigger
-        private Transform IndexJoint(int which)
-        {
-            if (joints == null) return null;
-
-            int seen = 0;
-            for (int i = 0; i < joints.Length; i++)
+            _fitted = transform.localRotation;
+            _fittedAt = transform.localPosition;
+            _wrist = _fittedAt;
+            foreach (var bone in GetComponentsInChildren<Transform>(true))
             {
-                if (joints[i] == null || joints[i].finger != Finger.Index) continue;
-                if (seen++ == which) return joints[i].bone;
+                if (!bone.name.StartsWith("wrist_") || transform.parent == null) continue;
+                _wrist = transform.parent.InverseTransformPoint(bone.position);
+                break;
             }
-
-            return null;
         }
 
         /// Ghost hands only. close is how far the hand has shut, 0 to 1; with a glove to fold into,
@@ -139,15 +132,20 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (joints == null) return;
 
+            if (pistol != null)
+            {
+                var turn = _fitted * Quaternion.Euler(wristTurn) * Quaternion.Inverse(_fitted);
+                transform.localRotation = turn * _fitted;
+                transform.localPosition = _wrist + turn * (_fittedAt - _wrist);
+                transform.position += transform.parent.TransformDirection(wristShift);
+            }
+
             float pull = pistol != null ? TriggerPull() : 0f;
             float step = Time.unscaledDeltaTime / Mathf.Max(0.01f, closeSeconds);
             _close = Mathf.MoveTowards(_close, _closeTarget, step);
             _trigger = Mathf.MoveTowards(_trigger, _triggerTarget, step);
             float swap = pistol != null ? pistol.MagSwap : 0f;
             float press = pistol != null ? pistol.ReleasePress : 0f;
-
-            if (pistol != null && pistol.IsReloading) HoldStillThroughTheTwirl();
-            else if (pistol != null && _triggerKnuckle != null) pistol.SpinOn(_triggerKnuckle.position);
 
             for (int i = 0; i < joints.Length; i++)
             {
@@ -158,25 +156,13 @@ namespace IntuitiveDesigns.ShootingRange
                 if (pistol == null)
                     angle = Ghost(joint.finger, angle);
                 else if (joint.finger == Finger.Index)
-                    angle += triggerSqueeze * pull + twirlHook * pistol.TwirlOpen(0f);
+                    angle += triggerSqueeze * pull;
                 else if (joint.finger == Finger.Thumb)
-                    angle = Mathf.Lerp(angle + releasePress * press, angle * twirlLoose, pistol.TwirlOpen(Lag(joint.finger)));
+                    angle += releasePress * press;
                 else
-                    angle = Mathf.Lerp(angle - reloadLoosen * swap, angle * twirlLoose, pistol.TwirlOpen(Lag(joint.finger)));
+                    angle -= reloadLoosen * swap;
 
                 joint.bone.localRotation = joint.rest * Quaternion.AngleAxis(angle * joint.weight, joint.axis);
-            }
-        }
-
-        /// Middle closes first, then ring, pinky and last the thumb
-        private float Lag(Finger finger)
-        {
-            switch (finger)
-            {
-                case Finger.Middle: return 0f;
-                case Finger.Ring: return regripLag;
-                case Finger.Pinky: return regripLag * 2f;
-                default: return regripLag * 3f;
             }
         }
 
@@ -187,17 +173,6 @@ namespace IntuitiveDesigns.ShootingRange
             float angle = Mathf.Lerp(relaxed + sway, shut, _close);
 
             return finger == Finger.Index ? angle + triggerSqueeze * _trigger : angle;
-        }
-
-        /// The glove rides the gun's visual, so the twirl would spin the hand with it. Undone here: the
-        /// hand stays put and slackens, and the gun turns on the hooked trigger finger
-        private void HoldStillThroughTheTwirl()
-        {
-            var spin = Quaternion.Inverse(pistol.Twirl);
-            var pivot = pistol.TwirlPivot;
-
-            transform.localPosition = pivot + spin * (_restPosition - pivot);
-            transform.localRotation = spin * _restRotation;
         }
 
         private float Grip(Finger finger)

@@ -14,6 +14,11 @@ namespace IntuitiveDesigns.CrystalCatch
         [SerializeField] private float maxAmplitude = 1f;
         [SerializeField] private bool enableHaptics = true;
 
+        [Header("A gunshot's kick (data): full strength for the snap, then a share of it for the tail")]
+        [SerializeField] private float kickSnapSeconds = 0.02f;
+        [SerializeField] private float kickTailSeconds = 0.05f;
+        [SerializeField, Range(0f, 1f)] private float kickTailShare = 0.35f;
+
         [Header("Both hands (data)")]
         [SerializeField, Range(0f, 1f)] private float offHandShare = 0.75f;
 
@@ -22,6 +27,10 @@ namespace IntuitiveDesigns.CrystalCatch
 
         private float _leftStopAt;
         private float _rightStopAt;
+        private float _leftTailAt;
+        private float _rightTailAt;
+        private float _leftTail;
+        private float _rightTail;
         private bool _logged;
 
         private void Awake()
@@ -48,6 +57,18 @@ namespace IntuitiveDesigns.CrystalCatch
             Pulse(hand, amplitude, hitSeconds);
         }
 
+        /// A gunshot: a hard snap, then a short weaker tail, which reads sharper than one flat buzz
+        public void Kick(VRAvatarLimbType hand, float strength01)
+        {
+            if (!enableHaptics) return;
+
+            float amplitude = Mathf.Lerp(minAmplitude, maxAmplitude, Mathf.Clamp01(strength01));
+            Pulse(hand, maxAmplitude, kickSnapSeconds);
+
+            if (hand == VRAvatarLimbType.LeftHand) { _leftTailAt = _leftStopAt; _leftTail = amplitude * kickTailShare; }
+            else { _rightTailAt = _rightStopAt; _rightTail = amplitude * kickTailShare; }
+        }
+
         public void HitBoth(VRAvatarLimbType swingingHand, float strength01)
         {
             if (!enableHaptics) return;
@@ -72,10 +93,10 @@ namespace IntuitiveDesigns.CrystalCatch
             bool left = hand == VRAvatarLimbType.LeftHand;
             var controller = left ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
 
-            // A newer pulse moves the stop, so an older one never cuts it short
+            // A newer pulse moves the stop, so an older one never cuts it short, and drops a tail still waiting
             float stopAt = Time.unscaledTime + seconds;
-            if (left) _leftStopAt = stopAt;
-            else _rightStopAt = stopAt;
+            if (left) { _leftStopAt = stopAt; _leftTailAt = 0f; }
+            else { _rightStopAt = stopAt; _rightTailAt = 0f; }
 
             LogDeviceState();
             Vibrate(controller, frequency, Mathf.Clamp01(amplitude));
@@ -89,14 +110,18 @@ namespace IntuitiveDesigns.CrystalCatch
 
             if (_leftStopAt > 0f && now >= _leftStopAt)
             {
-                _leftStopAt = 0f;
-                Vibrate(OVRInput.Controller.LTouch, 0f, 0f);
+                bool tail = _leftTailAt > 0f;
+                _leftStopAt = tail ? now + kickTailSeconds : 0f;
+                _leftTailAt = 0f;
+                Vibrate(OVRInput.Controller.LTouch, tail ? frequency : 0f, tail ? _leftTail : 0f);
             }
 
             if (_rightStopAt > 0f && now >= _rightStopAt)
             {
-                _rightStopAt = 0f;
-                Vibrate(OVRInput.Controller.RTouch, 0f, 0f);
+                bool tail = _rightTailAt > 0f;
+                _rightStopAt = tail ? now + kickTailSeconds : 0f;
+                _rightTailAt = 0f;
+                Vibrate(OVRInput.Controller.RTouch, tail ? frequency : 0f, tail ? _rightTail : 0f);
             }
         }
 

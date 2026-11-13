@@ -8,6 +8,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip countdownTickClip;
         [SerializeField] private AudioClip roundStartClip;
         [SerializeField] private AudioClip roundEndClip;
+        [SerializeField, Tooltip("At the shooter, on every sign hit, so a hit is heard over the gunshot")] private AudioClip hitTickClip;
+        [SerializeField, Range(0f, 1f)] private float hitTickVolume = 0.6f;
         [SerializeField, Range(0f, 1f)] private float volume = 0.75f;
 
         private AudioSource _audio;
@@ -21,6 +23,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnEnable()
         {
+            TrackMover.Struck += OnStruck;
             if (game == null) return;
 
             game.CountdownTick += OnTick;
@@ -30,6 +33,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnDisable()
         {
+            TrackMover.Struck -= OnStruck;
             if (game == null) return;
 
             game.CountdownTick -= OnTick;
@@ -38,6 +42,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         private void OnTick(int n) { Play(countdownTickClip); }
+        private void OnStruck() { if (hitTickClip != null && _audio != null) _audio.PlayOneShot(hitTickClip, hitTickVolume); }
         private void OnRoundStarted(int round) { Play(roundStartClip); }
         private void OnRoundEnded(int round, int roundScore) { Play(roundEndClip); }
 

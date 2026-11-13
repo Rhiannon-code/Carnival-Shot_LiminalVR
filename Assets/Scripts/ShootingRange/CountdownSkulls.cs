@@ -6,10 +6,14 @@ namespace IntuitiveDesigns.ShootingRange
     {
         [SerializeField] private GameObject[] eyes;
         [SerializeField] private float goHoldSeconds = 1f;
+        [Header("When the prize chest opens: the eyes light in turn (data)")]
+        [SerializeField] private float celebrateSeconds = 6f;
+        [SerializeField] private float celebrateStepsPerSecond = 5f;
 
         private RangeGame _game;
         private RoomReaction[] _skulls;
         private float _darkAt = -1f;
+        private float _celebrateFrom = -1f;
 
         private void Start()
         {
@@ -22,6 +26,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             Light(-1);
+            PrizeChest.Opened += Celebrate;
 
             _game = RangeGame.Instance;
             if (_game == null) return;
@@ -32,18 +37,18 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnDestroy()
         {
+            PrizeChest.Opened -= Celebrate;
             if (_game == null) return;
 
             _game.CountdownTick -= OnTick;
             _game.CountdownGo -= OnGo;
         }
 
-        /// The beat with n left lights the skull n from the end, so the last one is left for GO however long
-        /// the count is
+        /// Red on 3, orange on 2, green on 1. Green stays lit through GO
         private void OnTick(int n)
         {
             Protect(true);
-            Light(eyes.Length - 1 - n);
+            Light(eyes.Length - n);
             _darkAt = -1f;
         }
 
@@ -62,8 +67,20 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
+        private void Celebrate()
+        {
+            _celebrateFrom = Time.unscaledTime;
+            _darkAt = _celebrateFrom + celebrateSeconds;
+        }
+
         private void Update()
         {
+            if (_celebrateFrom >= 0f && Time.unscaledTime < _darkAt)
+            {
+                Light(Mathf.FloorToInt((Time.unscaledTime - _celebrateFrom) * celebrateStepsPerSecond) % Mathf.Max(1, eyes.Length));
+                return;
+            }
+
             if (_darkAt < 0f || Time.unscaledTime < _darkAt) return;
 
             _darkAt = -1f;

@@ -22,6 +22,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         public Fields Set(string name, bool value) { Find(name).boolValue = value; return this; }
         public Fields Set(string name, Object value) { Find(name).objectReferenceValue = value; return this; }
         public Fields Set(string name, Vector3 value) { Find(name).vector3Value = value; return this; }
+        public Fields Set(string name, Vector2 value) { Find(name).vector2Value = value; return this; }
 
         public Fields Set(string name, float[] values)
         {

@@ -26,6 +26,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Pace (data, round 1)")]
         [SerializeField] private float waveInterval = 2.2f;
+        [SerializeField, Tooltip("Seconds from the last sign up going to the next batch, when that beats the wave interval")]
+        private float clearBeatSeconds = 0.4f;
         [SerializeField] private float minSpeed = 0.7f;
         [SerializeField] private float maxSpeed = 1.3f;
         [SerializeField] private int concurrentTargets = 4;
@@ -40,13 +42,13 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("How many stand still instead of travelling (data, 0-1)")]
         [SerializeField, Range(0f, 1f)] private float stationaryShare = 0.4f;
 
-        [Header("Special power-up signs (data)")]
-        [SerializeField, Range(0f, 1f)] private float specialShare = 0.1f;
-        [SerializeField] private float specialSpeed = 1.6f;
-
-        [Header("Paced to the bell (data, seconds, the last sign's run ends on it, the rest lead up to it)")]
-        [SerializeField] private float shortestShowSeconds = 1f;
-        [SerializeField] private float mostHurry = 2f;
+        [Header("Special power-up signs (data): how many each round, round 1 first, spread through it, never two out at once")]
+        [SerializeField, Tooltip("A shorter list repeats its last entry. 0 is a round with no power-ups")]
+        private int[] specialsPerRound = { 0, 0, 2, 2, 3 };
+        [SerializeField, Range(0f, 0.5f), Tooltip("How far each can wander from its even spacing, as a share of the gap between them")]
+        private float specialJitter = 0.3f;
+        [SerializeField, Tooltip("A special's speed over an ordinary sign's, round 1 first. Falls as the rounds speed up, so late specials stay hittable")]
+        private float[] specialSpeedPerRound = { 1.6f, 1.5f, 1.4f, 1.3f, 1.2f };
 
         [Header("Refusals (data)")]
         [SerializeField] private float retrySeconds = 0.75f;
@@ -67,24 +69,28 @@ namespace IntuitiveDesigns.ShootingRange
         public event Action<int> TargetsLeftChanged;
         public event Action<bool> TargetResolved;
 
+        public int Rounds { get { return signsPerRound.Length; } }
         public int ConcurrencyCap { get { return _concurrency; } }
         public TrackMover[] Movers { get { return _pool; } }
         public int WaveSize { get { return _waveSize; } }
         public int Killed { get { return _killed; } }
         public int TargetsLeft { get { return Mathf.Max(0, _waveSize - _resolved); } }
 
+        /// Every sign of the round has been out and is off the range again, shot or escaped, reactions finished
+        public bool RoundOver { get { return _launched >= _waveSize && ActiveCount() == 0; } }
+
         private struct Pending
         {
             public TrackRail Rail;
             public float Due;
             public float Speed;
-            public bool Final;
         }
 
         private readonly List<TrackPattern.Launch> _launches = new List<TrackPattern.Launch>();
         private readonly List<Pending> _pending = new List<Pending>();
         private readonly List<TrackPatternKind> _unlocked = new List<TrackPatternKind>();
         private readonly List<TrackRail> _available = new List<TrackRail>();
+        private readonly List<int> _specialAt = new List<int>();
 
         private TrackMover[] _pool;
         private float _nextWave;
@@ -95,10 +101,9 @@ namespace IntuitiveDesigns.ShootingRange
         private int _launched;
         private int _resolved;
         private int _killed;
-        private TrackRail _finalRail;
-        private float _finalSpeed;
-        private float _finalAt;
-        private bool _finalQueued;
+        private int _nextSpecial;
+        private int _owedSpecials;
+        private float _specialSpeed = 1f;
 
         private void Awake()
         {
@@ -152,12 +157,14 @@ namespace IntuitiveDesigns.ShootingRange
             _concurrency = Mathf.Min(poolSize, maxConcurrentTargets, concurrentTargets + extraConcurrentPerRound * steps);
 
             RebuildUnlocked(round);
-            PlanTheFinalSign(round);
             RebuildAvailable(Stage());
 
             _pending.Clear();
-            _finalQueued = false;
             _nextWave = Time.time;
+            SpreadTheSpecials(steps);
+            _specialSpeed = specialSpeedPerRound != null && specialSpeedPerRound.Length > 0
+                          ? specialSpeedPerRound[Mathf.Min(steps, specialSpeedPerRound.Length - 1)]
+                          : 1f;
             RaiseTargetsLeft();
 
             if (Debug.isDebugBuild)
@@ -165,6 +172,41 @@ namespace IntuitiveDesigns.ShootingRange
                           _waveInterval.ToString("0.00") + " s, speed x" + _speedScale.ToString("0.00") +
                           ", up to " + _concurrency + " at once, " + _unlocked.Count + " patterns over " +
                           _available.Count + " of " + grid.Rails.Length + " rails.");
+        }
+
+        /// Which launches carry a power-up: evenly through the round, each nudged a little
+        private void SpreadTheSpecials(int steps)
+        {
+            _specialAt.Clear();
+            _nextSpecial = 0;
+            _owedSpecials = 0;
+
+            int last = specialsPerRound != null ? specialsPerRound.Length - 1 : -1;
+            int count = last >= 0 ? Mathf.Min(specialsPerRound[Mathf.Min(steps, last)], _waveSize) : 0;
+            if (count <= 0) return;
+
+            float gap = (float)_waveSize / count;
+            for (int i = 0; i < count; i++)
+            {
+                float at = (i + 0.5f + UnityEngine.Random.Range(-specialJitter, specialJitter)) * gap;
+                _specialAt.Add(Mathf.Clamp(Mathf.RoundToInt(at), 0, _waveSize - 1));
+            }
+        }
+
+        /// Due by the count, or owed for one that got away, and no other power-up sign out. One held back goes on
+        /// the next launch that's free
+        private bool SpecialDue()
+        {
+            bool scheduled = _nextSpecial < _specialAt.Count && _launched >= _specialAt[_nextSpecial];
+            if (!scheduled && _owedSpecials <= 0) return false;
+            if (PowerUps.Instance == null) return false;
+
+            for (int i = 0; i < _pool.Length; i++)
+            {
+                if (_pool[i].gameObject.activeSelf && _pool[i].CarriesPowerUp) return false;
+            }
+
+            return true;
         }
 
         private void OnRoundEnded(int round, int roundScore)
@@ -181,9 +223,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (game == null) return 1f;
 
-            float through = game.RoundSeconds > 0f
-                          ? Mathf.Clamp01(1f - game.TimeRemaining / game.RoundSeconds)
-                          : 0f;
+            float through = _waveSize > 0 ? Mathf.Clamp01((float)_launched / _waveSize) : 0f;
 
             return game.RoundNumber + through;
         }
@@ -220,27 +260,31 @@ namespace IntuitiveDesigns.ShootingRange
 
             ReleaseDue();
 
-            // The signs before the last, out or waiting. The last queues as soon as they all have, and
-            // waits in ReleaseDue for its moment
-            int before = _launched + _pending.Count - (_finalQueued ? 1 : 0);
-            if (before >= _waveSize - 1)
-            {
-                if (!_finalQueued && before + 1 <= _waveSize) QueueTheFinalSign();
-                return;
-            }
+            if (_launched + _pending.Count >= _waveSize) return;
 
-            // Never ahead of the clock, so a quick shot cannot empty the wave before the bell
-            if (Time.time < _nextWave || before >= OnTheClock(_waveInterval)) return;
+            // Nothing left up, so the next batch comes a beat later rather than waiting out the interval
+            if (_launched == _resolved && _pending.Count == 0)
+                _nextWave = Mathf.Min(_nextWave, Time.time + clearBeatSeconds);
 
-            _nextWave = Time.time + (Behind() > 0 ? minWaveInterval : _waveInterval);
-            StartWave(_waveSize - 1 - before);
+            if (Time.time < _nextWave || _pending.Count > 0) return;
+
+            _nextWave = Time.time + _waveInterval;
+            StartWave(_waveSize - _launched);
         }
 
-        /// room is how many signs the wave still wants before its last
+        /// room is how many signs the wave still wants
         private void StartWave(int room)
         {
             RebuildAvailable(Stage());
             if (_unlocked.Count == 0) RebuildUnlocked(1);
+
+            // The stage only moves on as signs launch, so with no rail open it never would: end the round, don't hang
+            if (_available.Count == 0)
+            {
+                _waveSize = _launched;
+                RaiseTargetsLeft();
+                return;
+            }
 
             var kind = _unlocked[UnityEngine.Random.Range(0, _unlocked.Count)];
             TrackPattern.Build(kind, _available, _launches);
@@ -248,7 +292,7 @@ namespace IntuitiveDesigns.ShootingRange
             // A pattern can come up empty when the rails it wants are not in play yet
             if (_launches.Count == 0) TrackPattern.Build(TrackPatternKind.Single, _available, _launches);
 
-            // The last pattern before the final sign is cut short rather than taking its place
+            // The round's last pattern is cut short rather than running over its count
             int count = Mathf.Min(_launches.Count, room);
             if (count <= 0) return;
 
@@ -270,7 +314,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void ReleaseDue()
         {
             float now = Time.time;
-            int cap = Mathf.Min(poolSize, _concurrency + Behind());
+            int cap = Mathf.Min(poolSize, _concurrency);
 
             for (int i = _pending.Count - 1; i >= 0; i--)
             {
@@ -289,143 +333,53 @@ namespace IntuitiveDesigns.ShootingRange
                 var mover = TakeIdle();
                 if (mover == null) continue;
 
-                // The wave's last sign waits until a run at its own pace would end on the bell, and its
-                // retry clock starts from then
-                bool last = due.Final;
-                if (last && Lifetime(due.Rail, mover, due.Speed * due.Rail.SpeedScale, 0f) < game.TimeRemaining)
-                {
-                    due.Due = now;
-                    _pending[i] = due;
-                    continue;
-                }
-
                 // Whether it travels is settled before the booking, not after, one that stands still
-                // holds the rail's origin the whole time it is up, and the booking has to know that.
-                // A special always travels, and faster, so it is the hard shot that pays. The last sign
-                // always travels to the end of its rail and is never a special: fitted to the bell it
-                // could come out slower than a special should
-                var powerUps = PowerUps.Instance;
+                // holds its spot the whole time it is up, and the booking has to know that.
+                // A special always travels, and faster, so it is the hard shot that pays
                 PowerUpKind? special = null;
-                if (powerUps != null && !last && UnityEngine.Random.value < specialShare) special = powerUps.RollSpecial();
+                if (SpecialDue()) special = PowerUps.Instance.RollSpecial();
 
-                float speed = (special.HasValue ? due.Speed * specialSpeed : due.Speed) * due.Rail.SpeedScale;
-                float hold = !special.HasValue && !last && UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
+                float speed = (special.HasValue ? due.Speed * _specialSpeed : due.Speed) * due.Rail.SpeedScale;
+                float hold = !special.HasValue && UnityEngine.Random.value < stationaryShare ? mover.RollHold() : 0f;
 
-                float deadline;
-                if (!FitToTheBell(due.Rail, mover, last, ref speed, ref hold, out deadline))
+                // Somewhere new each time, in the player's sight. With nowhere to be seen from, it travels instead of hiding
+                float spot = 0f;
+                var head = PopUpTarget.Head();
+                if (hold > 0f && head != null)
                 {
-                    // Too late to show it fairly, so the wave is a sign shorter rather than one that
-                    // cannot be cleared
-                    _pending.RemoveAt(i);
-                    if (last) _finalQueued = false;
-                    _waveSize--;
-                    RaiseTargetsLeft();
-                    continue;
+                    spot = due.Rail.OpenSpot(head.position);
+                    if (spot < 0f) { spot = 0f; hold = 0f; }
                 }
 
-                var pass = due.Rail.Book(now, speed, mover.SettleSeconds(due.Rail.Hinge), hold, mover.FallSeconds);
+                var pass = due.Rail.Book(now, speed, mover.SettleSeconds(due.Rail.Hinge), hold, mover.FallSeconds, spot);
 
                 // Only the rail turning it away, again and again, gives up on a launch
                 if (!grid.TryDispatch(due.Rail, pass, mover.MoverLength))
                 {
                     if (now <= due.Due + retrySeconds) continue;
 
-                    // A turned-away last sign is queued again, on any open rail
+                    // Not counted as launched, so a later wave makes up the number
                     _pending.RemoveAt(i);
-                    if (last) _finalQueued = false;
                     continue;
                 }
 
                 _pending.RemoveAt(i);
                 _launched++;
-                mover.Launch(due.Rail, speed, hold, special, deadline);
+                if (special.HasValue)
+                {
+                    if (_owedSpecials > 0) _owedSpecials--;
+                    else _nextSpecial++;
+                }
+                mover.Launch(due.Rail, speed, hold, special, spot);
             }
-        }
-
-        /// From launch to out of sight: swinging up, the run or the stand, and dropping away
-        private static float Lifetime(TrackRail rail, TrackMover mover, float speed, float hold)
-        {
-            float run = hold > 0f ? hold : rail.Length / Mathf.Max(0.01f, speed);
-            return mover.SettleSeconds(rail.Hinge) + run + mover.FallSeconds;
-        }
-
-        /// Every sign is out of sight by the bell. One that would still be up is hurried, or turned into
-        /// one that stands for the time there is when hurrying it would be unfair, and the last sign of
-        /// the wave is always fitted so it drops away exactly as the bell goes. False when there is too
-        /// little time left to show it at all. deadline is when its run has to end, unscaled, or 0
-        private bool FitToTheBell(TrackRail rail, TrackMover mover, bool last,
-                                  ref float speed, ref float hold, out float deadline)
-        {
-            deadline = 0f;
-            float left = game.TimeRemaining;
-            if (!last && Lifetime(rail, mover, speed, hold) <= left) return true;
-
-            float room = left - mover.SettleSeconds(rail.Hinge) - mover.FallSeconds;
-            if (room < shortestShowSeconds) return false;
-
-            if (hold <= 0f && rail.Length / room > speed * mostHurry) hold = room;
-
-            if (hold > 0f) hold = room;
-            else speed = rail.Length / room;
-
-            deadline = Time.unscaledTime + left - mover.FallSeconds;
-            return true;
-        }
-
-        /// The rail and pace of the round's last sign, chosen as the round starts so every launch before
-        /// it can be spread to lead into it. It goes when that run would end on the bell, so the round
-        /// closes with it being shot or dropping away at the end of its rail as the clock hits 0
-        private void PlanTheFinalSign(int round)
-        {
-            // Every rail that will be in play by the end of the round, not just the ones open now
-            RebuildAvailable(round + 0.99f);
-            _finalRail = _available.Count > 0 ? _available[UnityEngine.Random.Range(0, _available.Count)] : null;
-            _finalSpeed = UnityEngine.Random.Range(minSpeed, maxSpeed) * _speedScale;
-            _finalAt = _finalRail != null && game != null
-                     ? Mathf.Max(0f, game.RoundSeconds - Lifetime(_finalRail, _pool[0], _finalSpeed * _finalRail.SpeedScale, 0f))
-                     : 0f;
-        }
-
-        /// The planned last sign, or any open rail if the plan was turned away and this is a second try
-        private void QueueTheFinalSign()
-        {
-            var rail = _finalRail;
-            _finalRail = null;
-
-            if (rail == null)
-            {
-                RebuildAvailable(Stage());
-                if (_available.Count == 0) return;
-                rail = _available[UnityEngine.Random.Range(0, _available.Count)];
-            }
-
-            _pending.Add(new Pending { Rail = rail, Due = Time.time, Speed = _finalSpeed, Final = true });
-            _finalQueued = true;
-        }
-
-        /// How many of the signs before the last the clock wants out by now, plus lookAhead seconds. They
-        /// go at an even gap from the start of the round, and one more gap brings the last sign's launch
-        private int OnTheClock(float lookAhead)
-        {
-            int spread = Mathf.Max(0, _waveSize - 1);
-            if (game == null || spread == 0 || _finalAt <= 0f) return spread;
-
-            float gap = _finalAt / spread;
-            float elapsed = game.RoundSeconds - game.TimeRemaining + lookAhead;
-            return Mathf.Clamp(Mathf.FloorToInt(elapsed / gap) + 1, 0, spread);
-        }
-
-        /// How many launches short of the clock this round is. Behind it, waves come at the shortest gap
-        /// and the cap on targets up at once lifts by the shortfall until it catches up
-        private int Behind()
-        {
-            return Mathf.Max(0, OnTheClock(0f) - _launched);
         }
 
         private void OnResolved(TrackMover mover, bool shot)
         {
             _resolved++;
             if (shot) _killed++;
+            // A missed power-up comes back on the next free launch rather than being lost (user, 2026-11-10)
+            else if (mover.WasSpecial) _owedSpecials++;
             RaiseTargetsLeft();
             if (TargetResolved != null) TargetResolved(shot);
         }

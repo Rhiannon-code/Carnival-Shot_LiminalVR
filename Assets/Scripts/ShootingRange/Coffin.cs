@@ -18,7 +18,6 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Moves (degrees and seconds)")]
         [SerializeField] private float openAngle = 105f;
         [SerializeField] private Vector2 openSeconds = new Vector2(0.9f, 1.4f);
-        [SerializeField] private Vector2 stayOpenSeconds = new Vector2(1.5f, 4f);
         [SerializeField] private float slamSeconds = 0.3f;
         [SerializeField] private Vector2 peekAngle = new Vector2(12f, 25f);
         [SerializeField] private Vector2 peekSeconds = new Vector2(0.4f, 1.2f);
@@ -26,7 +25,14 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Vector2Int rattleKnocks = new Vector2Int(3, 6);
         [SerializeField] private float bounceAngle = 3f;
         [SerializeField] private Vector2 shutSeconds = new Vector2(3f, 8f);
-        [SerializeField] private Vector3 odds = new Vector3(0.4f, 0.35f, 0.25f);
+        [SerializeField, Range(0f, 1f)]
+        private float peekOdds = 0.6f;
+
+        [Header("Knocked (data): the barker slammed back in (user, 2026-11-06)")]
+        [SerializeField] private float knockDegrees = 2.5f;
+        [SerializeField] private float knockCycles = 2.5f;
+        [SerializeField] private float knockSeconds = 0.9f;
+        [SerializeField] private float knockBack = 0.02f;
 
         [Header("Sound")]
         [SerializeField] private AudioClip[] creaks;
@@ -39,6 +45,12 @@ namespace IntuitiveDesigns.ShootingRange
         private AudioSource _audio;
         private Coroutine _haunt;
         private float _angle;
+        private Vector3 _restPosition;
+        private Quaternion _restRotation;
+        private Vector3 _base;
+        private Vector3 _knockAxis;
+        private Vector3 _knockPush;
+        private float _knockTimer = -1f;
 
         private void Awake()
         {
@@ -47,6 +59,42 @@ namespace IntuitiveDesigns.ShootingRange
             _audio.spatialBlend = 1f;
             _audio.minDistance = minAudioDistance;
             _audio.maxDistance = maxAudioDistance;
+
+            _restPosition = transform.position;
+            _restRotation = transform.rotation;
+            var renderers = GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) { _base = transform.position; return; }
+
+            var all = renderers[0].bounds;
+            foreach (var item in renderers) all.Encapsulate(item.bounds);
+            _base = new Vector3(all.center.x, all.min.y, all.center.z);
+        }
+
+        /// Shoved the way push points, rocking on its base and settling, with a thud
+        public void Knock(Vector3 push)
+        {
+            var flat = Vector3.ProjectOnPlane(push, Vector3.up);
+            if (flat.sqrMagnitude < 1e-6f) return;
+
+            _knockPush = flat.normalized;
+            _knockAxis = Vector3.Cross(Vector3.up, _knockPush);
+            _knockTimer = 0f;
+            Play(thuds);
+        }
+
+        /// The lid is a child, so it rocks along with the rest
+        private void LateUpdate()
+        {
+            if (_knockTimer < 0f) return;
+
+            _knockTimer += Time.deltaTime;
+            float t = _knockTimer / Mathf.Max(0.01f, knockSeconds);
+            transform.SetPositionAndRotation(_restPosition, _restRotation);
+            if (t >= 1f) { _knockTimer = -1f; return; }
+
+            float fade = (1f - t) * (1f - t);
+            transform.position += _knockPush * (knockBack * fade);
+            transform.RotateAround(_base, _knockAxis, knockDegrees * Mathf.Sin(t * knockCycles * 2f * Mathf.PI) * fade);
         }
 
         private void OnEnable()
@@ -64,32 +112,57 @@ namespace IntuitiveDesigns.ShootingRange
             _haunt = null;
         }
 
+        /// Opened wide and held for the barker, or shut and haunting again. Returns how long the swing takes, so he can wait for it
+        public float HoldOpen(bool open)
+        {
+            if (lid == null || !isActiveAndEnabled) return 0f;
+
+            if (_haunt != null) StopCoroutine(_haunt);
+            _haunt = StartCoroutine(open ? OpenWide() : ShutAndHaunt());
+            return open ? openSeconds.x : slamSeconds;
+        }
+
+        private IEnumerator OpenWide()
+        {
+            Play(creaks);
+            yield return Swing(openAngle, openSeconds.x, Ease.InOut);
+        }
+
+        private IEnumerator ShutAndHaunt()
+        {
+            yield return Slam(slamSeconds);
+            yield return Haunt();
+        }
+
         private IEnumerator Haunt()
         {
             while (true)
             {
                 yield return new WaitForSeconds(Random.Range(shutSeconds.x, shutSeconds.y));
 
-                float pick = Random.value * (odds.x + odds.y + odds.z);
-                if (pick < odds.x) yield return Open();
-                else if (pick < odds.x + odds.y) yield return Peek();
+                if (Random.value < peekOdds) yield return Peek();
                 else yield return Rattle();
             }
         }
 
-        private IEnumerator Open()
-        {
-            Play(creaks);
-            yield return Swing(openAngle, Random.Range(openSeconds.x, openSeconds.y), Ease.InOut);
-            yield return new WaitForSeconds(Random.Range(stayOpenSeconds.x, stayOpenSeconds.y));
-            yield return Slam(slamSeconds);
-        }
+        /// Raised as the lid starts to crack open, which takes PeekSwingSeconds. Whatever's inside can hold it open with
+        /// KeepPeeking until it's done
+        public event System.Action Peeking;
+
+        public bool KeepPeeking { get; set; }
+
+        public const float PeekSwingSeconds = 0.5f;
+
+        /// Where the lid hangs from, in the world. Its free edge, where the gap opens, is on the other side
+        public Vector3 Hinge { get { return transform.TransformPoint(hingePoint); } }
 
         private IEnumerator Peek()
         {
             Play(creaks);
-            yield return Swing(Random.Range(peekAngle.x, peekAngle.y), 0.5f, Ease.InOut);
+            if (Peeking != null) Peeking();
+            yield return Swing(Random.Range(peekAngle.x, peekAngle.y), PeekSwingSeconds, Ease.InOut);
             yield return new WaitForSeconds(Random.Range(peekSeconds.x, peekSeconds.y));
+            while (KeepPeeking) yield return null;
             yield return Slam(0.15f);
         }
 
