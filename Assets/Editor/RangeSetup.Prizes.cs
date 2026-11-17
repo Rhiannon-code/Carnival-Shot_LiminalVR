@@ -4,16 +4,12 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange.EditorTools
 {
-    /// Step 69: the six prizes (user, 2026-11-10). Each is a room target that is knocked flying with a squeak when shot and
-    /// back next round, standing on a shelf along the booth top, and the same six, stripped, are hidden in the chest. The
-    /// posed models come from tools/prize_pose.py (Blender), baked still out of their T-poses
     public static partial class RangeSetup
     {
         private const string PrizeModelDir = "Assets/Models/Prizes";
         private const string PrizeMaterialDir = "Assets/Materials/Prizes";
         private const string PrizeShelfName = "Prize Shelf";
         private const string BoothTopName = "Booth Top";
-        // Every prize's biggest side, metres, on the shelf: one size so they all read (user, 2026-11-10)
         private const float PrizeSize = 0.4f;
         private const float ShelfUse = 0.85f;
         private const int PrizeTextureLimit = 1024;

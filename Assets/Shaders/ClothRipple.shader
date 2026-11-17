@@ -1,5 +1,3 @@
-// Faked cloth for the canvas roof and the banners: a slow ripple in the vertex shader, no physics (ADR 0064, fake-cloth test).
-// Vertex colour red is how free a vertex is, 0 where it's pinned. The bake sees the mesh at rest, so the ripple stays small
 Shader "CrystalCatch/Cloth Ripple"
 {
     Properties
@@ -14,6 +12,8 @@ Shader "CrystalCatch/Cloth Ripple"
         _AirLife ("How long it takes to settle, seconds", Float) = 1.2
         _AirSpeed ("How fast the wave spreads, metres a second", Float) = 2.5
         _AirWaves ("Wave crests per metre", Float) = 2
+        _Soot ("Soot where pinned: 0 none, 1 black", Range(0, 1)) = 0
+        _SootSpread ("Soot spread: higher keeps it tighter to the pins", Float) = 3
     }
 
     SubShader
@@ -36,12 +36,15 @@ Shader "CrystalCatch/Cloth Ripple"
         float _AirLife;
         float _AirSpeed;
         float _AirWaves;
+        float _Soot;
+        float _SootSpread;
         // The last few rounds that passed close: where (xyz) and when (w, in _Time.y), set by ClothAir
         float4 _ClothAir[4];
 
         struct Input
         {
             float2 uv_MainTex;
+            float4 color : COLOR;
         };
 
         void vert (inout appdata_full v)
@@ -62,7 +65,8 @@ Shader "CrystalCatch/Cloth Ripple"
 
         void surf (Input IN, inout SurfaceOutput o)
         {
-            o.Albedo = tex2D(_MainTex, IN.uv_MainTex).rgb * _Color.rgb;
+            float soot = 1 - _Soot * pow(saturate(1 - IN.color.r), _SootSpread);
+            o.Albedo = tex2D(_MainTex, IN.uv_MainTex).rgb * _Color.rgb * soot;
         }
         ENDCG
     }

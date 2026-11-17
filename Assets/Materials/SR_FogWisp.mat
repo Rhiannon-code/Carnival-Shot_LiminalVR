@@ -20,7 +20,14 @@ Material:
     serializedVersion: 3
     m_TexEnvs: []
     m_Floats:
+    - _ClearSoftness: 0.2
+    - _EndZ: 5.7
+    - _FloorY: 0.0259999
     - _NearFade: 1
     - _NearFadeRange: 1.5
     m_Colors:
     - _Color: {r: 0.45, g: 0.41999996, b: 0.5, a: 1}
+    - _Hole0: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Hole1: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Hole2: {r: 0, g: 0, b: 0, a: 0.2}
+    - _Hole3: {r: 0, g: 0, b: 0, a: 0.2}

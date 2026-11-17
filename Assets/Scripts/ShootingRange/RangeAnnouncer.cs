@@ -21,9 +21,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private string roundOverMessage = "ROUND OVER";
         [SerializeField] private string slainLabel = "SLAIN";
         [SerializeField] private string finalScoreLabel = "FINAL SCORE";
-        [SerializeField, Tooltip("On the board while the prize chest waits to be shot; the score shows once it's open")]
+        [SerializeField]
         private string shootTheLock = "SHOOT THE LOCK!";
-        [SerializeField, Tooltip("Seconds the final score takes to count up once the chest is open")] private float tallySeconds = 2.5f;
+        [SerializeField] private float tallySeconds = 2.5f;
 
         private bool _cleared;
         private int _total;

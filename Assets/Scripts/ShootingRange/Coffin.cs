@@ -28,7 +28,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)]
         private float peekOdds = 0.6f;
 
-        [Header("Knocked (data): the barker slammed back in (user, 2026-11-06)")]
+        [Header("Knocked (data): the barker slammed back in")]
         [SerializeField] private float knockDegrees = 2.5f;
         [SerializeField] private float knockCycles = 2.5f;
         [SerializeField] private float knockSeconds = 0.9f;
@@ -51,6 +51,7 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _knockAxis;
         private Vector3 _knockPush;
         private float _knockTimer = -1f;
+        private Vector3 _closedLidCentre;
 
         private void Awake()
         {
@@ -102,6 +103,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (lid == null) return;
 
             Pose(0f);
+            var lidRenderer = lid.GetComponentInChildren<Renderer>();
+            _closedLidCentre = transform.InverseTransformPoint(lidRenderer != null ? lidRenderer.bounds.center : lid.position);
             _haunt = StartCoroutine(Haunt());
         }
 
@@ -152,6 +155,27 @@ namespace IntuitiveDesigns.ShootingRange
         public bool KeepPeeking { get; set; }
 
         public const float PeekSwingSeconds = 0.5f;
+
+        /// While a peek is held open, swings the lid out to at least this many degrees, so something can reach through
+        public void WidenPeek(float degrees)
+        {
+            if (lid != null && isActiveAndEnabled && KeepPeeking && _angle < degrees)
+                StartCoroutine(Swing(degrees, PeekSwingSeconds * 0.5f, Ease.Out));
+        }
+
+        /// The middle of the gap the lid leaves on its free side, level with near along the hinge: the box's rim on that side
+        /// and the lid's free edge, worked out from the closed lid's middle, which sits half a lid's width from the hinge
+        public Vector3 GapNear(Vector3 near)
+        {
+            Vector3 axis = hingeAxis.normalized;
+            Vector3 toMiddle = _closedLidCentre - hingePoint;
+            Vector3 across = 2f * (toMiddle - axis * Vector3.Dot(toMiddle, axis));
+            Vector3 rim = hingePoint + across;
+            Vector3 edge = hingePoint + Quaternion.AngleAxis(_angle, axis) * across;
+            Vector3 gap = transform.TransformPoint((rim + edge) * 0.5f);
+            Vector3 along = transform.TransformDirection(axis).normalized;
+            return gap + along * Vector3.Dot(near - gap, along);
+        }
 
         /// Where the lid hangs from, in the world. Its free edge, where the gap opens, is on the other side
         public Vector3 Hinge { get { return transform.TransformPoint(hingePoint); } }

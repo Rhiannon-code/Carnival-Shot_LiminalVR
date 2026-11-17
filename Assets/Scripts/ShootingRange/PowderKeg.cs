@@ -16,17 +16,17 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("The lift (data, seconds and metres)")]
         [SerializeField] private float riseSeconds = 0.6f;
         [SerializeField] private float slideSeconds = 0.3f;
-        [SerializeField, Tooltip("How far over the board's top it rides before it slides onto it")] private float clearance = 0.04f;
+        [SerializeField] private float clearance = 0.04f;
 
         [Header("The blast (data)")]
-        [SerializeField, Tooltip("Metres from the keg that a sign is caught")] private float blastRadius = 1.5f;
-        [SerializeField, Tooltip("A flash and a shockwave ring along the ground, in place of the cartoon fireball (client feedback, 2026-11-10). Step 72 builds it")]
+        [SerializeField] private float blastRadius = 1.5f;
+        [SerializeField]
         private ParticleSystem blastFx;
-        [SerializeField, Tooltip("Metres out that loose props are thrown, and how hard")] private float throwRadius = 2.5f;
+        [SerializeField] private float throwRadius = 2.5f;
         [SerializeField] private float throwForce = 6f;
         [SerializeField, Range(0f, 1f)] private float rumble = 1f;
         [SerializeField] private float rumbleSeconds = 0.35f;
-        [SerializeField, Range(0f, 1f), Tooltip("0 heard from everywhere alike, 1 only from where it is")] private float blastSpatial = 0.4f;
+        [SerializeField, Range(0f, 1f)] private float blastSpatial = 0.4f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] blastClips;

@@ -4,8 +4,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange.EditorTools
 {
-    /// Step 70: small fixes from playing it (user, 2026-11-10). Each value changes only while it's still at its old default,
-    /// so anything tuned by hand since is left alone
     public static partial class RangeSetup
     {
         // 0.5 at first, then 0.25 (still far too big for a bat: the puff is sized to cover a sign), now 0.1

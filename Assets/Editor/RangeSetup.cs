@@ -690,7 +690,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             if (moved > 0) Dirty();
         }
 
-        /// How far in front of the player's spot the guns wait to be picked up. 0.30 m was a reach too far (ADR 0063)
         private static float GunZ()
         {
             var floor = RangeSetupUtil.FindInScene("PlayerFloor");
@@ -1867,9 +1866,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string BatPath = "Assets/Prefabs/ShootingRange/Bat.prefab";
         private const string PerfName = "PerfReadout";
 
-        /// The fps / worst-frame readout for headset testing, small in the HUD's bottom-left corner. It
-        /// sits at the canvas root. ADR 0018: an APK
-        /// may carry it, a .limapp must not, so it has a Remove twin rather than living in the scene
         private static void AddThePerfReadout()
         {
             var hud = Object.FindObjectOfType<PowerUpHUD>();
@@ -1909,7 +1905,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             Dirty();
             Did("Perf readout in the HUD's bottom-left corner: fps, average and worst frame against 72 Hz, " +
-                "also to adb logcat as [Perf]. Remove it before building a .limapp (ADR 0018)");
+                "also to adb logcat as [Perf]. Remove it before building a .limapp");
         }
 
         private static void RemoveThePerfReadout()
@@ -2237,10 +2233,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private const string SpiderPath = "Assets/Prefabs/ShootingRange/Spider.prefab";
 
-        private const string SpiderModelPath = "Assets/Models/spider/spider_legs.fbx";
+        // The 2026-11-13 spider, its legs split off by LiminalVR/tools/spider_split.py in Local Docs
+        private const string SpiderModelPath = "Assets/Models/SpiderNew/spider_legs.fbx";
         private const string SpiderSkinPath = "Assets/Materials/SR_Spider.mat";
-        private const string SpiderAlbedoPath = "Assets/Models/spider/lambert2_Base_color.png";
-        private const string SpiderNormalPath = "Assets/Models/spider/lambert2_Normal_OpenGL.png";
+        private const string SpiderAlbedoPath = "Assets/Models/SpiderNew/lambert5_Base_color.png";
+        private const string SpiderNormalPath = "Assets/Models/SpiderNew/lambert5_Normal_OpenGL.png";
         // Tip to tip across the legs, as the greybox spider was (user, 2026-11-10)
         private const float SpiderSpan = 0.6f;
 
@@ -2341,8 +2338,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             material.shader = shader;
-            material.SetTexture("_MainTex", RangeSetupUtil.Load<Texture2D>(SpiderAlbedoPath));
-            var normal = RangeSetupUtil.Load<Texture2D>(SpiderNormalPath);
+            material.SetTexture("_MainTex", PrizeTexture(SpiderAlbedoPath, false));
+            var normal = PrizeTexture(SpiderNormalPath, true);
             material.SetTexture("_BumpMap", normal);
             if (normal != null) material.EnableKeyword("_NORMALMAP");
             EditorUtility.SetDirty(material);
@@ -3260,13 +3257,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 "same sums are redone from wherever the player's head actually is, so a crouch lowers the " +
                 "line and the signs stay only just in view");
 
-            float ceiling = CeilingBottom();
-
             foreach (var rail in Object.FindObjectsOfType<TrackRail>())
             {
                 var fields = new Fields(rail);
                 float shown = fields.Float("shownOffset");
                 float railY = rail.PointAt(rail.Length * 0.5f).y;
+                // The roof itself, straight above the rail. There is no object called Ceiling, so CeilingBottom() is a guess
+                float ceiling = RoomSurface(rail.PointAt(rail.Length * 0.5f), Vector3.up, float.PositiveInfinity);
+                if (float.IsPositiveInfinity(ceiling)) Say(rail.name + ": no roof collider above it, so no ceiling check");
 
                 if (rail.Hinge == Hinge.Sideways)
                 {

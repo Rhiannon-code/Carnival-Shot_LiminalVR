@@ -8,17 +8,17 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private RangeGame game;
         [SerializeField] private AudioClip clip;
         [SerializeField, Range(0f, 1f)] private float volume = 0.7f;
-        [Header("The end (data, user 2026-11-10): ducked under the barker and the drum roll, then the victory music")]
-        [SerializeField, Range(0f, 1f), Tooltip("The bed's volume from the final round to the chest opening")] private float endDuck = 0.6f;
+        [Header("The end ducked under the barker and the drum roll, then the victory music")]
+        [SerializeField, Range(0f, 1f)] private float endDuck = 0.6f;
         [SerializeField] private float duckSeconds = 1.5f;
-        [SerializeField, Tooltip("Plays once the prize chest opens; with none, the bed comes back up")] private AudioClip victoryClip;
+        [SerializeField] private AudioClip victoryClip;
         [SerializeField, Range(0f, 1f)] private float victoryVolume = 0.8f;
 
         [Header("Winds up as the lights come on (data)")]
         [SerializeField] private float windUpSeconds = 4f;
         [SerializeField, Range(0f, 1f)] private float windUpVolume = 0.1f;
         [SerializeField, Range(0.1f, 1f)] private float windUpPitch = 0.55f;
-        [SerializeField, Tooltip("Something mechanical being cranked up, once, under the music as it winds up")] private AudioClip windUpSound;
+        [SerializeField] private AudioClip windUpSound;
         [SerializeField, Range(0f, 1f)] private float windUpSoundVolume = 0.5f;
 
         /// 0 at the start of the wind-up to 1 when it's done. The barker follows it, so he and the music wind up as one

@@ -21,7 +21,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private MusicBed music;
 
         [Header("Session (data)")]
-        [SerializeField, Tooltip("Seconds after the triggers go live before the game starts by itself, if nobody shoots the card")]
+        [SerializeField]
         private float autoStartSeconds = 45f;
         [SerializeField] private int countdownFrom = 3;
         [SerializeField] private int betweenRoundsCountdownFrom = 3;
@@ -42,7 +42,7 @@ namespace IntuitiveDesigns.ShootingRange
         public bool IsFinalRound { get { return MaxRounds > 0 && RoundNumber >= MaxRounds; } }
         public int NextRoundNumber { get { return RoundNumber + 1; } }
 
-        /// The guns are in hand from the start but fire nothing until the carnival has wound up (user, 2026-11-10)
+        /// The guns are in hand from the start but fire nothing until the carnival has wound up
         public bool TriggersLive { get; private set; }
 
         public event Action<int> ScoreChanged;

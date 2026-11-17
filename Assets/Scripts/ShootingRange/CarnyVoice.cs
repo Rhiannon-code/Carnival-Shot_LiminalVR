@@ -43,13 +43,13 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] prizeMedium;
         [SerializeField] private AudioClip[] prizeBig;
         [SerializeField] private AudioClip[] prizeTop;
-        [SerializeField, Tooltip("As the score counts up once the chest is open. Waiting on the tally (not built yet)")]
+        [SerializeField]
         private AudioClip[] scoreTally;
 
         [Header("Warnings, the first time each turns up (they cut in: the spider bites, the bat is coming)")]
         [SerializeField] private AudioClip[] spiderWarning;
         [SerializeField] private AudioClip[] batWarning;
-        [SerializeField, Tooltip("The first time a gun runs dry in play, naming the grip")] private AudioClip[] firstReload;
+        [SerializeField] private AudioClip[] firstReload;
 
         [Header("Reactions (only while he is quiet)")]
         [SerializeField] private AudioClip[] missStreak;
@@ -65,12 +65,14 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)] private float volume = 1f;
 
         /// Mid-line, or with lines still waiting their turn
-        public bool Talking { get { return Time.unscaledTime < _busyUntil || _queue.Count > 0; } }
+        public bool Talking { get { return Time.unscaledTime < _busyUntil || _queue.Count > 0 || _upNext.Count > 0; } }
 
         /// What the skeleton barker's jaw follows
         public AudioSource Speaker { get { return _audio; } }
 
         private readonly Queue<AudioClip> _queue = new Queue<AudioClip>();
+        // Warnings that go ahead of the queue, but still wait for the line he is saying to finish
+        private readonly Queue<AudioClip> _upNext = new Queue<AudioClip>();
         private AudioSource _audio;
         private MusicBed _music;
         private int _misses;
@@ -84,7 +86,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         public static CarnyVoice Instance { get; private set; }
 
-        /// A ricochet found a sign (ADR 0063)
         public void TrickShot() { React(trickShot); }
 
         private void OnDestroy()
@@ -165,7 +166,10 @@ namespace IntuitiveDesigns.ShootingRange
                 _audio.volume = Mathf.Lerp(windUpVolume, 1f, _music.WindUpThrough);
             }
 
-            if (_queue.Count > 0 && Time.unscaledTime >= _busyUntil) Play(_queue.Dequeue());
+            if (Time.unscaledTime < _busyUntil) return;
+
+            if (_upNext.Count > 0) Play(_upNext.Dequeue());
+            else if (_queue.Count > 0) Play(_queue.Dequeue());
         }
 
         /// The count has to land on the beat, so it is the one thing that cuts him off
@@ -251,7 +255,7 @@ namespace IntuitiveDesigns.ShootingRange
         /// The score counts up on the board as the lid flies open
         private void OnChestOpened()
         {
-            Interrupt(Pick(scoreTally));
+            UpNext(Pick(scoreTally));
         }
 
         private void OnAmmoChanged(int rounds, int size)
@@ -259,7 +263,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (_toldToReload || rounds > 0 || size <= 0 || game == null || game.Current != RangeGame.State.Playing) return;
 
             _toldToReload = true;
-            Interrupt(Pick(firstReload));
+            UpNext(Pick(firstReload));
         }
 
         private void OnSpiderDropped()
@@ -267,7 +271,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (_warnedOfSpiders) return;
 
             _warnedOfSpiders = true;
-            Interrupt(Pick(spiderWarning));
+            UpNext(Pick(spiderWarning));
         }
 
         private void OnBatLaunched()
@@ -275,7 +279,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (_warnedOfBats) return;
 
             _warnedOfBats = true;
-            Interrupt(Pick(batWarning));
+            UpNext(Pick(batWarning));
         }
 
         private void OnGranted(PowerUpKind kind, float seconds, bool stack)
@@ -312,8 +316,15 @@ namespace IntuitiveDesigns.ShootingRange
             if (clip == null) return;
 
             _queue.Clear();
+            _upNext.Clear();
             _audio.Stop();
             Play(clip);
+        }
+
+        /// Never cuts him off: it plays the moment the line he is saying ends, ahead of anything queued
+        private void UpNext(AudioClip clip)
+        {
+            if (clip != null) _upNext.Enqueue(clip);
         }
 
         private void Play(AudioClip clip)

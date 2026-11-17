@@ -8,11 +8,6 @@ using Random = UnityEngine.Random;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// The skeleton barker (user, 2026-11-10). He flops: limp on his joints while the stand shoves him out of the coffin and
-    /// yanks him back. Once out, his servos catch: he stiffens into his pose and moves like an animatronic, each move at a
-    /// steady motor speed that stops dead with a small overshoot and a shake, now and then catching with a clunk. He looks
-    /// at the player, and after a good round tips his hat with the hand going out round his side, never through him. During
-    /// rounds an arm reaches sideways out of the cracked lid and waves
     public class SkeletonBarker : RoomReaction
     {
         [Header("Laid out by setup steps 64 and 65")]
@@ -23,34 +18,53 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Rigidbody skull;
         [SerializeField] private Transform jaw;
         [SerializeField] private Rigidbody hat;
-        [SerializeField, Tooltip("Flat, toward the player, set by step 65")] private Vector3 outward = Vector3.forward;
+        [SerializeField] private Vector3 outward = Vector3.forward;
 
         [Header("In and out of the coffin (data): limp, so he flops")]
-        [SerializeField] private float reachOut = 1f;
+        [Header("Where he stops (data): beside the player's head as it is when he comes out")]
+        [SerializeField] private float besidePlayer = 1.1f;
+        [SerializeField] private float aheadOfPlayer = 1f;
+        [SerializeField] private float aboveEyes = 0.15f;
+        [SerializeField]
+        private Vector3 playerFaces = Vector3.forward;
+        [SerializeField]
+        private Vector3 carry = Vector3.forward;
         [SerializeField] private float shoveSeconds = 0.45f;
         [SerializeField] private float yankSeconds = 0.35f;
-        [SerializeField, Tooltip("Seconds he swings once out, before his servos catch")] private float settleSeconds = 0.6f;
-        [SerializeField, Tooltip("Seconds his servos take to pull him back into his pose")] private float engageSeconds = 0.5f;
+        [SerializeField] private float settleSeconds = 0.6f;
+        [SerializeField, Range(0f, 0.2f)]
+        private float lungeWindUp = 0.05f;
+        [SerializeField]
+        private float boingHeight = 0.15f;
+        [SerializeField] private int boingWobbles = 3;
+        [SerializeField] private float engageSeconds = 0.5f;
         [SerializeField] private float holdStrength = 150f;
         [SerializeField] private float holdDamping = 18f;
-        [SerializeField, Tooltip("Degrees he leans toward the player once his servos have him")] private float leanDegrees = 8f;
+        [SerializeField] private float leanDegrees = 8f;
 
-        [Header("Servo (data): steady motor speed, a dead stop with a little overshoot, a shake while it runs")]
-        [SerializeField, Range(0f, 0.2f), Tooltip("Share of the move it overshoots by before settling")] private float overshoot = 0.05f;
-        [SerializeField, Range(0f, 0.05f), Tooltip("Share of the move it shakes by while the motor runs")] private float motorShake = 0.008f;
+        [Header("Cartoon servo (data): a wind-up the other way, a snap, a springy overshoot that wobbles to rest")]
+        [SerializeField, Range(0f, 0.3f)] private float anticipation = 0.12f;
+        [SerializeField, Range(0f, 0.5f)] private float overshoot = 0.25f;
+        [SerializeField] private int wobbles = 2;
+        [SerializeField, Range(0f, 0.05f)] private float motorShake = 0.008f;
         [SerializeField] private Vector2Int hitchesPerMove = new Vector2Int(0, 1);
         [SerializeField, Tooltip("Seconds")] private Vector2 hitchSeconds = new Vector2(0.06f, 0.18f);
         [SerializeField] private Vector2 hitchBetween = new Vector2(0.15f, 0.85f);
         [SerializeField] private AudioClip[] clunkClips;
         [SerializeField, Range(0f, 1f)] private float clunkVolume = 0.5f;
+        [SerializeField] private AudioClip[] whirClips;
+        [SerializeField, Range(0f, 1f)] private float whirVolume = 0.25f;
+        [SerializeField] private AudioClip[] stopClips;
+        [SerializeField, Range(0f, 1f)] private float stopVolume = 0.06f;
 
         [Header("Looking at the player (data)")]
         [SerializeField] private float lookEverySeconds = 0.8f;
-        [SerializeField, Tooltip("Degrees a second, a steady servo turn that stops dead")] private float lookSpeed = 140f;
+        [SerializeField] private float lookTurnSeconds = 0.35f;
+        [SerializeField] private float headTilt = 12f;
         [SerializeField] private float lookLimit = 45f;
-        [SerializeField, Tooltip("Metres below the player's eyes he looks at, so he looks down at them a little (user, 2026-11-10)")]
+        [SerializeField]
         private float lookBelow = 0.25f;
-        [SerializeField, Tooltip("While limp, the torque that turns his skull to the player")] private float lookStrength = 150f;
+        [SerializeField] private float lookStrength = 150f;
         [SerializeField] private float lookDamping = 18f;
 
         [Header("Hat tip (data): only after a good round")]
@@ -58,17 +72,20 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float reachSeconds = 0.6f;
         [SerializeField] private float sweepSeconds = 0.6f;
         [SerializeField] private float holdSeconds = 0.6f;
-        [SerializeField, Tooltip("Metres the hand stays out to his side and above the brim on its way, so it never goes through him")]
+        [SerializeField]
         private Vector2 clearOfHim = new Vector2(0.18f, 0.15f);
-        [SerializeField, Tooltip("Where the hat is held out: metres to his side, up from the skull, and toward the player")]
+        [SerializeField]
         private Vector3 sweepTo = new Vector3(0.25f, -0.35f, 0.4f);
         [SerializeField] private float bowDegrees = 15f;
 
         [Header("Mid-round gag (data): an arm out sideways through the cracked lid, waving")]
         [SerializeField, Range(0f, 1f)] private float waveChance = 0.6f;
-        [SerializeField, Range(0.5f, 1f), Tooltip("How straight the arm is, as a share of its length")] private float waveReach = 0.95f;
-        [SerializeField, Tooltip("Metres the hand is also brought toward the player and up")] private Vector2 waveLean = new Vector2(0.15f, 0.15f);
+        [SerializeField, Range(0.5f, 1f)] private float waveReach = 0.95f;
+        [SerializeField] private Vector2 waveLean = new Vector2(0.15f, 0.15f);
         [SerializeField] private float waveDegrees = 40f;
+        [SerializeField] private float waveGapDegrees = 30f;
+        [SerializeField]
+        private float palmBackDegrees = 33f;
         [SerializeField] private int waves = 3;
         [SerializeField] private float waveSeconds = 0.4f;
         [SerializeField] private float waveReachSeconds = 0.5f;
@@ -79,8 +96,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Tooltip("Seconds")] private float jawSmoothing = 0.05f;
 
         [Header("Shot (data)")]
-        [SerializeField, Tooltip("Limp: the push on the piece hit")] private float shotImpulse = 0.8f;
-        [SerializeField, Tooltip("Stiff: a hard twitch at the waist")] private float joltDegrees = 6f;
+        [SerializeField] private float shotImpulse = 0.8f;
+        [SerializeField] private float joltDegrees = 6f;
+        [SerializeField]
+        private float shotLimpSeconds = 1f;
         [SerializeField] private float joltSeconds = 0.25f;
         [SerializeField] private AudioClip[] hitClips;
         [SerializeField, Range(0f, 1f)] private float hitVolume = 0.6f;
@@ -99,6 +118,9 @@ namespace IntuitiveDesigns.ShootingRange
             public float Side;
             /// Where the wrist is in the built pose this frame: set each frame before the arm is posed
             public Vector3 RestWrist;
+            /// The palm's facing and the fingers' direction, in the wrist's own space. In the built pose the hands hang along
+            /// the forearm with their palms to his body, turned a little toward his back (skeleton.fbx hand meshes, 2026-11-13)
+            public Vector3 PalmInWrist, FingersInWrist;
         }
 
         private readonly float[] _samples = new float[Samples];
@@ -118,16 +140,22 @@ namespace IntuitiveDesigns.ShootingRange
         private Vector3 _bodyRest, _standRest;
         private Quaternion _waistRest, _neckRest, _jawRest;
         private Vector3 _faceInNeck, _faceInSkull;
+        // The middle of the skull mesh, in the skull's space: its pivot is down at his feet, so aiming from skull.position
+        // looked up at the player's chin and he gazed straight ahead (user, 2026-11-13)
+        private Vector3 _headInSkull;
         private Arm _tipArm, _waveArm;
         private Vector3 _brimInSkull;
         private Vector3 _hatPosition;
         private Quaternion _hatRotation;
         private bool _hatOn = true;
         private bool _hatInHand;
-        private float _shove, _bow, _wave, _waveRock;
+        private float _shove, _boing, _bow, _wave, _waveRock;
+        private Vector3 _carry;
         private Func<Vector3> _handTo;
-        private Quaternion _look = Quaternion.identity, _lookTarget = Quaternion.identity;
-        private float _nextLook;
+        private Quaternion _look = Quaternion.identity, _lookFrom = Quaternion.identity, _lookTarget = Quaternion.identity;
+        private float _nextLook, _lookStartedAt = -1f;
+        private float _whirredAt = float.MinValue;
+        private float _stoppedAt = float.MinValue;
         private Vector3 _joltAxis = Vector3.right;
         private float _joltAt = -1f;
         private float _mouth, _mouthSpeed;
@@ -160,12 +188,15 @@ namespace IntuitiveDesigns.ShootingRange
             _markerRest = _markers.Select(m => m.localRotation).ToArray();
 
             _standRest = stand.transform.position;
+            BuildTheReach();
             _bodyRest = _body.position;
             _waistRest = _waist.localRotation;
             _neckRest = _neck.localRotation;
             _jawRest = jaw.localRotation;
             _faceInNeck = _neck.InverseTransformDirection(transform.forward);
             _faceInSkull = skull.transform.InverseTransformDirection(transform.forward);
+            var skullMesh = skull.GetComponent<Renderer>();
+            _headInSkull = skull.transform.InverseTransformPoint(skullMesh != null ? skullMesh.bounds.center : _neck.position);
             _hatPosition = hat.transform.localPosition;
             _hatRotation = hat.transform.localRotation;
             WearTheHat();
@@ -218,6 +249,12 @@ namespace IntuitiveDesigns.ShootingRange
             arm.Fore = Vector3.Distance(arm.Elbow.position, arm.Wrist.position);
             arm.Side = Mathf.Sign(Vector3.Dot(arm.Shoulder.position - _waist.position, transform.right));
             arm.RestWrist = arm.Wrist.position;
+            Vector3 forearm = (arm.Wrist.position - arm.Elbow.position).normalized;
+            Vector3 inward = Vector3.ProjectOnPlane(-transform.right * arm.Side, forearm).normalized;
+            Vector3 back = Vector3.ProjectOnPlane(-transform.forward, forearm).normalized;
+            Vector3 palm = inward * Mathf.Cos(palmBackDegrees * Mathf.Deg2Rad) + back * Mathf.Sin(palmBackDegrees * Mathf.Deg2Rad);
+            arm.PalmInWrist = Quaternion.Inverse(arm.Wrist.rotation) * palm.normalized;
+            arm.FingersInWrist = Quaternion.Inverse(arm.Wrist.rotation) * forearm;
             return arm;
         }
 
@@ -280,6 +317,7 @@ namespace IntuitiveDesigns.ShootingRange
             _waving = true;
             coffin.KeepPeeking = true;
             yield return new WaitForSeconds(Coffin.PeekSwingSeconds);
+            coffin.WidenPeek(waveGapDegrees);
             yield return Tween(waveReachSeconds, t => _wave = t);
 
             for (float t = 0f; t < waves * waveSeconds; t += Time.deltaTime)
@@ -322,16 +360,19 @@ namespace IntuitiveDesigns.ShootingRange
             _act = StartCoroutine(act);
         }
 
-        /// Limp, shoved out speeding up all the way and stopped dead so he flops on; then his servos catch him
+        /// Limp, shoved out fast but slowing into the stop, so he sways to a halt beside the player instead of flopping on into
+        /// them (user, 2026-11-13: a 3 m lunge stopped dead slammed him into the player); then his servos catch him
         private IEnumerator ComeOut()
         {
             StopWaving();
             _out = true;
             if (coffin != null) yield return new WaitForSeconds(coffin.HoldOpen(true));
 
+            _carry = CarryToThePlayer();
             GoLimp();
-            yield return Shove(shoveSeconds, t => _shove = t * t);
-            yield return new WaitForSeconds(settleSeconds);
+            yield return Shove(shoveSeconds, t => _shove = Lunge(t));
+            yield return Shove(settleSeconds, t => _boing = boingHeight * Mathf.Sin(t * boingWobbles * 2f * Mathf.PI) * (1f - t) * (1f - t));
+            _boing = 0f;
             yield return Engage();
 
             if (_didWell && _tipArm != null) yield return TipTheHat();
@@ -348,7 +389,9 @@ namespace IntuitiveDesigns.ShootingRange
 
             GoLimp();
             float from = _shove;
-            yield return Shove(yankSeconds, t => _shove = from * (1f - t * t));
+            // Leans further out first, then the yank
+            yield return Shove(yankSeconds, t => _shove = from * (t < WindUp ? 1f + lungeWindUp * Mathf.Sin(t / WindUp * Mathf.PI)
+                                                                             : 1f - Squared((t - WindUp) / (1f - WindUp))));
 
             if (coffin != null)
             {
@@ -375,7 +418,7 @@ namespace IntuitiveDesigns.ShootingRange
             _limp = false;
             stand.interpolation = RigidbodyInterpolation.None;
             _engage = 0f;
-            _look = Quaternion.identity;
+            _look = _lookFrom = _lookTarget = Quaternion.identity;
             PlayOne(clunkClips, stand.position, clunkVolume);
             yield return Tween(engageSeconds, t => _engage = t);
             _engage = 1f;
@@ -451,6 +494,8 @@ namespace IntuitiveDesigns.ShootingRange
             for (int i = 0; i < hitches.Length; i++) hitches[i] = Random.Range(hitchBetween.x, hitchBetween.y);
             Array.Sort(hitches);
 
+            PlayOnce(whirClips, whirVolume, ref _whirredAt);
+
             int next = 0;
             for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, seconds))
             {
@@ -458,7 +503,6 @@ namespace IntuitiveDesigns.ShootingRange
                 if (next < hitches.Length && t >= hitches[next])
                 {
                     next++;
-                    PlayOne(clunkClips, stand.position, clunkVolume);
                     yield return new WaitForSeconds(Random.Range(hitchSeconds.x, hitchSeconds.y));
                 }
 
@@ -466,20 +510,48 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             apply(1f);
+            PlayOnce(stopClips, stopVolume, ref _stoppedAt);
         }
 
-        private const float Running = 0.8f;
+        // Moves run in pairs (a reach and a bow together), and two of the same sound at once would flam
+        private const float SameMoment = 0.1f;
 
+        private void PlayOnce(AudioClip[] clips, float volume, ref float lastAt)
+        {
+            if (Time.time - lastAt < SameMoment) return;
+
+            lastAt = Time.time;
+            PlayOne(clips, stand.position, volume);
+        }
+
+        // Shares of a move: the wind-up ends at WindUp, the snap at Snap, and the rest wobbles to rest
+        private const float WindUp = 0.2f;
+        private const float Snap = 0.6f;
+
+        private static float Squared(float t) { return t * t; }
+
+        /// The cartoon servo, 0 to 1: back a little, snap past the end, wobble in. Shakes while the motor runs
         private float Servo(float t)
         {
-            if (t < Running)
+            float shake = Random.Range(-motorShake, motorShake);
+            if (t < WindUp) return -anticipation * Mathf.Sin(t / WindUp * Mathf.PI * 0.5f) + shake;
+            if (t < Snap)
             {
-                float run = t / Running;
-                return run * (1f + overshoot) + Random.Range(-motorShake, motorShake);
+                float u = (t - WindUp) / (Snap - WindUp);
+                return Mathf.LerpUnclamped(-anticipation, 1f + overshoot, u * u * (3f - 2f * u)) + shake;
             }
 
-            float settle = (t - Running) / (1f - Running);
-            return 1f + overshoot * Mathf.Cos(settle * 2.5f * Mathf.PI) * Mathf.Exp(-settle * 4f);
+            float settle = (t - Snap) / (1f - Snap);
+            return 1f + overshoot * Mathf.Cos(settle * wobbles * 2f * Mathf.PI) * Mathf.Exp(-settle * 5f);
+        }
+
+        /// The trip out: ducks back into the coffin, then out fast, slowing into the stop so he never flies on at the player
+        /// (user, 2026-11-13: a lunge stopped dead slammed him into them). The bounce on arrival is up and down only
+        private float Lunge(float t)
+        {
+            if (t < WindUp) return -lungeWindUp * Mathf.Sin(t / WindUp * Mathf.PI);
+            float u = (t - WindUp) / (1f - WindUp);
+            return u * u * (3f - 2f * u);
         }
 
         private Vector3 Side { get { return transform.right * _tipArm.Side; } }
@@ -504,9 +576,90 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (!_limp) return;
 
-            stand.MovePosition(_standRest + outward * (reachOut * _shove));
+            stand.MovePosition(_standRest + ShoveOffset());
             Hold();
             LookLimp();
+        }
+
+        // The stand's bar, carried out with him, and a copy of it stretched from its back end to where that end sat in the
+        // coffin, so the bar always reaches back in (user, 2026-11-13: "his stand is too short"; chose a stretching bar). The
+        // stand itself isn't stretched: his joints hang from it
+        private Transform _reach, _reachBar;
+        private Vector3 _reachAnchor, _reachBackInStand, _reachAxis, _reachMiddle;
+        private float _reachLength;
+
+        private void BuildTheReach()
+        {
+            // The biggest mesh is the bar; the first found was one of its bolts, stretched into a thin rod (user, 2026-11-13)
+            var filter = stand.GetComponentsInChildren<MeshFilter>().Where(m => m.sharedMesh != null)
+                              .OrderByDescending(m => Vector3.Scale(m.sharedMesh.bounds.size, m.transform.lossyScale).sqrMagnitude)
+                              .FirstOrDefault();
+            var bar = filter != null ? filter.GetComponent<MeshRenderer>() : null;
+            if (bar == null || filter.sharedMesh == null) return;
+
+            // Its long axis: the mesh's longest side once scaled
+            var bounds = filter.sharedMesh.bounds;
+            var scaled = Vector3.Scale(bounds.size, filter.transform.lossyScale);
+            int longest = scaled.x >= scaled.y && scaled.x >= scaled.z ? 0 : scaled.y >= scaled.z ? 1 : 2;
+            _reachAxis = new Vector3(longest == 0 ? 1f : 0f, longest == 1 ? 1f : 0f, longest == 2 ? 1f : 0f);
+            _reachMiddle = bounds.center;
+            _reachLength = bounds.size[longest];
+
+            // The end further from him is the back, in the coffin
+            Vector3 a = filter.transform.TransformPoint(bounds.center + _reachAxis * (_reachLength * 0.5f));
+            Vector3 b = filter.transform.TransformPoint(bounds.center - _reachAxis * (_reachLength * 0.5f));
+            _reachAnchor = (a - _body.position).sqrMagnitude > (b - _body.position).sqrMagnitude ? a : b;
+            _reachBackInStand = stand.transform.InverseTransformPoint(_reachAnchor);
+
+            var copy = new GameObject("Stand Reach", typeof(MeshFilter), typeof(MeshRenderer));
+            copy.GetComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
+            copy.GetComponent<MeshRenderer>().sharedMaterials = bar.sharedMaterials;
+            _reach = copy.transform;
+            _reachBar = filter.transform;
+            _reach.localScale = filter.transform.lossyScale;
+            _reach.gameObject.SetActive(false);
+        }
+
+        private void StretchTheReach()
+        {
+            if (_reach == null) return;
+
+            Vector3 back = stand.transform.TransformPoint(_reachBackInStand);
+            Vector3 gap = _reachAnchor - back;
+            float length = gap.magnitude;
+            bool show = length > 0.01f;
+            if (_reach.gameObject.activeSelf != show) _reach.gameObject.SetActive(show);
+            if (!show) return;
+
+            Vector3 along = _reachBar.TransformDirection(_reachAxis);
+            _reach.rotation = Quaternion.FromToRotation(along, gap) * _reachBar.rotation;
+            Vector3 scale = _reachBar.lossyScale;
+            scale[_reachAxis.x > 0f ? 0 : _reachAxis.y > 0f ? 1 : 2] = length / Mathf.Max(1e-5f, _reachLength);
+            _reach.localScale = scale;
+            _reach.position = (back + _reachAnchor) * 0.5f - _reach.TransformVector(_reachMiddle);
+        }
+
+        /// How far the stand has carried him out of the coffin so far
+        private Vector3 ShoveOffset() { return _carry * _shove + Vector3.up * _boing; }
+
+        /// From where his head is now, in the coffin, to beside the player's head as it is now. Falls back to the measured carry
+        private Vector3 CarryToThePlayer()
+        {
+            if (_head == null && !FindTheHead()) return carry;
+
+            Vector3 eyes = _head.position;
+            Vector3 from = HeadCentre();
+            // Where they're looking as he comes out, so he lands in view (user, 2026-11-13: chose front-left, in view); the range
+            // direction only if they're looking straight up or down
+            Vector3 ahead = Vector3.ProjectOnPlane(_head.forward, Vector3.up);
+            ahead = ahead.sqrMagnitude > 0.01f ? ahead.normalized : Vector3.ProjectOnPlane(playerFaces, Vector3.up).normalized;
+            Vector3 side = Vector3.Cross(Vector3.up, ahead);
+            if (Vector3.Dot(from - eyes, side) < 0f) side = -side;
+            Vector3 to = eyes + side * besidePlayer + ahead * aheadOfPlayer + Vector3.up * aboveEyes;
+            Debug.Log("[Barker] Coming out to beside the head '" + _head.name + "' at " + eyes.ToString("0.00") + ", facing " +
+                      ahead.ToString("0.00") + ": from " +
+                      from.ToString("0.00") + " to " + to.ToString("0.00"), this);
+            return to - from;
         }
 
         private static float Damping(float wanted) { return Mathf.Min(wanted, SafeDamping / Time.fixedDeltaTime); }
@@ -544,7 +697,7 @@ namespace IntuitiveDesigns.ShootingRange
             Vector3 face = skull.transform.TransformDirection(_faceInSkull);
             float angle;
             Vector3 axis;
-            Quaternion.FromToRotation(face, LookPoint() - skull.position).ToAngleAxis(out angle, out axis);
+            Quaternion.FromToRotation(face, LookPoint() - HeadCentre()).ToAngleAxis(out angle, out axis);
             if (angle > 180f) angle -= 360f;
 
             skull.AddTorque(axis * (angle * Mathf.Deg2Rad * Stiffness(lookStrength)) - skull.angularVelocity * Damping(lookDamping),
@@ -554,6 +707,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void LateUpdate()
         {
             if (!_limp) Pose();
+            StretchTheReach();
             Listen();
             jaw.localRotation = _jawRest * Quaternion.AngleAxis(jawOpenDegrees * _mouth, Vector3.right);
         }
@@ -562,7 +716,7 @@ namespace IntuitiveDesigns.ShootingRange
         /// while they're catching him, each piece pulled from where the flop left it
         private void Pose()
         {
-            Vector3 offset = outward * (reachOut * _shove);
+            Vector3 offset = ShoveOffset();
             stand.transform.position = _standRest + offset;
             _body.position = _bodyRest + offset;
 
@@ -600,7 +754,7 @@ namespace IntuitiveDesigns.ShootingRange
             return Quaternion.AngleAxis(joltDegrees * amount, _joltAxis);
         }
 
-        /// The head turns at a steady servo speed to a fresh aim at the player every so often, and stops dead there
+        /// Every so often the head turns to a fresh aim at the player on the cartoon servo, cocked to one side
         private void Look()
         {
             if (_head == null && !FindTheHead()) return;
@@ -609,11 +763,16 @@ namespace IntuitiveDesigns.ShootingRange
             {
                 _nextLook = Time.time + lookEverySeconds;
                 Vector3 face = _neck.TransformDirection(_faceInNeck);
-                var turn = Quaternion.FromToRotation(face, LookPoint() - skull.position);
-                _lookTarget = Quaternion.RotateTowards(Quaternion.identity, turn, lookLimit);
+                var turn = Quaternion.FromToRotation(face, LookPoint() - HeadCentre());
+                var aim = Quaternion.RotateTowards(Quaternion.identity, turn, lookLimit);
+                float tilt = Random.value < 0.5f ? -headTilt : headTilt;
+                _lookFrom = _look;
+                _lookTarget = Quaternion.AngleAxis(tilt, aim * face) * aim;
+                _lookStartedAt = Time.time;
             }
 
-            _look = Quaternion.RotateTowards(_look, _lookTarget, lookSpeed * Time.deltaTime);
+            float t = _lookStartedAt < 0f ? 1f : (Time.time - _lookStartedAt) / Mathf.Max(0.01f, lookTurnSeconds);
+            _look = Quaternion.SlerpUnclamped(_lookFrom, _lookTarget, t < 1f ? Servo(t) : 1f);
             _neck.rotation = _look * _neck.rotation;
         }
 
@@ -641,35 +800,55 @@ namespace IntuitiveDesigns.ShootingRange
 
             arm.Shoulder.rotation = Quaternion.FromToRotation(arm.Elbow.position - shoulder, elbow - shoulder) * arm.Shoulder.rotation;
             arm.Elbow.rotation = Quaternion.FromToRotation(arm.Wrist.position - arm.Elbow.position, wrist - arm.Elbow.position) * arm.Elbow.rotation;
+            if (arm == _waveArm && _waving) PalmToThePlayer(arm);
             if (wristShare != 0f) arm.Wrist.rotation = Quaternion.AngleAxis(waveDegrees * wristShare, outward) * arm.Wrist.rotation;
         }
 
-        /// Straight out to his side through the lid's gap, a little toward the player and up, so it's well clear of the
-        /// coffin and easy to see (user, 2026-11-10)
+        /// The hand as people wave: fingers up, palm to the player's face, set outright as the arm reaches (user, 2026-11-13).
+        /// Twisting it about the forearm failed once the arm came out of the gap pointing at the player
+        private void PalmToThePlayer(Arm arm)
+        {
+            Vector3 toward = (_head != null ? _head.position : arm.Wrist.position + outward) - arm.Wrist.position;
+            Vector3 palm = Vector3.ProjectOnPlane(toward, Vector3.up);
+            if (palm.sqrMagnitude < 1e-6f) palm = outward;
+
+            var wanted = Quaternion.LookRotation(palm.normalized, Vector3.up) *
+                         Quaternion.Inverse(Quaternion.LookRotation(arm.PalmInWrist, arm.FingersInWrist));
+            arm.Wrist.rotation = Quaternion.Slerp(arm.Wrist.rotation, wanted, Mathf.Clamp01(_wave));
+        }
+
+        /// Out through the lid's gap, a little toward the player and up, so it's well clear of the coffin and easy to see
+        /// (user, 2026-11-10)
         private Vector3 WaveTarget()
         {
+            // To the middle of the lid's gap first, then on out the way the gap points from his shoulder, so the arm leaves
+            // through the opening, not through the coffin's side (user, 2026-11-13)
             Vector3 rest = _waveArm.RestWrist;
-            Vector3 side = transform.right * _waveArm.Side;
-            Vector3 reached = _waveArm.Shoulder.position + side * ((_waveArm.Upper + _waveArm.Fore) * waveReach) +
+            Vector3 shoulder = _waveArm.Shoulder.position;
+            Vector3 gap = coffin != null ? coffin.GapNear(shoulder) : shoulder + transform.right * _waveArm.Side * _waveArm.Upper;
+            Vector3 reached = shoulder + (gap - shoulder).normalized * ((_waveArm.Upper + _waveArm.Fore) * waveReach) +
                               outward * waveLean.x + Vector3.up * waveLean.y;
-            return Vector3.LerpUnclamped(rest, reached, _wave);
+            return _wave < 0.5f ? Vector3.LerpUnclamped(rest, gap, _wave * 2f) : Vector3.LerpUnclamped(gap, reached, _wave * 2f - 1f);
         }
 
         private Vector3 LookPoint() { return _head.position - Vector3.up * lookBelow; }
 
-        /// The avatar's head once the SDK has spawned the rig, or the camera before it has. Not ?. on VRAvatar: it's a
-        /// UnityEngine.Object, and null propagation would sail past a destroyed one
+        private Vector3 HeadCentre() { return skull.transform.TransformPoint(_headInSkull); }
+
+        /// The camera the player sees through, else the avatar's head. Camera first: in the editor the avatar's 'Head' stayed
+        /// at its start, (0, 1.70, 1.57), while the view moved, so he aimed beside a spot the player wasn't at (log, 2026-11-13).
+        /// Not ?. on VRAvatar: it's a UnityEngine.Object, and null propagation would sail past a destroyed one
         private bool FindTheHead()
         {
+            var cam = Camera.main;
+            if (cam != null) { _head = cam.transform; return true; }
+
             var avatar = VRAvatar.Active;
             if (avatar != null)
             {
                 var limb = avatar.GetLimb(VRAvatarLimbType.Head);
-                if (limb != null) { _head = limb.Transform; return true; }
+                if (limb != null) _head = limb.Transform;
             }
-
-            var cam = Camera.main;
-            if (cam != null) _head = cam.transform;
             return _head != null;
         }
 
@@ -774,8 +953,29 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlayOne(clunkClips, point, clunkVolume);
+            if (_out)
+            {
+                Run(Flop(struck, push, point));
+                return;
+            }
+
             _joltAxis = _waist.parent.InverseTransformDirection(Vector3.Cross(Vector3.up, direction).normalized);
             _joltAt = Time.time;
+        }
+
+        /// Shot while he's out: limp, the hit flinging the piece it struck, then his servos catch him again
+        private IEnumerator Flop(Rigidbody struck, Vector3 push, Vector3 point)
+        {
+            StopWaving();
+            if (_hatInHand) WearTheHat();
+            _handTo = null;
+            _bow = 0f;
+
+            GoLimp();
+            if (struck != null) struck.AddForceAtPosition(push, point, ForceMode.Impulse);
+            yield return new WaitForSeconds(shotLimpSeconds);
+            yield return Engage();
+            _act = null;
         }
 
         private Rigidbody BodyNearest(Vector3 point)

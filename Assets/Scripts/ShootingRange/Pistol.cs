@@ -31,7 +31,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Vector2 magazineFalls = new Vector2(0.04f, 0.3f);
         [SerializeField] private Vector2 magazineRises = new Vector2(0.4f, 0.6f);
         [SerializeField] private float insertKick = 0.3f;
-        [SerializeField, Tooltip("Metres the gun, and the hand on it, jump up the grip as the magazine seats and the slide drops")]
+        [SerializeField]
         private float seatJolt = 0.025f;
         [SerializeField] private float joltSeconds = 0.12f;
         [SerializeField] private ParticleSystem[] tintedByPowerUp;
@@ -91,8 +91,7 @@ namespace IntuitiveDesigns.ShootingRange
         public Transform Muzzle { get { return muzzle != null ? muzzle : transform; } }
         /// The model as posed: recoil, reload tilt and the reload's jolts all move this, not the gun's own transform
         public Transform Visual { get { return visual != null ? visual : transform; } }
-        /// The grip: VRButton.Three on the OVR path, but Three is thumbstick touch on UnityXR, where a
-        /// resting thumb would fire it (ADR 0015)
+
 #if UNITY_XR
         public static readonly string GripButton = VRButton.Seconday;
 #else

@@ -11,22 +11,22 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private PopOpenOnShot lid;
         [SerializeField] private Transform lockPart;
         [SerializeField] private Transform lockGlow;
-        [SerializeField, Tooltip("Smallest to best, each hidden in the chest")] private Transform[] prizes;
+        [SerializeField] private Transform[] prizes;
 
         [Header("Which prize (data): the share of all the session's signs hit to earn each prize after the first")]
         [SerializeField] private float[] tierShares = { 0.2f, 0.4f, 0.6f, 0.75f, 0.9f };
 
         [Header("Reveal (data)")]
-        [SerializeField, Tooltip("Metres the prize rises out of the chest")] private float riseHeight = 0.45f;
+        [SerializeField] private float riseHeight = 0.45f;
         [SerializeField] private float riseSeconds = 1.2f;
-        [SerializeField, Tooltip("How much a prize grows as it rises, the same for every prize so each is seen properly (user, 2026-11-10)")]
+        [SerializeField]
         private float grow = 2.1f;
         [SerializeField] private float turnDegreesPerSecond = 45f;
-        [SerializeField, Tooltip("How long the session holds on the prize before it ends")] private float revealSeconds = 4f;
-        [SerializeField, Tooltip("Seconds the lock waits to be shot, from the drum roll starting, before the chest opens by itself. A drum roll that doesn't loop sets it: the chest opens on its climax")]
+        [SerializeField] private float revealSeconds = 4f;
+        [SerializeField]
         private float claimSeconds = 15f;
-        [Header("Showing where to shoot (data, user 2026-11-10: hard to know where to shoot)")]
-        [SerializeField, Tooltip("A sign and arrow over the lock, shown while it waits; bobs")] private Transform prompt;
+        [Header("Showing where to shoot hard to know where to shoot)")]
+        [SerializeField] private Transform prompt;
         [SerializeField] private float promptBob = 0.05f;
         [SerializeField] private float promptBobsPerSecond = 1.2f;
         [SerializeField, Range(0f, 1f)] private float glowPulse = 0.4f;
@@ -34,17 +34,17 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Audio")]
         [SerializeField] private AudioClip unlockClip;
-        [SerializeField, Tooltip("Smallest to best. Spread over the prizes when there are fewer of these than prizes")] private AudioClip[] fanfares;
+        [SerializeField] private AudioClip[] fanfares;
         [SerializeField, Range(0f, 1f)] private float volume = 0.8f;
-        [Header("Celebration when it opens (user, 2026-11-10)")]
+        [Header("Celebration when it opens")]
         [SerializeField] private ParticleSystem confetti;
-        [SerializeField, Tooltip("Follows the prize up as it rises")] private ParticleSystem sparkle;
-        [SerializeField, Range(0f, 1f), Tooltip("How far through the fanfare the barker names the prize, so he doesn't talk over its start")]
+        [SerializeField] private ParticleSystem sparkle;
+        [SerializeField, Range(0f, 1f)]
         private float lineAfterFanfare = 0.6f;
 
-        [Header("Drum roll while the lock waits to be shot (user, 2026-11-10)")]
-        [SerializeField, Tooltip("Plays until the chest opens; looped only if it's shorter than the wait")] private AudioClip drumRoll;
-        [SerializeField, Tooltip("Cuts the roll off as the lid flies open")] private AudioClip drumRollEnd;
+        [Header("Drum roll while the lock waits to be shot")]
+        [SerializeField] private AudioClip drumRoll;
+        [SerializeField] private AudioClip drumRollEnd;
         [SerializeField, Range(0f, 1f)] private float drumRollVolume = 0.7f;
 
         public static PrizeChest Instance { get; private set; }

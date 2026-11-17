@@ -20,7 +20,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             {
                 if (RangeSetupUtil.Child(pistol.transform, ReloadTagName) != null) { Say(pistol.name + " already has a reload tag"); continue; }
                 BuildAReloadTag(pistol, game, font);
-                Did(pistol.name + ": reload tag over the muzzle, shown while it's dry, double size until the first reload");
+                Did(pistol.name + ": reload tag over the muzzle, shown while it's dry");
             }
             Dirty();
             End();
