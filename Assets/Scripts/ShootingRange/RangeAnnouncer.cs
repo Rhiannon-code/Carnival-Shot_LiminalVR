@@ -21,12 +21,15 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private string roundOverMessage = "ROUND OVER";
         [SerializeField] private string slainLabel = "SLAIN";
         [SerializeField] private string finalScoreLabel = "FINAL SCORE";
-        [SerializeField, Tooltip("On the board while the prize chest waits to be shot; the score shows once it's open")]
+        [SerializeField]
         private string shootTheLock = "SHOOT THE LOCK!";
-        [SerializeField, Tooltip("Seconds the final score takes to count up once the chest is open")] private float tallySeconds = 2.5f;
+        [SerializeField] private float tallySeconds = 2.5f;
 
         private bool _cleared;
         private int _total;
+
+        /// The final score has counted up on the board (PrizeChest ends its drum roll on it)
+        public static event System.Action TallyFinished;
 
         private void OnEnable()
         {
@@ -41,6 +44,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.FinalScore += OnFinalScore;
             }
             PrizeChest.Opened += OnChestOpened;
+            PrizeChest.LockOffered += OnLockOffered;
         }
 
         private void OnDisable()
@@ -56,6 +60,7 @@ namespace IntuitiveDesigns.ShootingRange
                 game.FinalScore -= OnFinalScore;
             }
             PrizeChest.Opened -= OnChestOpened;
+            PrizeChest.LockOffered -= OnLockOffered;
         }
 
         private void Start()
@@ -99,8 +104,13 @@ namespace IntuitiveDesigns.ShootingRange
         private void OnFinalScore(int total)
         {
             _total = total;
-            if (PrizeChest.Instance != null) { Show(shootTheLock); return; }
-            ShowTheScore();
+            if (PrizeChest.Instance == null) ShowTheScore();
+        }
+
+        /// Not before the barker has said to shoot it (user, 2026-11-17)
+        private void OnLockOffered()
+        {
+            Show(shootTheLock);
         }
 
         private void OnChestOpened()
@@ -119,6 +129,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             ShowTheScore();
+            if (TallyFinished != null) TallyFinished();
         }
 
         private void ShowTheScore()

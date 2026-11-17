@@ -22,14 +22,14 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Near misses (data): a round striking the room this close makes the sign flinch")]
         [SerializeField] private float flinchRadius = 0.6f;
-        [SerializeField, Tooltip("Degrees a second of twitch it starts with")] private float flinchKick = 150f;
+        [SerializeField] private float flinchKick = 150f;
 
         [Header("Rail sounds (optional): a clatter that follows the speed, a clunk off the mark, a squeal at the end")]
         [SerializeField] private AudioSource clatter;
         [SerializeField] private AudioClip[] launchClips;
         [SerializeField] private AudioClip[] stopClips;
         [SerializeField, Range(0f, 1f)] private float clipVolume = 0.5f;
-        [SerializeField, Tooltip("Speed, m/s, at which the clatter plays at its own pitch")] private float clatterSpeed = 1.2f;
+        [SerializeField] private float clatterSpeed = 1.2f;
         [SerializeField] private float lowestPitch = 0.8f;
         [SerializeField] private float highestPitch = 1.4f;
 
@@ -173,8 +173,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         public void OnShot(Vector3 point, Vector3 direction, float impulse) { Shot(point, direction, false); }
 
-        /// A ricochet that found this sign: the biggest reaction there is, and the barker notices. Worth no
-        /// more than any other hit (ADR 0063)
         public void OnTrickShot(Vector3 point, Vector3 direction) { Shot(point, direction, true); }
 
         private void Flinch(Vector3 at)

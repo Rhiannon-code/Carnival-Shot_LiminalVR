@@ -26,11 +26,11 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Color bulbOff = new Color(0.42f, 0.29f, 0.12f);
         [SerializeField] private int bulbSpacing = 3;
         [SerializeField] private float bulbStepsPerSecond = 6f;
-        [SerializeField, Range(0f, 1f), Tooltip("How much of the start label shows before the triggers are live")]
+        [SerializeField, Range(0f, 1f)]
         private float startLabelAsleep = 0.35f;
         [SerializeField] private float bullseyePulseScale = 0.06f;
         [SerializeField] private float bullseyePulsesPerSecond = 1.5f;
-        [SerializeField, Tooltip("How far the bullseye jumps when it's shot, as a share of its size")] private float hitPunch = 0.25f;
+        [SerializeField] private float hitPunch = 0.25f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip shotClip;

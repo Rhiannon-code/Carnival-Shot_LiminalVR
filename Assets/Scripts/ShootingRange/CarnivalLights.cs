@@ -18,6 +18,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [SerializeField] private RangeGame game;
         [SerializeField] private Renderer[] bulbs;
+        [SerializeField] private ParticleSystem[] gnats;
 
         [Header("The two bakes (filled by setup step 39)")]
         [SerializeField] private Texture2D[] litColour;
@@ -26,7 +27,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Texture2D[] darkColour;
         [SerializeField] private Texture2D[] darkDirection;
         [SerializeField] private LightProbes darkProbes;
-        [SerializeField, Tooltip("One string on, two strings on, and so on, up to one short of all of them")] private Stage[] stages;
+        [SerializeField] private Stage[] stages;
 
         [Header("Flicker (data, seconds): each step swaps between on and off, and it ends where it was headed")]
         [SerializeField] private float[] comingOn = { 0.12f, 0.2f, 0.08f, 0.35f, 0.1f, 0.15f };
@@ -288,12 +289,26 @@ namespace IntuitiveDesigns.ShootingRange
             if (on) _hum.Stop();
             LitHum(on ? 1f : 0f);
             ShowRoom(on ? StringCount : 0);
+            Gnats(on);
 
             if (bulbs == null) return;
             foreach (var bulb in bulbs) Glow(bulb, on ? 1f : darkGlow);
         }
 
         private int StringCount { get { return bulbs != null ? bulbs.Length : 0; } }
+
+        /// The ones already out live out their second or so, so in a blackout they thin away rather than vanish
+        private void Gnats(bool on)
+        {
+            if (gnats == null) return;
+
+            foreach (var swarm in gnats)
+            {
+                if (swarm == null) continue;
+                if (on) { if (!swarm.isEmitting) swarm.Play(); }
+                else swarm.Stop(false, ParticleSystemStopBehavior.StopEmitting);
+            }
+        }
 
         /// The strings hum while they're lit, louder the more of them are on, and fall silent when they go out. Once
         /// started it runs on and only its volume follows the lights: restarting it on every flicker step chopped it up

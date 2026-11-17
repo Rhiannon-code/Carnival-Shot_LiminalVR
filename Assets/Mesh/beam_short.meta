@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/Mesh/beam_short.meta
 guid: 30780eb6ac356584e9a8d1b92e1d67d6
+========
+guid: 94d7e778cacfa264aa191ddcac612ac6
+>>>>>>>> main:Assets/Mesh/historic_medieval_farm_lamp_iron_hanging_02_yf1jdjr_low.meta
 folderAsset: yes
 DefaultImporter:
   externalObjects: {}

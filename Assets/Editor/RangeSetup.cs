@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -690,7 +691,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             if (moved > 0) Dirty();
         }
 
-        /// How far in front of the player's spot the guns wait to be picked up. 0.30 m was a reach too far (ADR 0063)
         private static float GunZ()
         {
             var floor = RangeSetupUtil.FindInScene("PlayerFloor");
@@ -939,12 +939,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             {
                 var sparks = contents.GetComponent<ParticleSystem>();
                 if (sparks == null) { Fail("FX_MuzzleFlash has no particle system on its root"); return false; }
+                // Sizes below are as seen, in metres: everything scales with the prefab's root (0.35 on 2026-11-17), so undo it
+                float seen = 1f / Mathf.Max(0.01f, contents.transform.localScale.x);
 
                 // The root stays the sparks so the pistols' existing reference still fires the lot
                 var main = sparks.main;
-                main.duration = 0.2f;
+                main.duration = 0.1f;
                 main.loop = false;
-                main.startLifetime = new ParticleSystem.MinMaxCurve(0.05f, 0.12f);
+                // Snappy, not lingering (user, 2026-11-17)
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.04f, 0.08f);
                 main.startSpeed = new ParticleSystem.MinMaxCurve(4f, 8f);
                 main.startSize = new ParticleSystem.MinMaxCurve(0.024f, 0.05f);
                 main.startColor = Color.white;
@@ -959,10 +962,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
                 var flash = FxChild(contents.transform, "Flash", flashMat, ParticleSystemSimulationSpace.Local);
                 main = flash.main;
-                main.duration = 0.1f;
-                main.startLifetime = 0.08f;
+                main.duration = 0.06f;
+                main.startLifetime = 0.05f;
                 main.startSpeed = 0f;
-                main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.76f);
+                // A bigger, quicker pop (user, 2026-11-17: it was 18-27 cm seen, too small, and lingered)
+                main.startSize = new ParticleSystem.MinMaxCurve(0.3f * seen, 0.4f * seen);
                 main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
                 main.startColor = Color.white;
                 main.maxParticles = 1;
@@ -975,15 +979,16 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
                 var wisp = FxChild(contents.transform, "Wisp", smokeMat, ParticleSystemSimulationSpace.World);
                 main = wisp.main;
-                main.duration = 0.6f;
-                main.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.7f);
+                main.duration = 0.3f;
+                // Smaller and gone quickly (user, 2026-11-17: too big, lingered)
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.2f, 0.3f);
                 main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.5f);
-                main.startSize = new ParticleSystem.MinMaxCurve(0.16f, 0.24f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.028f * seen, 0.042f * seen);
                 main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
                 main.startColor = new Color(0.85f, 0.85f, 0.85f, 0.5f);
-                main.maxParticles = 5;
+                main.maxParticles = 3;
                 emission = wisp.emission;
-                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 3, 4) });
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 2, 3) });
                 shape = wisp.shape;
                 shape.enabled = true;
                 shape.shapeType = ParticleSystemShapeType.Cone;
@@ -999,8 +1004,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 sheet.frameOverTime = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0f, 1f, 1f));
 
                 PrefabUtility.SaveAsPrefabAsset(contents, MuzzlePath);
-                Did("FX_MuzzleFlash: sparks (5-8, 0.05-0.12 s) on the root, a Flash pow (1, 0.08 s, 50-76 cm) and a " +
-                    "grey Wisp (3-4 cartoon puffs, 16-24 cm, 0.45-0.7 s) under it. No light, on purpose");
+                Did("FX_MuzzleFlash: sparks (5-8, 0.04-0.08 s) on the root, a Flash pow (1, 0.05 s, 30-40 cm as seen) and a " +
+                    "grey Wisp (2-3 cartoon puffs, 2.8-4.2 cm as seen growing 2.2x, 0.2-0.3 s) under it. No light, on purpose");
                 return true;
             }
             finally { PrefabUtility.UnloadPrefabContents(contents); }
@@ -1867,9 +1872,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const string BatPath = "Assets/Prefabs/ShootingRange/Bat.prefab";
         private const string PerfName = "PerfReadout";
 
-        /// The fps / worst-frame readout for headset testing, small in the HUD's bottom-left corner. It
-        /// sits at the canvas root. ADR 0018: an APK
-        /// may carry it, a .limapp must not, so it has a Remove twin rather than living in the scene
         private static void AddThePerfReadout()
         {
             var hud = Object.FindObjectOfType<PowerUpHUD>();
@@ -1909,7 +1911,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             Dirty();
             Did("Perf readout in the HUD's bottom-left corner: fps, average and worst frame against 72 Hz, " +
-                "also to adb logcat as [Perf]. Remove it before building a .limapp (ADR 0018)");
+                "also to adb logcat as [Perf]. Remove it before building a .limapp");
         }
 
         private static void RemoveThePerfReadout()
@@ -2099,12 +2101,20 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private const string FogName = "GroundFog";
         private const string FogNoise = "Assets/Textures/ShootingRange/T_SR_FogNoise.png";
+        // Only where no wall is found either side of where the player stands
         private const float FogWidth = 7f;
+        private static readonly float[] FogHeights = { 0.05f, 0.16f, 0.26f, 0.38f };
         // The first tier is at z 6; the fog stops short of it so the planes don't show cutting through its front (user, 2026-11-10)
         private const float FogEndZ = 5.7f;
         private const float FogHoleMargin = 0.15f;
         private const float FogHoleSoftness = 0.2f;
         private const int FogHoles = 4;
+        // What stands in the fog (user, 2026-11-17: the sheets cut through Alex's shelf, the stairs, the chest and the coffin)
+        private const float FogTop = 0.4f;
+        private const float FogClearMargin = 0.2f;
+        private const float FogAcrossDepth = 1f;
+        private const float FogHoleLargest = 2f;
+        private const float FogLineSoftness = 0.4f;
 
         private static void LayTheGroundFog()
         {
@@ -2124,25 +2134,154 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var high = FogMaterial("Assets/Materials/SR_GroundFogHigh.mat", shader, noise, 0.3f, 0.2f, 0.42f,
                                    new Vector4(-0.05f, 0.02f), new Vector4(0.03f, -0.04f));
 
-            var bench = RangeSetupUtil.FindInScene("ShootingBench");
-            float start = (bench != null ? bench.transform.position.z : 0.55f) + 0.5f;
-            float floor = FloorUnder(new Vector3(0f, 2f, (start + FogEndZ) * 0.5f));
+            Rect area;
+            float floor;
+            FogSpan(out area, out floor);
 
             var root = RangeSetupUtil.FindInScene(FogName);
             if (root == null) root = new GameObject(FogName);
             for (int i = root.transform.childCount - 1; i >= 0; i--) Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+            // The sheets are sized in it, so a parent moved or scaled by hand blows them up through the walls (it was 2 x 3, 2026-11-17)
+            root.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            root.transform.localScale = Vector3.one;
 
-            FogLayer(root.transform, "Low", low, floor + 0.05f, start);
-            FogLayer(root.transform, "High", high, floor + 0.16f, start);
-            FogAroundThePlayer(low, high);
+            FogLayer(root.transform, "Low", low, floor + 0.05f, area);
+            FogLayer(root.transform, "High", high, floor + 0.16f, area);
+            FogAroundThePlayer(area, floor, low, high);
             Dirty();
-            Did("Ground fog: two layers, " + FogWidth + " m wide from z " + start.ToString("0.00") + " to " + FogEndZ +
-                ", 5 and 16 cm over the floor at y " + floor.ToString("0.00") + ". Tune SR_GroundFogLow / High");
+            Did("Ground fog: two layers over x " + area.xMin.ToString("0.00") + " to " + area.xMax.ToString("0.00") + ", z " +
+                area.yMin.ToString("0.00") + " to " + area.yMax.ToString("0.00") + ", 5 and 16 cm over the floor at y " +
+                floor.ToString("0.00") + ". Tune SR_GroundFogLow / High");
         }
 
-        /// Where the player stands (PlayerFloor, else the bench), so the clear patch stays put however they look; and a hole round
-        /// each prop stack, so the flat fog doesn't cut through them
-        private static void FogAroundThePlayer(params Material[] materials)
+        /// The open floor round the player (user, 2026-11-17: fill it): out to a little short of the walls either side and behind,
+        /// and of anything long and thin standing along a side (Alex's shelf in front, the side steps, which have no colliders),
+        /// never past FogEndZ. x is across, y is z
+        private static void FogSpan(out Rect area, out float floor)
+        {
+            var spot = RangeSetupUtil.FindInScene("PlayerFloor");
+            if (spot == null) spot = RangeSetupUtil.FindInScene("ShootingBench");
+            Vector3 stand = spot != null ? spot.transform.position : Vector3.zero;
+            floor = FloorUnder(new Vector3(stand.x, 2f, stand.z + 1.5f));
+
+            area = Rect.MinMaxRect(stand.x - WallAway(stand, floor, Vector3.left, FogWidth * 0.5f) + FogClearMargin,
+                                   stand.z - WallAway(stand, floor, Vector3.back, 0.5f) + FogClearMargin,
+                                   stand.x + WallAway(stand, floor, Vector3.right, FogWidth * 0.5f) - FogClearMargin, FogEndZ);
+            // Twice, as one side drawing in can leave something along another long enough to count
+            for (int pass = 0; pass < 2; pass++)
+            foreach (var thing in StandingInTheFog(area, floor))
+            {
+                var b = thing.Bounds;
+                if (AlongX(b, area))
+                {
+                    if (b.center.z > stand.z) area.yMax = Mathf.Min(area.yMax, b.min.z - FogClearMargin);
+                    else area.yMin = Mathf.Max(area.yMin, b.max.z + FogClearMargin);
+                }
+                else if (AlongZ(b, area))
+                {
+                    if (b.center.x > stand.x) area.xMax = Mathf.Min(area.xMax, b.min.x - FogClearMargin);
+                    else area.xMin = Mathf.Max(area.xMin, b.max.x + FogClearMargin);
+                }
+            }
+        }
+
+        /// Standing right across the fog, like a wall: at least half its width long and under FogAcrossDepth deep
+        private static bool AlongX(Bounds b, Rect area) { return b.size.x >= area.width * 0.5f && b.size.z < FogAcrossDepth; }
+
+        private static bool AlongZ(Bounds b, Rect area) { return b.size.z >= area.height * 0.5f && b.size.x < FogAcrossDepth; }
+
+        private static bool Inside(Bounds b, Rect area)
+        {
+            return b.max.x > area.xMin && b.min.x < area.xMax && b.max.z > area.yMin && b.min.z < area.yMax;
+        }
+
+        /// How far the first thing that stays put is, at fog height, from where the player stands
+        private static float WallAway(Vector3 stand, float floor, Vector3 direction, float fallback)
+        {
+            float nearest = float.MaxValue;
+            foreach (float height in FogHeights)
+            foreach (var hit in Physics.RaycastAll(new Vector3(stand.x, floor + height, stand.z), direction, 20f, ~0, QueryTriggerInteraction.Ignore))
+                if (StaysPut(hit.collider.transform) && hit.collider.name != "PlayerFloor") nearest = Mathf.Min(nearest, hit.distance);
+            return nearest < float.MaxValue ? nearest : fallback;
+        }
+
+        private static bool StaysPut(Transform t)
+        {
+            return !NotASurface(t) && t.GetComponentInParent<TrackMover>() == null && t.GetComponentInParent<Knockable>() == null &&
+                   t.GetComponentInParent<Pistol>() == null;
+        }
+
+        private struct FogObstacle
+        {
+            public Bounds Bounds;
+            public Renderer Renderer;
+        }
+
+        /// What doesn't move and stands inside the fog's slab, small pieces that touch merged into one (a chest and its lock)
+        private static List<FogObstacle> StandingInTheFog(Rect area, float floor)
+        {
+            var slab = new Bounds();
+            slab.SetMinMax(new Vector3(area.xMin, floor + 0.05f, area.yMin), new Vector3(area.xMax, floor + FogTop, area.yMax));
+
+            var found = new List<FogObstacle>();
+            foreach (var renderer in Object.FindObjectsOfType<MeshRenderer>())
+            {
+                if (!renderer.enabled || !renderer.bounds.Intersects(slab) || !StaysPut(renderer.transform)) continue;
+                found.Add(new FogObstacle { Bounds = renderer.bounds, Renderer = renderer });
+            }
+
+            for (bool merged = true; merged;)
+            {
+                merged = false;
+                for (int i = 0; i < found.Count && !merged; i++)
+                for (int j = i + 1; j < found.Count && !merged; j++)
+                {
+                    if (!Small(found[i].Bounds) || !Small(found[j].Bounds) || !found[i].Bounds.Intersects(found[j].Bounds)) continue;
+                    var both = found[i].Bounds;
+                    both.Encapsulate(found[j].Bounds);
+                    found[i] = new FogObstacle { Bounds = both, Renderer = found[i].Renderer };
+                    found.RemoveAt(j);
+                    merged = true;
+                }
+            }
+            return found;
+        }
+
+        private static bool Small(Bounds b) { return Mathf.Max(b.size.x, b.size.z) <= FogHoleLargest; }
+
+        /// The front edge of something deep standing in the fog (the side stairs), from where level rays across the fog first
+        /// meet it: x and y point into it, z is where the fog is gone, w how far it thins before that
+        private static Vector4 FogLineAt(FogObstacle deep, Rect area, float floor)
+        {
+            var points = new List<Vector2>();
+            for (float x = area.xMin; x <= area.xMax; x += 0.25f)
+            {
+                float nearest = float.MaxValue;
+                foreach (float height in FogHeights)
+                foreach (var hit in Physics.RaycastAll(new Vector3(x, floor + height, area.yMin), Vector3.forward, 20f, ~0, QueryTriggerInteraction.Ignore))
+                    if (hit.collider.transform.IsChildOf(deep.Renderer.transform) || deep.Renderer.transform.IsChildOf(hit.collider.transform))
+                        nearest = Mathf.Min(nearest, hit.point.z);
+                if (nearest < float.MaxValue) points.Add(new Vector2(x, nearest));
+            }
+            if (points.Count < 2) return Vector4.zero;
+
+            var mean = Vector2.zero;
+            foreach (var p in points) mean += p;
+            mean /= points.Count;
+            float xx = 0f, xz = 0f, zz = 0f;
+            foreach (var p in points) { var d = p - mean; xx += d.x * d.x; xz += d.x * d.y; zz += d.y * d.y; }
+            float angle = 0.5f * Mathf.Atan2(2f * xz, xx - zz);
+            var normal = new Vector2(-Mathf.Sin(angle), Mathf.Cos(angle));
+            var middle = new Vector2(deep.Bounds.center.x, deep.Bounds.center.z);
+            if (Vector2.Dot(normal, middle - mean) < 0f) normal = -normal;
+
+            return new Vector4(normal.x, normal.y, Vector2.Dot(mean, normal) - FogClearMargin, FogLineSoftness);
+        }
+
+        /// Where the player stands (PlayerFloor, else the bench), so the clear patch stays put however they look; a hole round
+        /// each prop stack and each small thing standing in the fog (the chest, the coffin); and a soft edge before one deep thing
+        /// (the side stairs), so the flat fog doesn't cut through any of them
+        private static void FogAroundThePlayer(Rect area, float floor, params Material[] materials)
         {
             var spot = RangeSetupUtil.FindInScene("PlayerFloor");
             if (spot == null) spot = RangeSetupUtil.FindInScene("ShootingBench");
@@ -2162,16 +2301,38 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 }
             }
 
+            var line = Vector4.zero;
+            var deepOnes = new List<string>();
+            foreach (var thing in StandingInTheFog(area, floor).OrderByDescending(o => o.Bounds.size.x * o.Bounds.size.z))
+            {
+                var b = thing.Bounds;
+                if (!Inside(b, area)) continue;
+                if (Small(b))
+                {
+                    if (holes.Count < FogHoles) holes.Add(new Vector4(b.center.x, b.center.z, Mathf.Max(b.extents.x, b.extents.z) + FogClearMargin, FogHoleSoftness));
+                    else Fail("No fog hole left for " + thing.Renderer.name + ": the fog cuts through it");
+                }
+                else if (!AlongX(b, area) && !AlongZ(b, area))
+                {
+                    if (line == Vector4.zero) line = FogLineAt(thing, area, floor);
+                    deepOnes.Add(thing.Renderer.name);
+                }
+            }
+            if (deepOnes.Count > 1) Fail("The fog clears before one deep thing only (" + deepOnes[0] + "); it cuts through " + string.Join(", ", deepOnes.Skip(1).ToArray()));
+            if (deepOnes.Count > 0 && line == Vector4.zero) Fail("No collider found on " + deepOnes[0] + " to fit the fog's edge to: the fog cuts through it");
+
             foreach (var material in materials)
             {
                 material.SetVector("_Stand", new Vector4(stand.x, stand.z, 0f, 0f));
                 for (int i = 0; i < FogHoles; i++)
                     material.SetVector("_Hole" + i, i < holes.Count ? holes[i] : new Vector4(0f, 0f, 0f, FogHoleSoftness));
+                material.SetVector("_ClearLine", line);
                 EditorUtility.SetDirty(material);
             }
 
             Did("Ground fog thins round where the player stands (" + stand.x.ToString("0.00") + ", " + stand.z.ToString("0.00") +
-                "), clears round " + holes.Count + " prop stack(s), and stops at z " + FogEndZ);
+                "), clears round " + holes.Count + " thing(s) standing in it" + (line != Vector4.zero ? ", fades out before " + deepOnes[0] : "") +
+                ", and stops at z " + area.yMax.ToString("0.00"));
         }
 
         private static Material FogMaterial(string path, Shader shader, Texture noise, float density, float scaleA,
@@ -2198,15 +2359,15 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             return material;
         }
 
-        private static void FogLayer(Transform root, string name, Material material, float height, float start)
+        private static void FogLayer(Transform root, string name, Material material, float height, Rect area)
         {
             var plane = GameObject.CreatePrimitive(PrimitiveType.Quad);
             Object.DestroyImmediate(plane.GetComponent<Collider>());
             plane.name = name;
             plane.transform.SetParent(root, false);
-            plane.transform.position = new Vector3(0f, height, (start + FogEndZ) * 0.5f);
+            plane.transform.position = new Vector3(area.center.x, height, area.center.y);
             plane.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            plane.transform.localScale = new Vector3(FogWidth, FogEndZ - start, 1f);
+            plane.transform.localScale = new Vector3(area.width, area.height, 1f);
 
             var renderer = plane.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
@@ -2237,10 +2398,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private const string SpiderPath = "Assets/Prefabs/ShootingRange/Spider.prefab";
 
-        private const string SpiderModelPath = "Assets/Models/spider/spider_legs.fbx";
+        // The 2026-11-13 spider, its legs split off by LiminalVR/tools/spider_split.py in Local Docs
+        private const string SpiderModelPath = "Assets/Models/SpiderNew/spider_legs.fbx";
         private const string SpiderSkinPath = "Assets/Materials/SR_Spider.mat";
-        private const string SpiderAlbedoPath = "Assets/Models/spider/lambert2_Base_color.png";
-        private const string SpiderNormalPath = "Assets/Models/spider/lambert2_Normal_OpenGL.png";
+        private const string SpiderAlbedoPath = "Assets/Models/SpiderNew/lambert5_Base_color.png";
+        private const string SpiderNormalPath = "Assets/Models/SpiderNew/lambert5_Normal_OpenGL.png";
         // Tip to tip across the legs, as the greybox spider was (user, 2026-11-10)
         private const float SpiderSpan = 0.6f;
 
@@ -2341,8 +2503,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             material.shader = shader;
-            material.SetTexture("_MainTex", RangeSetupUtil.Load<Texture2D>(SpiderAlbedoPath));
-            var normal = RangeSetupUtil.Load<Texture2D>(SpiderNormalPath);
+            material.SetTexture("_MainTex", PrizeTexture(SpiderAlbedoPath, false));
+            var normal = PrizeTexture(SpiderNormalPath, true);
             material.SetTexture("_BumpMap", normal);
             if (normal != null) material.EnableKeyword("_NORMALMAP");
             EditorUtility.SetDirty(material);
@@ -3260,13 +3422,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 "same sums are redone from wherever the player's head actually is, so a crouch lowers the " +
                 "line and the signs stay only just in view");
 
-            float ceiling = CeilingBottom();
-
             foreach (var rail in Object.FindObjectsOfType<TrackRail>())
             {
                 var fields = new Fields(rail);
                 float shown = fields.Float("shownOffset");
                 float railY = rail.PointAt(rail.Length * 0.5f).y;
+                // The roof itself, straight above the rail. There is no object called Ceiling, so CeilingBottom() is a guess
+                float ceiling = RoomSurface(rail.PointAt(rail.Length * 0.5f), Vector3.up, float.PositiveInfinity);
+                if (float.IsPositiveInfinity(ceiling)) Say(rail.name + ": no roof collider above it, so no ceiling check");
 
                 if (rail.Hinge == Hinge.Sideways)
                 {

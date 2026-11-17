@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/Mesh/beam_long.meta
 guid: b68e90ec03a824f498c3fc27ba31eae5
+========
+guid: 6115249e818e1aa4fa334649b22d3ad8
+>>>>>>>> main:Assets/Mesh/cobweb.meta
 folderAsset: yes
 DefaultImporter:
   externalObjects: {}

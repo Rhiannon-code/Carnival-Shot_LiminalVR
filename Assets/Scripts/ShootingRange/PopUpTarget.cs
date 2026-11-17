@@ -45,7 +45,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float snapOdds = 2f;
         [SerializeField] private float peekOdds = 1f;
         [SerializeField, Tooltip("Roof signs only")] private float bungeeOdds = 2f;
-        [SerializeField, Range(0f, 1f), Tooltip("How far up a peek gets before it pops")] private float peekShare = 0.3f;
+        [SerializeField, Range(0f, 1f)] private float peekShare = 0.3f;
         [SerializeField] private float snapOvershoot = 1.8f;
         [SerializeField] private float bungeeOvershoot = 2.5f;
 
@@ -59,7 +59,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("In the sun (data): a vampire under an open skylight goes up in flames")]
         [SerializeField] private float burnSeconds = 1f;
-        [SerializeField, Tooltip("Seconds between one lick of flame and the next")] private float flameEvery = 0.05f;
+        [SerializeField] private float flameEvery = 0.05f;
         [SerializeField] private Color charred = new Color(0.1f, 0.08f, 0.07f);
         [SerializeField] private AudioClip[] igniteClips;
 
@@ -92,9 +92,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Material specialGlow;
         [SerializeField] private float specialBorder = 0.035f;
         [SerializeField] private float specialStrength = 1.8f;
-        [Header("Faint outline on every other sign, so it stands out from the room (data, user 2026-11-10)")]
+        [Header("Faint outline on every other sign, so it stands out from the room")]
         [SerializeField] private Color rimColour = new Color(1f, 0.88f, 0.66f);
-        [SerializeField, Tooltip("Metres of border round the sign")] private float rimBorder = 0.015f;
+        [SerializeField] private float rimBorder = 0.015f;
         [SerializeField] private float rimStrength = 0.15f;
 
         [Header("Audio (optional)")]

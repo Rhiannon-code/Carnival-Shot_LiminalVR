@@ -1,4 +1,6 @@
-// Bullet holes (ShotDecals). Unlit, alpha blended, faded by vertex colour alpha.
+// Bullet holes (ShotDecals). Premultiplied (One, OneMinusSrcAlpha), so a hole darkens the wall under it and adds a little
+// raw wood on its torn edge, the wall's own grain and light showing through (user, 2026-11-17; tools/shot-decal-art.py makes
+// the art for this). Vertex colour carries the hue of the light where the hole landed (rgb) and the fade (alpha).
 //
 // Offset pulls the hole forward in the depth test only, so it can sit flat on the wall instead of
 // floating a centimetre off it to stop the two flickering through each other.
@@ -8,6 +10,7 @@ Shader "IntuitiveDesigns/Shot Decal"
     {
         _MainTex ("Holes (RGBA)", 2D) = "white" {}
         _DarkShare ("Brightness in a blackout, as a share of lit", Range(0, 1)) = 0.12
+        _WoodEdge ("Raw wood on the torn edge", Range(0, 1)) = 0.5
     }
 
     SubShader
@@ -16,7 +19,7 @@ Shader "IntuitiveDesigns/Shot Decal"
         Tags { "RenderType" = "Transparent" "Queue" = "AlphaTest+50" "IgnoreProjector" = "True" }
         LOD 100
 
-        Blend SrcAlpha OneMinusSrcAlpha
+        Blend One OneMinusSrcAlpha
         ZWrite Off
         Cull Off
         Offset -1, -4
@@ -26,7 +29,6 @@ Shader "IntuitiveDesigns/Shot Decal"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_fog
 
             #include "UnityCG.cginc"
 
@@ -41,7 +43,6 @@ Shader "IntuitiveDesigns/Shot Decal"
             {
                 float2 uv : TEXCOORD0;
                 fixed4 color : COLOR;
-                UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -50,6 +51,7 @@ Shader "IntuitiveDesigns/Shot Decal"
             float4 _MainTex_ST;
             half _DarkShare;
             half _RoomLight;
+            half _WoodEdge;
 
             v2f vert (appdata v)
             {
@@ -60,18 +62,15 @@ Shader "IntuitiveDesigns/Shot Decal"
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.color = v.color;
-                UNITY_TRANSFER_FOG(o, o.vertex);
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
-                fixed4 col = tex2D(_MainTex, i.uv) * i.color;
-
-                // Unlit, so the pale rims would glow in a blackout. _RoomLight is set by CarnivalLights
-                col.rgb *= lerp(_DarkShare, 1, _RoomLight);
-                UNITY_APPLY_FOG(i.fogCoord, col);
-                return col;
+                fixed4 art = tex2D(_MainTex, i.uv);
+                // The wood is unlit, so it would glow in a blackout. _RoomLight is set by CarnivalLights
+                half3 wood = art.rgb * i.color.rgb * _WoodEdge * lerp(_DarkShare, 1, _RoomLight);
+                return fixed4(wood, art.a) * i.color.a;
             }
             ENDCG
         }

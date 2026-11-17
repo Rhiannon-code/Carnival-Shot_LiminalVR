@@ -1,6 +1,3 @@
-// A soft puff of ground fog (a particle). Worked out from its uv, so it needs no texture, and it fades out close to the
-// camera, because a big see-through quad right against the eye is the costly case and looks like a flat card anyway.
-// CarnivalLights sets _Color with the room's lights
 Shader "CrystalCatch/Fog Wisp"
 {
     Properties
@@ -8,6 +5,14 @@ Shader "CrystalCatch/Fog Wisp"
         _Color ("Colour", Color) = (0.45, 0.42, 0.5, 1)
         _NearFade ("Gone by this close, metres", Float) = 1
         _NearFadeRange ("Fully there this much further, metres", Float) = 1.5
+        _EndZ ("Gone by this z, the fog's far end (step 51)", Float) = 100
+        _FloorY ("Gone at this height, the floor (step 51)", Float) = -100
+        _ClearSoftness ("Fade into the floor and far end over, metres", Float) = 0.2
+        _Hole0 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
+        _Hole1 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
+        _Hole2 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
+        _Hole3 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
+        _ClearLine ("Clear past a line: direction x, z, distance, softness (step 51)", Vector) = (0, 0, 0, 0.4)
     }
 
     SubShader
@@ -26,6 +31,7 @@ Shader "CrystalCatch/Fog Wisp"
             #pragma target 2.0
 
             #include "UnityCG.cginc"
+            #include "FogHoles.cginc"
 
             struct appdata
             {
@@ -40,12 +46,16 @@ Shader "CrystalCatch/Fog Wisp"
                 float4 vertex : SV_POSITION;
                 fixed alpha : COLOR;
                 float2 uv : TEXCOORD0;
+                float3 world : TEXCOORD1;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
             fixed4 _Color;
             float _NearFade;
             float _NearFadeRange;
+            float _EndZ;
+            float _FloorY;
+            float _ClearSoftness;
 
             v2f vert (appdata v)
             {
@@ -55,7 +65,8 @@ Shader "CrystalCatch/Fog Wisp"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                float away = distance(mul(unity_ObjectToWorld, v.vertex).xyz, _WorldSpaceCameraPos);
+                o.world = mul(unity_ObjectToWorld, v.vertex).xyz;
+                float away = distance(o.world, _WorldSpaceCameraPos);
                 o.alpha = v.color.a * saturate((away - _NearFade) / max(_NearFadeRange, 0.01));
                 o.uv = v.uv * 2 - 1;
                 return o;
@@ -64,7 +75,9 @@ Shader "CrystalCatch/Fog Wisp"
             fixed4 frag (v2f i) : SV_Target
             {
                 float soft = saturate(1 - dot(i.uv, i.uv));
-                return fixed4(_Color.rgb, soft * soft * i.alpha);
+                float softness = max(_ClearSoftness, 0.01);
+                float inside = saturate((_EndZ - i.world.z) / softness) * saturate((i.world.y - _FloorY) / softness);
+                return fixed4(_Color.rgb, soft * soft * i.alpha * inside * FogHoles(i.world.xz));
             }
             ENDCG
         }
