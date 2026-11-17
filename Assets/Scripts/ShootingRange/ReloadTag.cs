@@ -8,22 +8,19 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Pistol pistol;
         [SerializeField] private RangeGame game;
         [SerializeField] private GameObject content;
-        [SerializeField] private Transform gripGlow;
+        [SerializeField, Tooltip("What the arrow points down at: the gun's ammo counter. Empty, the muzzle")]
+        private Transform pointAt;
 
         [Header("Look (data)")]
-        [SerializeField] private float above = 0.1f;
+        [SerializeField, Tooltip("Metres from what it points at up to the arrow's middle")] private float above = 0.03f;
         [SerializeField]
         private float size = 0.5f;
-        [SerializeField] private float pulsesPerSecond = 2f;
-        [SerializeField, Range(0f, 0.5f)] private float pulse = 0.15f;
 
-        private Vector3 _glowSize;
         private Transform _head;
         private bool _showing;
 
         private void Awake()
         {
-            if (gripGlow != null) _glowSize = gripGlow.localScale;
             content.SetActive(false);
         }
 
@@ -37,7 +34,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
             if (!show) return;
 
-            transform.position = pistol.SightOrigin + Vector3.up * above;
+            transform.position = (pointAt != null ? pointAt.position : pistol.SightOrigin) + Vector3.up * above;
             if (_head != null || FindTheHead())
             {
                 // Text Mesh Pro and quads read from behind their +Z, so +Z points away from the player
@@ -46,8 +43,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             transform.localScale = Vector3.one * size / Mathf.Max(1e-4f, transform.parent != null ? transform.parent.lossyScale.x : 1f);
-            if (gripGlow != null)
-                gripGlow.localScale = _glowSize * (1f + pulse * Mathf.Sin(Time.unscaledTime * pulsesPerSecond * 2f * Mathf.PI));
         }
 
         /// The avatar's head once the SDK has spawned the rig, or the camera before it has. Not ?. on VRAvatar: it's a

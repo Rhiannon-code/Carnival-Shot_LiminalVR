@@ -3,17 +3,16 @@ using TMPro;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A small count on the gun itself, where the player is already looking. Empty, it says how to reload
+    /// A small count on the gun itself, where the player is already looking. Empty, it shows 0: the reload tag over it says
+    /// how to reload (user, 2026-11-17: the red "RELOAD · GRIP" here went)
     [RequireComponent(typeof(TMP_Text))]
     public class AmmoCounter : MonoBehaviour
     {
         [SerializeField] private Pistol pistol;
 
         [Header("Copy (data)")]
-        [SerializeField] private string reloadPrompt = "RELOAD · GRIP";
         [SerializeField, Tooltip("Shown while a power-up gives the gun a bottomless magazine")] private string bottomless = "\u221E";
         [SerializeField] private Color countColour = new Color(1f, 0.92f, 0.75f);
-        [SerializeField] private Color promptColour = new Color(1f, 0.3f, 0.2f);
 
         private TMP_Text _text;
 
@@ -72,9 +71,8 @@ namespace IntuitiveDesigns.ShootingRange
                 return;
             }
 
-            bool empty = pistol.IsEmpty;
-            _text.color = empty ? promptColour : countColour;
-            _text.text = empty ? reloadPrompt : pistol.RoundsLeft.ToString();
+            _text.color = countColour;
+            _text.text = pistol.RoundsLeft.ToString();
         }
 
         private void Update()

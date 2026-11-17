@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace IntuitiveDesigns.ShootingRange
 {
@@ -18,6 +19,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float surfaceGap = 0.002f;
         [SerializeField] private float fadeSeconds = 0.4f;
         [SerializeField] private float lifeSeconds = 10f;
+        [Tooltip("How much a hole takes on the colour of the light where it lands: 0 keeps the art's own colour, 1 the light's full hue. Brightness is never lowered")]
+        [SerializeField, Range(0f, 1f)] private float lightHue = 0.5f;
 
         // A few more slots than marks, so the ones fading out are not taken over mid-fade
         private const int FadingSpare = 6;
@@ -31,6 +34,9 @@ namespace IntuitiveDesigns.ShootingRange
         private Color32[] _colours;
         private float[] _fadeFrom;
         private float[] _bornAt;
+        private Color32[] _lit;
+        private readonly Vector3[] _probeDirection = new Vector3[1];
+        private readonly Color[] _probeLight = new Color[1];
         private int _next;
         private int _shown;
 
@@ -42,6 +48,7 @@ namespace IntuitiveDesigns.ShootingRange
             _colours = new Color32[slots * 4];
             _fadeFrom = new float[slots];
             _bornAt = new float[slots];
+            _lit = new Color32[slots];
 
             var triangles = new int[slots * 6];
             for (int i = 0; i < slots; i++)
@@ -156,12 +163,34 @@ namespace IntuitiveDesigns.ShootingRange
 
             _fadeFrom[slot] = -1f;
             _bornAt[slot] = Time.time;
+            _lit[slot] = LightAt(point, normal);
             SetAlpha(slot, 255);
 
             _mesh.vertices = _corners;
             _mesh.uv = _uvs;
             _mesh.colors32 = _colours;
         }
+
+        /// The colour of the baked light where it landed, so a hole on a red-lit wall is red-tinged and sits in the room's light.
+        /// Only its hue: the probes there are far darker than the wall looks, and a hole lit by them was hard to spot (user,
+        /// 2026-11-17). White with no light probes baked
+        private Color32 LightAt(Vector3 point, Vector3 normal)
+        {
+            if (LightmapSettings.lightProbes == null) return new Color32(255, 255, 255, 255);
+
+            SphericalHarmonicsL2 probe;
+            LightProbes.GetInterpolatedProbe(point, null, out probe);
+            _probeDirection[0] = normal;
+            probe.Evaluate(_probeDirection, _probeLight);
+            var light = _probeLight[0];
+            float brightest = Mathf.Max(light.r, light.g, light.b);
+            if (brightest < 1e-4f) return new Color32(255, 255, 255, 255);
+
+            var hue = Color.Lerp(Color.white, light / brightest, lightHue);
+            return new Color32(Channel(hue.r), Channel(hue.g), Channel(hue.b), 255);
+        }
+
+        private static byte Channel(float value) { return (byte)Mathf.RoundToInt(Mathf.Clamp01(value) * 255f); }
 
         private static bool OnThe(Collider surface, Vector3 corner, Vector3 normal)
         {
@@ -211,7 +240,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void SetAlpha(int slot, byte alpha)
         {
-            var colour = new Color32(255, 255, 255, alpha);
+            var colour = _lit[slot];
+            colour.a = alpha;
             for (int corner = 0; corner < 4; corner++) _colours[slot * 4 + corner] = colour;
         }
     }

@@ -9,7 +9,7 @@ Shader "CrystalCatch/Ground Fog"
         _ScaleB ("Pattern B, tiles per metre", Float) = 0.55
         _DriftA ("Pattern A drift, metres per second (x, z)", Vector) = (0.06, 0.025, 0, 0)
         _DriftB ("Pattern B drift, metres per second (x, z)", Vector) = (-0.035, 0.045, 0, 0)
-        _Edge ("Edge fade, share of the plane", Range(0.01, 0.5)) = 0.22
+        _EdgeMetres ("Edge fade, metres", Float) = 0.5
         _WispLow ("Wisps: noise below this is clear", Range(0, 1)) = 0.2
         _WispHigh ("Wisps: noise above this is full", Range(0, 2)) = 1
         _Stand ("Where the player stands, x and z: set by step 18", Vector) = (0, 0, 0, 0)
@@ -17,6 +17,7 @@ Shader "CrystalCatch/Ground Fog"
         _Hole1 ("Clear round a prop: x, z, radius, softness (step 18)", Vector) = (0, 0, 0, 0.2)
         _Hole2 ("Clear round a prop: x, z, radius, softness (step 18)", Vector) = (0, 0, 0, 0.2)
         _Hole3 ("Clear round a prop: x, z, radius, softness (step 18)", Vector) = (0, 0, 0, 0.2)
+        _ClearLine ("Clear past a line: direction x, z, distance, softness (step 51)", Vector) = (0, 0, 0, 0.4)
         _NearFade ("Gone by this close, metres", Float) = 0.6
         _NearFadeRange ("Fully there this much further, metres", Float) = 2
     }
@@ -53,6 +54,7 @@ Shader "CrystalCatch/Ground Fog"
                 float2 b : TEXCOORD1;
                 float2 uv : TEXCOORD2;
                 float3 world : TEXCOORD3;
+                float2 size : TEXCOORD4;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -63,7 +65,7 @@ Shader "CrystalCatch/Ground Fog"
             float _ScaleB;
             float4 _DriftA;
             float4 _DriftB;
-            float _Edge;
+            float _EdgeMetres;
             float _WispLow;
             float _WispHigh;
             float _NearFade;
@@ -91,13 +93,16 @@ Shader "CrystalCatch/Ground Fog"
                 o.b = (world.xz - _DriftB.xy * _Time.y) * _ScaleB;
                 o.uv = v.uv;
                 o.world = world;
+                // The quad's own width and depth, so its edges fade over metres however big step 51 lays it
+                o.size = float2(length(unity_ObjectToWorld._m00_m10_m20), length(unity_ObjectToWorld._m01_m11_m21));
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed fog = smoothstep(_WispLow, _WispHigh, tex2D(_Noise, i.a).r * tex2D(_Noise, i.b).r * 2);
-                float2 edge = smoothstep(0, _Edge, i.uv) * smoothstep(0, _Edge, 1 - i.uv);
+                float edgeFade = max(_EdgeMetres, 0.01);
+                float2 edge = smoothstep(0, edgeFade, i.uv * i.size) * smoothstep(0, edgeFade, (1 - i.uv) * i.size);
                 float near = saturate((distance(i.world.xz, _Stand.xy) - _NearFade) / max(_NearFadeRange, 0.01));
                 float holes = FogHoles(i.world.xz);
                 float stirred = Stir(i.world.xz, _FogStir0) * Stir(i.world.xz, _FogStir1);

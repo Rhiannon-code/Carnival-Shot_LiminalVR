@@ -29,6 +29,64 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         [MenuItem("Shooting Range/Setup/35 - Open The Skylights", false, 58)]
         public static void SkylightsMenu() { Begin("Skylights"); OpenTheSkylights(); End(); }
 
+        // How far past each of its two rows a lined-up beam reaches, so a sign standing on either row is in it
+        private const float BeamPastRows = 0.2f;
+        // Signs stand up to about 1.15 m over their rail (step 30): the beam is aimed at half that
+        private const float SignMiddleOverRail = 0.55f;
+
+        /// Each window stays in its opening in the tent (they sit back there so the boards can be seen, tent plan 2026-11-13);
+        /// its beam leans from the window down through the middle of its two rows at sign height, on to the floor, and widens
+        /// (with the reach that burns vampires) to take in both rows (user, 2026-11-17: "1 hits the middle rows and 2 hits the
+        /// back rows")
+        [MenuItem("Shooting Range/Setup/35b - Aim The Skylight Beams At Their Rows", false, 58)]
+        public static void AimTheSkylightBeamsMenu()
+        {
+            if (!EditorUtility.DisplayDialog("Aim the skylight beams",
+                    "This tilts the sunbeam of Skylight Floor_Across_1 onto the middle rows and Skylight Floor_Across_2's onto the " +
+                    "back rows, and widens each to cover both rows. The windows don't move. Bake afterwards.", "Aim them", "Cancel"))
+                return;
+
+            Begin("Skylight beams aimed at their rows");
+            foreach (var tier in SkylightTiers)
+            {
+                string name = "Skylight " + tier[0];
+                var sky = RangeSetupUtil.FindInScene(name);
+                var skylight = sky != null ? sky.GetComponent<Skylight>() : null;
+                if (skylight == null) { Fail("No " + name + " with a Skylight in the scene. Step 35 lays it"); continue; }
+
+                var middles = new List<Vector3>();
+                foreach (var railName in tier)
+                {
+                    var found = RangeSetupUtil.FindInScene(railName);
+                    var rail = found != null ? found.GetComponent<TrackRail>() : null;
+                    if (rail != null) middles.Add(rail.PointAt(rail.Length * 0.5f));
+                }
+                if (middles.Count < 2) { Fail(name + ": needs both " + string.Join(" and ", tier)); continue; }
+
+                var fields = new Fields(skylight);
+                var beam = fields.Ref("beam") as Renderer;
+                if (beam == null) { Fail(name + " has no beam"); continue; }
+
+                float front = Mathf.Min(middles[0].z, middles[1].z), back = Mathf.Max(middles[0].z, middles[1].z);
+                float radius = (back - front) * 0.5f + BeamPastRows;
+                var window = sky.transform.position;
+                var target = new Vector3(window.x, (middles[0].y + middles[1].y) * 0.5f + SignMiddleOverRail, (front + back) * 0.5f);
+                var down = (target - window).normalized;
+                float floor = FloorUnder(new Vector3(target.x, target.y, target.z));
+                float length = (window.y - floor) / Mathf.Max(0.05f, -down.y);
+
+                Undo.RecordObject(beam.transform, "Aim " + name);
+                beam.transform.position = window + down * length * 0.5f;
+                beam.transform.rotation = Quaternion.FromToRotation(Vector3.up, -down);
+                beam.transform.localScale = new Vector3(radius * 2f, length * 0.5f, radius * 2f);
+                fields.Set("radius", radius).Apply();
+                Did(name + ": beam leans " + Vector3.Angle(Vector3.down, down).ToString("0") + "° onto rows at z " + front.ToString("0.00") +
+                    " and " + back.ToString("0.00") + " (through " + target.ToString("F2") + "), " + (radius * 2f).ToString("0.00") + " m across");
+            }
+            Dirty();
+            End();
+        }
+
         /// Fills blanks: a skylight already over its tier only has its boards brought up to date. Delete it and
         /// re-run to lay it out again
         private static void OpenTheSkylights()

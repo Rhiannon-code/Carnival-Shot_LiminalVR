@@ -12,6 +12,7 @@ Shader "CrystalCatch/Fog Wisp"
         _Hole1 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
         _Hole2 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
         _Hole3 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
+        _ClearLine ("Clear past a line: direction x, z, distance, softness (step 51)", Vector) = (0, 0, 0, 0.4)
     }
 
     SubShader

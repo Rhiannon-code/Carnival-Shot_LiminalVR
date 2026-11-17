@@ -6,7 +6,9 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 {
     /// Step 83: what step 82 found on Alex's pieces and the tent, put right (user, 2026-11-13). Box colliders where a piece has
     /// none, a PhysicMaterial where a collider has none, the tent's cloth its own soft surface with no debris, and bullet holes on
-    /// the flat wood. Fills blanks: a collider or material already there is left alone
+    /// the flat wood. Fills blanks: a collider or material already there is left alone, except that the open pieces a box can't
+    /// fit (the shelf, the side stairs, the pillars) get a collider of their own mesh, so a hole lands on the wood rather than in
+    /// the air in front of it (user, 2026-11-17)
     public static partial class RangeSetup
     {
         private enum ShotSurface { Wood, Metal, Cloth }
@@ -17,9 +19,10 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             public bool Prefix;
             public ShotSurface Surface;
             public bool Holes;
-            public ShotPiece(string name, ShotSurface surface, bool holes, bool prefix = false)
+            public bool FitMesh;
+            public ShotPiece(string name, ShotSurface surface, bool holes, bool prefix = false, bool fitMesh = false)
             {
-                Name = name; Surface = surface; Holes = holes; Prefix = prefix;
+                Name = name; Surface = surface; Holes = holes; Prefix = prefix; FitMesh = fitMesh;
             }
         }
 
@@ -33,7 +36,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             new ShotPiece("wall_bats", ShotSurface.Wood, false), new ShotPiece("lantern", ShotSurface.Metal, false),
             new ShotPiece("Canvas", ShotSurface.Cloth, false),
             new ShotPiece("Valance", ShotSurface.Cloth, false),
-            new ShotPiece("vlwmahl_LOD0_TIER3_000", ShotSurface.Wood, true), new ShotPiece("stairs1", ShotSurface.Wood, true),
+            new ShotPiece("vlwmahl_LOD0_TIER3_000", ShotSurface.Wood, true, fitMesh: true),
+            new ShotPiece("stairs1", ShotSurface.Wood, true, fitMesh: true), new ShotPiece("pillar", ShotSurface.Wood, true, fitMesh: true),
             new ShotPiece("handle", ShotSurface.Metal, false, true), new ShotPiece("helmet", ShotSurface.Metal, false),
             new ShotPiece("decoration2", ShotSurface.Wood, false), new ShotPiece("Beam", ShotSurface.Wood, true),
         };
@@ -62,7 +66,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             AddHoleSurfaces(fields.FindProperty("holeSurfaces"));
             fields.ApplyModifiedPropertiesWithoutUndo();
 
-            int boxes = 0, tagged = 0;
+            int boxes = 0, tagged = 0, meshed = 0;
             foreach (var renderer in Object.FindObjectsOfType<MeshRenderer>())
             {
                 if (!renderer.enabled || !ShotRoom.Contains(renderer.bounds.center) || Moves(renderer.transform)) continue;
@@ -73,16 +77,22 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
                 var material = piece.Surface == ShotSurface.Wood ? wood : piece.Surface == ShotSurface.Metal ? metal : cloth;
                 var collider = holder.GetComponent<Collider>();
-                if (collider == null)
+                if (collider == null && !piece.FitMesh)
                 {
                     collider = FittedBox(holder, renderer);
                     boxes++;
                 }
-                if (collider.sharedMaterial == null) { collider.sharedMaterial = material; tagged++; }
+                if (piece.FitMesh && !(collider is MeshCollider))
+                {
+                    var fitted = MeshFitted(holder, renderer, collider);
+                    if (fitted != null) { collider = fitted; meshed++; }
+                }
+                if (collider != null && collider.sharedMaterial == null) { collider.sharedMaterial = material; tagged++; }
             }
 
             Dirty();
-            Did(boxes + " box colliders added, " + tagged + " colliders given a surface. Run step 82 to check");
+            Did(boxes + " box colliders added, " + meshed + " swapped for a collider of the piece's own mesh, " + tagged +
+                " colliders given a surface. Run step 82 to check");
         }
 
         /// The cloth's own surface: the soft surface's sounds, no debris (user: "Soft canvas, no debris")
@@ -145,6 +155,41 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             box.center = local.center;
             box.size = local.size;
             return box;
+        }
+
+        /// The piece's own mesh as its collider, in place of a box, keeping the box's surface. Only on the object the mesh is on
+        private static MeshCollider MeshFitted(Transform holder, Renderer renderer, Collider old)
+        {
+            var filter = renderer.GetComponent<MeshFilter>();
+            if (holder != renderer.transform || filter == null || filter.sharedMesh == null)
+            {
+                Say(holder.name + ": its mesh isn't on its own object, so it keeps " + (old != null ? "its " + old.GetType().Name : "no collider"));
+                return null;
+            }
+
+            // Unity 2019.1 Manual, Mesh Collider: a mesh that isn't read/write enabled won't work under a skewed transform
+            if (!filter.sharedMesh.isReadable && Skewed(holder))
+                Fail(holder.name + ": turn on Read/Write in " + filter.sharedMesh.name + "'s import settings, its transform is skewed");
+
+            var surface = old != null ? old.sharedMaterial : null;
+            if (old != null) Object.DestroyImmediate(old);
+            var collider = holder.gameObject.AddComponent<MeshCollider>();
+            collider.sharedMesh = filter.sharedMesh;
+            collider.sharedMaterial = surface;
+            return collider;
+        }
+
+        /// A turned object under a parent scaled unevenly comes out sheared
+        private static bool Skewed(Transform t)
+        {
+            bool turnedBelow = t.localRotation != Quaternion.identity;
+            for (var parent = t.parent; parent != null; parent = parent.parent)
+            {
+                var s = parent.localScale;
+                if (turnedBelow && (!Mathf.Approximately(s.x, s.y) || !Mathf.Approximately(s.y, s.z))) return true;
+                turnedBelow |= parent.localRotation != Quaternion.identity;
+            }
+            return false;
         }
 
         private static void AddHoleSurfaces(SerializedProperty holes)

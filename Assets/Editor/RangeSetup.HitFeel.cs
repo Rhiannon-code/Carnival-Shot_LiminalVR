@@ -158,7 +158,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         {
             if (!EditorUtility.DisplayDialog("Better ground fog",
                     "This DELETES everything under " + FogName + " and lays it again: 4 thin sheets at rising heights and drifting wisps " +
-                    "over the floor, all clear of the prop stacks and the first tier, and rounds clearing rings through it. No bake needed. It costs more " +
+                    "over the floor, and resets " + FogName + "'s own position and scale. The fog stops short of the shelf and clears round the chest, the coffin " +
+                    "and the side stairs, and rounds clear rings through it. No bake needed. It costs more " +
                     "see-through drawing than the 2 sheets did, so check the frame rate on a Quest 2.", "Do it", "Cancel"))
                 return;
 
@@ -170,15 +171,16 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var noise = RangeSetupUtil.Load<Texture2D>(FogNoise);
             if (root == null || shader == null || noise == null) { Fail("The ground fog didn't lay. See above"); End(); return; }
 
-            float start = RangeSetupUtil.Child(root.transform, "Low").position.z * 2f - FogEndZ;
-            float floor = RangeSetupUtil.Child(root.transform, "Low").position.y - 0.05f;
+            Rect area;
+            float floor;
+            FogSpan(out area, out floor);
 
             var mid = FogMaterial("Assets/Materials/SR_GroundFogMid.mat", shader, noise, 0.22f, 0.26f, 0.5f,
                                   new Vector4(0.04f, -0.03f), new Vector4(-0.05f, -0.02f));
             var top = FogMaterial("Assets/Materials/SR_GroundFogTop.mat", shader, noise, 0.14f, 0.17f, 0.37f,
                                   new Vector4(-0.03f, -0.035f), new Vector4(0.045f, 0.015f));
-            FogLayer(root.transform, "Mid", mid, floor + 0.26f, start);
-            FogLayer(root.transform, "Top", top, floor + 0.38f, start);
+            FogLayer(root.transform, "Mid", mid, floor + 0.26f, area);
+            FogLayer(root.transform, "Top", top, floor + 0.38f, area);
 
             // Layered, so each is fainter than the one sheet it replaces
             SetFogDensity("Assets/Materials/SR_GroundFogLow.mat", 0.38f);
@@ -190,15 +192,18 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var wisp = RangeSetupUtil.Load<Material>(FogWispMaterial);
             if (wisp == null) { wisp = new Material(wispShader); AssetDatabase.CreateAsset(wisp, FogWispMaterial); }
             wisp.shader = wispShader;
-            wisp.SetFloat("_EndZ", FogEndZ);
+            wisp.SetFloat("_EndZ", area.yMax);
             wisp.SetFloat("_FloorY", floor);
             wisp.SetFloat("_ClearSoftness", FogHoleSoftness);
 
             // Step 18 clears only its own two sheets round the player and the prop stacks; these clear the same way
-            FogAroundThePlayer(mid, top, wisp);
+            FogAroundThePlayer(area, floor, mid, top, wisp);
 
-            MakeFogWisps(root.transform, "Wisps Floor", wisp, new Vector3(0f, floor + 0.3f, (start + FogEndZ) * 0.5f),
-                         new Vector3(FogWidth, 0.2f, FogEndZ - start), 14, 1.6f, 1.2f, 2.2f, 0.16f);
+            // Held in by the biggest puff's half-width at the sides and back, so none pokes through a wall; the far end fades by _EndZ
+            const float biggestWisp = 2.2f;
+            var wisps = Rect.MinMaxRect(area.xMin + biggestWisp * 0.5f, area.yMin + biggestWisp * 0.5f, area.xMax - biggestWisp * 0.5f, area.yMax);
+            MakeFogWisps(root.transform, "Wisps Floor", wisp, new Vector3(wisps.center.x, floor + 0.3f, wisps.center.y),
+                         new Vector3(wisps.width, 0.2f, wisps.height), 14, 1.6f, 1.2f, biggestWisp, 0.16f);
 
             // None on the steps (user, 2026-11-13): puffs there poked through Alex's step art and the signs
             Did("Fog: drifting wisps over the floor, fading out before the floor, the first tier and the prop stacks");

@@ -98,9 +98,12 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Shot (data)")]
         [SerializeField] private float shotImpulse = 0.8f;
         [SerializeField] private float joltDegrees = 6f;
-        [SerializeField]
-        private float shotLimpSeconds = 1f;
         [SerializeField] private float joltSeconds = 0.25f;
+        [Header("Shot while out on his stand: snapped back away from the shot, then eased upright (user, 2026-11-17)")]
+        [SerializeField] private float recoilDegrees = 25f;
+        [SerializeField] private float recoilSeconds = 0.6f;
+        [SerializeField, Range(0.05f, 0.5f), Tooltip("Share of recoilSeconds spent snapping back; the rest eases him upright")]
+        private float recoilSnapShare = 0.15f;
         [SerializeField] private AudioClip[] hitClips;
         [SerializeField, Range(0f, 1f)] private float hitVolume = 0.6f;
 
@@ -158,6 +161,7 @@ namespace IntuitiveDesigns.ShootingRange
         private float _stoppedAt = float.MinValue;
         private Vector3 _joltAxis = Vector3.right;
         private float _joltAt = -1f;
+        private bool _recoil;
         private float _mouth, _mouthSpeed;
         private bool _out, _limp, _didWell, _waving;
         private Transform _head;
@@ -746,8 +750,15 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (_joltAt < 0f) return Quaternion.identity;
 
-            float t = (Time.time - _joltAt) / Mathf.Max(0.01f, joltSeconds);
+            float t = (Time.time - _joltAt) / Mathf.Max(0.01f, _recoil ? recoilSeconds : joltSeconds);
             if (t >= 1f) { _joltAt = -1f; return Quaternion.identity; }
+
+            if (_recoil)
+            {
+                float back = t < recoilSnapShare ? Mathf.Sin(t / recoilSnapShare * Mathf.PI * 0.5f)
+                                                 : Mathf.SmoothStep(1f, 0f, (t - recoilSnapShare) / (1f - recoilSnapShare));
+                return Quaternion.AngleAxis(recoilDegrees * back, _joltAxis);
+            }
 
             // Out and back in two hard ticks, not a spring
             float amount = t < 0.3f ? 1f : t < 0.6f ? -0.4f : 0f;
@@ -953,29 +964,11 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlayOne(clunkClips, point, clunkVolume);
-            if (_out)
-            {
-                Run(Flop(struck, push, point));
-                return;
-            }
-
+            // Out on his stand he used to go limp, and gravity tipped him on toward the player (user, 2026-11-17: he should lean
+            // back). Tipping about up x the shot's line takes the top of him along it, away from whoever fired
+            _recoil = _out;
             _joltAxis = _waist.parent.InverseTransformDirection(Vector3.Cross(Vector3.up, direction).normalized);
             _joltAt = Time.time;
-        }
-
-        /// Shot while he's out: limp, the hit flinging the piece it struck, then his servos catch him again
-        private IEnumerator Flop(Rigidbody struck, Vector3 push, Vector3 point)
-        {
-            StopWaving();
-            if (_hatInHand) WearTheHat();
-            _handTo = null;
-            _bow = 0f;
-
-            GoLimp();
-            if (struck != null) struck.AddForceAtPosition(push, point, ForceMode.Impulse);
-            yield return new WaitForSeconds(shotLimpSeconds);
-            yield return Engage();
-            _act = null;
         }
 
         private Rigidbody BodyNearest(Vector3 point)

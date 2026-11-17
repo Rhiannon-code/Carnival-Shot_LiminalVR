@@ -39,6 +39,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("The prize chest at the end: shoot the lock, then what was won, smallest to best")]
         [SerializeField] private AudioClip[] shootTheLock;
+        [Tooltip("Seconds into his shoot-the-lock line where he has said 'Drum roll, please!'; the roll starts there")]
+        [SerializeField] private float drumRollCue = 2.1f;
         [SerializeField] private AudioClip[] prizeSmall;
         [SerializeField] private AudioClip[] prizeMedium;
         [SerializeField] private AudioClip[] prizeBig;
@@ -70,6 +72,12 @@ namespace IntuitiveDesigns.ShootingRange
         /// What the skeleton barker's jaw follows
         public AudioSource Speaker { get { return _audio; } }
 
+        /// He has got as far as "Drum roll, please!" in his shoot-the-lock line
+        public bool CalledForTheDrumRoll
+        {
+            get { return _lockLineAt >= 0f && Time.unscaledTime >= _lockLineAt + drumRollCue / Mathf.Max(0.1f, _audio.pitch); }
+        }
+
         private readonly Queue<AudioClip> _queue = new Queue<AudioClip>();
         // Warnings that go ahead of the queue, but still wait for the line he is saying to finish
         private readonly Queue<AudioClip> _upNext = new Queue<AudioClip>();
@@ -78,6 +86,8 @@ namespace IntuitiveDesigns.ShootingRange
         private int _misses;
         private float _busyUntil;
         private float _quietUntil;
+        private AudioClip _lockLine;
+        private float _lockLineAt = -1f;
         private bool _cleared;
         private bool _warnedOfSpiders;
         private bool _warnedOfBats;
@@ -228,7 +238,11 @@ namespace IntuitiveDesigns.ShootingRange
             if (PrizeChest.Instance == null) Queue(goodbye);
         }
 
-        public void AskForTheLock() { Queue(shootTheLock); }
+        public void AskForTheLock()
+        {
+            _lockLine = Pick(shootTheLock);
+            if (_lockLine != null) _queue.Enqueue(_lockLine);
+        }
 
         /// 0 smallest to 3 best
         /// Small, medium, big and top: how many sets of prize lines he has
@@ -331,6 +345,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             _audio.PlayOneShot(clip, volume);
             _busyUntil = Time.unscaledTime + clip.length / Mathf.Max(0.1f, _audio.pitch);
+            if (clip == _lockLine) _lockLineAt = Time.unscaledTime;
         }
 
         private static AudioClip Pick(AudioClip[] lines)
