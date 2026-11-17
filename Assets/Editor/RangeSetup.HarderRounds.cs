@@ -3,15 +3,11 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange.EditorTools
 {
-    /// Step 74 (ADR 0073): harder rounds and a punchier hit. The signs' pace (shared with step 19), louder sign voices and
-    /// reactions, a bat puff no bigger than the bat, and on every sign hit an impact star, a ring, wood chunks, a little
-    /// dust and the score rising off it. The effects are made once and then left alone: retune them in the Inspector
     public static partial class RangeSetup
     {
         private const float SignVoiceVolume = 0.8f;
         private const float SignReactionVolume = 0.8f;
         private const int SignSplinterTimes = 3;
-        // The puff is about six times this across, against a bat's body of about 12 cm (52 cm wingspan, ADR 0055)
         private const float BatPopScale = 0.02f;
         private const string ScorePopupsName = "Score Popups";
 

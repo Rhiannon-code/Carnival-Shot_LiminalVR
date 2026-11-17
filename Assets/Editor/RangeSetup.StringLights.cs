@@ -31,9 +31,10 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float BoothLightRange = 2.5f;
         private const float FanLightIntensity = 0.65f;
         private const float FanLightRange = 3.5f;
-        private const float FanBelowCeiling = 0.35f;
+        private const float FanBelowCeiling = 0.2f;
         private const float FanMeetGap = 0.1f;
-        private const int FanFirstLight = 7;
+        // The fan strings meet at the booth top; no baked lights within this many metres of it, or they pile up there
+        private const float FanFirstLightAt = 2.1f;
         private const string FanFillName = "Fill";
         private const float FanFillY = 2.2f;
         private const float FanFillSideX = 3f;
@@ -46,19 +47,33 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const float FanBackX = 3.6f;
         private const float FanOffBackWall = 0.4f;
         private const float FanBackFallbackZ = -4.4f;
-        private const int StringLightEvery = 4;
+        // A baked light about this far apart along a string, whatever its bulb spacing
+        private const float StringLightSpacing = 1.2f;
 
-        private const float StringBulbSpacing = 0.3f;
-        private const float StringBulbSize = 0.03f;
-        private const float StringWireWidth = 0.01f;
-        private const float StringSagPerMetre = 0.06f;
-        private const float StringHookSpacing = 2f;
+        // Every string (user, 2026-11-13: about 300 bulbs at 0.5-0.7 m was "way too many")
+        private const float StringBulbSpacing = 1.2f;
+        private const string StringBulbPath = "Assets/Models/StringBulb/StringBulb.fbx";
+        // Inside the glass: the bulb hangs 0.1225 m below the wire
+        private const float BulbLightDrop = 0.075f;
+        // Wide enough to read as one string in the headset (user, 2026-11-13: at 1 cm the bulbs looked like separate pieces)
+        private const float StringWireWidth = 0.02f;
+        // Like the canvas between its beams (user, 2026-11-13: "droop similar to the canvas roof"): 0.1 m a metre of span, at most
+        // 0.35 m, with hooks far enough apart to show it
+        private const float StringSagPerMetre = 0.1f;
+        private const float StringSagMax = 0.35f;
+        private const float StringHookSpacing = 3f;
+        private const int StringPointsPerSpan = 12;
+        private const string StringWireShader = "CrystalCatch/String Wire";
         private const float StringFront = 0.06f;
         private const float BoothStringBelowCeiling = 0.25f;
         private const float BoothStringBottom = 1.2f;
         private const float CeilingSearchFrom = 3.2f;
         private const float RangeStringX = 2.5f;
-        private const float RangeStringBelowCeiling = 0.4f;
+        // Over the lanes, so as close as the cloth allows: the canvas can ripple 0.11 m down (SR_TentCanvas), the wire droops up to
+        // 0.3 m between 3 m hooks and the modelled bulbs hang 0.1225 m below it: 0.06 m over the back front lane's tallest sign
+        private const float RangeStringBelowCeiling = 0.15f;
+        // They stop this far short of the back-most lane: its tallest signs reach 4.12 m, the canvas over it is only 4.58 m
+        private const float RangeStringShortOfBack = 0.8f;
 
         private static readonly Color DarkSky = new Color(0.04f, 0.036f, 0.045f);
         private static readonly Color DarkEquator = new Color(0.027f, 0.024f, 0.029f);
@@ -97,7 +112,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             var bulbMaterial = ShaderMaterial(StringBulbMaterialPath, StringBulbShader, StringColour);
-            var wireMaterial = ShaderMaterial(WireMaterialPath, "Unlit/Color", new Color(0.05f, 0.04f, 0.04f));
+            var wireMaterial = WireMaterial();
             if (bulbMaterial == null || wireMaterial == null) return;
 
             var left = RangeSetupUtil.FindInScene(SidePillars[0, 1]);
@@ -135,6 +150,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             float backZ = frontZ;
             foreach (var rail in Object.FindObjectsOfType<TrackRail>())
                 backZ = Mathf.Max(backZ, Mathf.Max(rail.PointAt(0f).z, rail.PointAt(rail.Length).z));
+            backZ -= RangeStringShortOfBack;
 
             int lights = 0;
             for (int side = -1; side <= 1; side += 2)
@@ -172,7 +188,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             if (marker == null) { Fail("No " + StringLightsName + "/Booth Top to fan out from. Run step 37"); return; }
 
             var bulbMaterial = ShaderMaterial(StringBulbMaterialPath, StringBulbShader, StringColour);
-            var wireMaterial = ShaderMaterial(WireMaterialPath, "Unlit/Color", new Color(0.05f, 0.04f, 0.04f));
+            var wireMaterial = WireMaterial();
             if (bulbMaterial == null || wireMaterial == null) return;
 
             float frontZ = marker.transform.position.z;
@@ -206,7 +222,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 var meet = UnderCeiling(new Vector3(pair.Value.x < 0f ? -FanMeetGap : FanMeetGap, 0f, frontZ), FanBelowCeiling);
                 var end = UnderCeiling(new Vector3(pair.Value.x, 0f, pair.Value.y), FanBelowCeiling);
                 lights += HangString(strings, pair.Key, Hooks(meet, end, FanBelowCeiling), bulbMaterial, wireMaterial,
-                                     FanLightIntensity, FanLightRange, FanFirstLight);
+                                     FanLightIntensity, FanLightRange, Mathf.RoundToInt(FanFirstLightAt / StringBulbSpacing));
             }
 
             HangTheRoomFill(strings);
@@ -308,53 +324,41 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         /// The wire sags between hooks; a straight drop (down a pillar) hangs straight. Returns how many lights it has
         private static int HangString(Transform parent, string name, List<Vector3> hooks, Material bulbMaterial, Material wireMaterial,
-                                      float intensity = StringLightIntensity, float range = StringLightRange, int firstLight = 0)
+                                      float intensity = StringLightIntensity, float range = StringLightRange, int firstLight = 0,
+                                      float spacing = StringBulbSpacing)
         {
-            var path = new List<Vector3>();
-            for (int h = 0; h + 1 < hooks.Count; h++)
-            {
-                var a = hooks[h];
-                var b = hooks[h + 1];
-                float across = new Vector2(b.x - a.x, b.z - a.z).magnitude;
-                float sag = StringSagPerMetre * across;
-                for (int s = h == 0 ? 0 : 1; s <= 20; s++)
-                {
-                    float t = s / 20f;
-                    path.Add(Vector3.Lerp(a, b, t) + Vector3.down * 4f * sag * t * (1f - t));
-                }
-            }
+            return HangRuns(parent, name, new List<List<Vector3>> { hooks }, bulbMaterial, wireMaterial, intensity, range, firstLight, spacing);
+        }
 
+        /// Several separate runs under one holder: one mesh of bulbs, sockets and wire, one set of lights. The bake and the start-up
+        /// chase go string by string, so the beam swags and the room edge are one string each, not one per beam
+        private static int HangRuns(Transform parent, string name, List<List<Vector3>> runs, Material bulbMaterial, Material wireMaterial,
+                                    float intensity, float range, int firstLight, float spacing)
+        {
             var holder = new GameObject(name).transform;
             holder.SetParent(parent, false);
 
-            var wire = new GameObject("Wire").AddComponent<LineRenderer>();
-            wire.transform.SetParent(holder, false);
-            wire.useWorldSpace = true;
-            wire.positionCount = path.Count;
-            wire.SetPositions(path.ToArray());
-            wire.widthMultiplier = StringWireWidth;
-            wire.sharedMaterial = wireMaterial;
-            wire.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            wire.receiveShadows = false;
+            var paths = new List<StringPath>();
+            var spots = new List<StringPoint>();
+            foreach (var hooks in runs)
+            {
+                if (hooks.Count < 2) continue;
 
-            var spots = Along(path, StringBulbSpacing);
-            var vertices = new List<Vector3>();
-            var uvs = new List<Vector2>();
-            var triangles = new List<int>();
-            foreach (var spot in spots) Diamond(spot, StringBulbSize, 0f, vertices, uvs, triangles);
+                var path = SaggingPath(hooks);
+                paths.Add(path);
+                spots.AddRange(Along(path, spacing));
+            }
 
-            var mesh = new Mesh { name = "StringBulbs " + name };
-            mesh.SetVertices(vertices);
-            mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateBounds();
+            var mesh = StringMesh(paths, spots, "StringBulbs " + name);
+            if (mesh == null) return 0;
             AssetDatabase.CreateAsset(mesh, StringMeshDir + "/" + name.Replace(" ", "") + ".asset");
 
             var bulbs = new GameObject("Bulbs");
             bulbs.transform.SetParent(holder, false);
             bulbs.AddComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = bulbs.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = bulbMaterial;
+            // Glass first: CarnivalLights sets _Glow through a property block, which the wire's material ignores
+            renderer.sharedMaterials = new[] { bulbMaterial, wireMaterial };
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
             renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -362,30 +366,64 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             var lights = new GameObject("Lights").transform;
             lights.SetParent(holder, false);
+            int every = Mathf.Max(1, Mathf.RoundToInt(StringLightSpacing / spacing));
             int count = 0;
-            for (int i = firstLight; i < spots.Count; i += StringLightEvery)
+            for (int i = firstLight; i < spots.Count; i += every)
             {
-                BakedLight(lights, "Light", spots[i] + Vector3.down * 0.05f, StringColour, intensity, range, StringLightSoftness);
+                BakedLight(lights, "Light", spots[i].At + Vector3.down * BulbLightDrop, StringColour, intensity, range, StringLightSoftness);
                 count++;
             }
 
             return count;
         }
 
-        /// Evenly spaced points along a polyline
-        private static List<Vector3> Along(List<Vector3> path, float spacing)
+        /// A point on a string and how free it is to sway: 0 at a hook, 1 mid-span (the vertex red the string shaders read)
+        private struct StringPoint
         {
-            var spots = new List<Vector3> { path[0] };
+            public Vector3 At;
+            public float Freedom;
+            public StringPoint(Vector3 at, float freedom) { At = at; Freedom = freedom; }
+        }
+
+        private class StringPath : List<StringPoint> { }
+
+        /// Droops between hooks the way the canvas does between beams (user, 2026-11-13): deeper the wider the span, up to a limit.
+        /// A straight drop (down a pillar) hangs straight
+        private static StringPath SaggingPath(List<Vector3> hooks)
+        {
+            var path = new StringPath();
+            for (int h = 0; h + 1 < hooks.Count; h++)
+            {
+                var a = hooks[h];
+                var b = hooks[h + 1];
+                float across = new Vector2(b.x - a.x, b.z - a.z).magnitude;
+                float sag = Mathf.Min(StringSagMax, StringSagPerMetre * across);
+                for (int s = h == 0 ? 0 : 1; s <= StringPointsPerSpan; s++)
+                {
+                    float t = s / (float)StringPointsPerSpan;
+                    float droop = 4f * t * (1f - t);
+                    path.Add(new StringPoint(Vector3.Lerp(a, b, t) + Vector3.down * sag * droop, across > 0.01f ? droop : 0f));
+                }
+            }
+
+            return path;
+        }
+
+        /// Evenly spaced points along a path, each as free as the path is there
+        private static List<StringPoint> Along(StringPath path, float spacing)
+        {
+            var spots = new List<StringPoint> { path[0] };
             float carried = 0f;
             for (int i = 1; i < path.Count; i++)
             {
                 var a = path[i - 1];
                 var b = path[i];
-                float length = Vector3.Distance(a, b);
+                float length = Vector3.Distance(a.At, b.At);
                 float d = spacing - carried;
                 while (d <= length)
                 {
-                    spots.Add(Vector3.Lerp(a, b, d / length));
+                    float t = d / length;
+                    spots.Add(new StringPoint(Vector3.Lerp(a.At, b.At, t), Mathf.Lerp(a.Freedom, b.Freedom, t)));
                     d += spacing;
                 }
 
@@ -393,6 +431,104 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             return spots;
+        }
+
+        /// The modelled bulb (art/string-bulb/build_string_bulb.py in Local Docs, after Alex's String Lights.fbx) at every spot,
+        /// hanging straight down, plus the wire as a thin four-sided tube: submesh 0 the glass, 1 the sockets and wire. One mesh,
+        /// so the wire and bulbs sway together in the shader instead of a LineRenderer that cannot
+        private static Mesh StringMesh(List<StringPath> paths, List<StringPoint> spots, string name)
+        {
+            var model = RangeSetupUtil.Load<GameObject>(StringBulbPath);
+            var filter = model != null ? model.GetComponentInChildren<MeshFilter>() : null;
+            if (filter == null || filter.sharedMesh == null || filter.sharedMesh.subMeshCount < 2)
+            {
+                Fail("No two-part bulb at " + StringBulbPath + ". Let Unity import it, then run this again");
+                return null;
+            }
+
+            var shape = filter.sharedMesh;
+            // The importer leaves Blender's axis turn on the model's transforms, not in the mesh (user's screenshot, 2026-11-13: the
+            // bulbs lay on their sides when measured against the model's own root). The asset's transforms are the world ones, so
+            // take its full turn and scale, without its position: the bulb then hangs as it does when the model is dropped in
+            var toModel = Matrix4x4.TRS(Vector3.zero, filter.transform.rotation, filter.transform.lossyScale);
+            var corners = shape.vertices;
+            for (int i = 0; i < corners.Length; i++) corners[i] = toModel.MultiplyPoint3x4(corners[i]);
+            var glass = shape.GetTriangles(0);
+            var socket = shape.GetTriangles(1);
+
+            var vertices = new List<Vector3>();
+            var colours = new List<Color>();
+            var glassTriangles = new List<int>();
+            var darkTriangles = new List<int>();
+            foreach (var spot in spots)
+            {
+                int first = vertices.Count;
+                foreach (var corner in corners) { vertices.Add(spot.At + corner); colours.Add(new Color(spot.Freedom, 0f, 0f, 1f)); }
+                foreach (int t in glass) glassTriangles.Add(first + t);
+                foreach (int t in socket) darkTriangles.Add(first + t);
+            }
+
+            foreach (var path in paths) WireTube(path, vertices, colours, darkTriangles);
+
+            var mesh = new Mesh { name = name };
+            if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.SetVertices(vertices);
+            mesh.SetColors(colours);
+            mesh.subMeshCount = 2;
+            mesh.SetTriangles(glassTriangles, 0);
+            mesh.SetTriangles(darkTriangles, 1);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// A square tube StringWireWidth across, following the path, its corners at the sides and top and bottom so it reads as
+        /// round from below
+        private static void WireTube(StringPath path, List<Vector3> vertices, List<Color> colours, List<int> triangles)
+        {
+            float r = StringWireWidth * 0.5f;
+            int first = vertices.Count;
+            for (int i = 0; i < path.Count; i++)
+            {
+                var along = (path[Mathf.Min(i + 1, path.Count - 1)].At - path[Mathf.Max(i - 1, 0)].At).normalized;
+                var side = Vector3.Cross(along, Vector3.up);
+                if (side.sqrMagnitude < 1e-6f) side = Vector3.right;
+                side.Normalize();
+                var up = Vector3.Cross(side, along).normalized;
+
+                var colour = new Color(path[i].Freedom, 0f, 0f, 1f);
+                foreach (var offset in new[] { up * r, side * r, -up * r, -side * r })
+                {
+                    vertices.Add(path[i].At + offset);
+                    colours.Add(colour);
+                }
+            }
+
+            for (int i = 0; i + 1 < path.Count; i++)
+            {
+                for (int k = 0; k < 4; k++)
+                {
+                    int a = first + i * 4 + k, b = first + i * 4 + (k + 1) % 4;
+                    int c = a + 4, d = b + 4;
+                    triangles.Add(a); triangles.Add(c); triangles.Add(b);
+                    triangles.Add(b); triangles.Add(c); triangles.Add(d);
+                }
+            }
+        }
+
+        /// The wire and sockets' material, on the swaying wire shader (it was Unlit/Color while the wire was a LineRenderer)
+        private static Material WireMaterial()
+        {
+            var material = ShaderMaterial(WireMaterialPath, StringWireShader, new Color(0.05f, 0.04f, 0.04f));
+            var shader = Shader.Find(StringWireShader);
+            if (material != null && shader != null && material.shader != shader)
+            {
+                var colour = material.color;
+                material.shader = shader;
+                material.color = colour;
+                EditorUtility.SetDirty(material);
+                Did(material.name + ": now " + StringWireShader + ", so the wire sways with the bulbs");
+            }
+            return material;
         }
 
         private static void WireTheCarnivalLights(Transform root)
@@ -412,7 +548,13 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 foreach (var renderer in groundFog.GetComponentsInChildren<Renderer>(true)) fogPlanes.Add(renderer);
             }
 
-            var fields = new Fields(lights).SetArray("bulbs", bulbs).SetArray("fog", fogPlanes);
+            var gnats = new List<Object>();
+            if (strings != null)
+            {
+                foreach (var system in strings.GetComponentsInChildren<ParticleSystem>(true)) gnats.Add(system);
+            }
+
+            var fields = new Fields(lights).SetArray("bulbs", bulbs).SetArray("fog", fogPlanes).SetArray("gnats", gnats);
             if (fields.Ref("game") == null) fields.Set("game", Object.FindObjectOfType<RangeGame>());
             fields.Apply();
 
@@ -551,6 +693,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
         private static readonly List<Light> _otherLights = new List<Light>();
         private static readonly List<Light[]> _stringLights = new List<Light[]>();
+        // Each string's glass and halos, dimmed with its lights so the Scene view shows what each pass bakes. They add no
+        // light to the bake themselves (their shaders have no Meta pass), and only CarnivalLights dims them in play
+        private static readonly List<Renderer> _stringGlass = new List<Renderer>();
+        private static float _darkGlow;
+        private static MaterialPropertyBlock _glowBlock;
         private static readonly List<KeptBake> _partBakes = new List<KeptBake>();
         private static int _bakingStrings;
         private static Color _litSky;
@@ -657,11 +804,18 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             }
 
             _stringLights.Clear();
+            _stringGlass.Clear();
             foreach (Transform holder in strings)
             {
                 var lights = holder.GetComponentsInChildren<Light>();
-                if (lights.Length > 0) _stringLights.Add(lights);
+                if (lights.Length == 0) continue;
+                _stringLights.Add(lights);
+                _stringGlass.Add(holder.GetComponent<Renderer>());
             }
+
+            var carnival = Object.FindObjectOfType<CarnivalLights>();
+            _darkGlow = carnival != null ? new SerializedObject(carnival).FindProperty("darkGlow").floatValue : 0f;
+            if (_glowBlock == null) _glowBlock = new MaterialPropertyBlock();
 
             _partBakes.Clear();
             // From the constants, not the scene: a bake stopped part way leaves the scene's ambient turned down, and
@@ -956,6 +1110,12 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             for (int i = 0; i < _stringLights.Count; i++)
             {
                 foreach (var light in _stringLights[i]) if (light != null) light.enabled = i < count;
+
+                var glass = _stringGlass[i];
+                if (glass == null) continue;
+                glass.GetPropertyBlock(_glowBlock);
+                _glowBlock.SetFloat("_Glow", i < count ? 1f : _darkGlow);
+                glass.SetPropertyBlock(_glowBlock);
             }
 
             float ambient = _stringLights.Count > 0 ? Mathf.Lerp(DarkBakeAmbient, 1f, (float)count / _stringLights.Count) : 1f;

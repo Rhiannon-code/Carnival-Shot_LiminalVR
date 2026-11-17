@@ -370,8 +370,8 @@ MonoBehaviour:
   target: {fileID: 5465035754655860925}
   hitScore: 100
   moverLength: 0.34
-  minHold: 3
-  maxHold: 5
+  minHold: 2
+  maxHold: 3.5
   flinchRadius: 0.6
   flinchKick: 150
   clatter: {fileID: 3979945506846920587}
@@ -446,6 +446,9 @@ MonoBehaviour:
   reactionDelay: 0.3
   spinTurns: 4
   spinSeconds: 0.5
+  hitShakeDegrees: 6
+  hitShakeCycles: 2
+  hitShakeSeconds: 0.15
   fragments: 30
   fragmentImpulse: 1.4
   joltRadius: 1.5
@@ -462,8 +465,10 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 027aed1e79b3fe42e90e99bc0df00374, type: 3}
   - {fileID: 8300000, guid: 1b743c35dddfdae0687723a0f57bbbdc, type: 3}
   - {fileID: 8300000, guid: 69f9c048fd9de25ebba0f3c7ceb4e2c6, type: 3}
+  - {fileID: 8300000, guid: 5dc31b7ea5a930a45a46b852e6e15d0a, type: 3}
+  hitVolume: 0.9
   clipVolume: 0.6
-  voiceVolume: 0.55
+  voiceVolume: 0.8
 --- !u!114 &2766882888699382202
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -551,7 +556,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: f77178f35ed7c10a99e9da7d48b57203, type: 3}
   - {fileID: 8300000, guid: 01e8c17334e2ca4799d2c4fcf44bdb5c, type: 3}
   - {fileID: 8300000, guid: 6eec206135429c30697e14dadb126758, type: 3}
-  volume: 0.6
+  volume: 0.8
 --- !u!82 &3979945506846920587
 AudioSource:
   m_ObjectHideFlags: 0

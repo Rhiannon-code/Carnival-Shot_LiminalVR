@@ -41,7 +41,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 var hinge = lid != null ? new Fields(lid).Ref("hinge") as Transform : null;
                 if (hinge == null) { Fail("Room_Chest has no Pop Open On Shot with a hinge"); return; }
 
-                foreach (var name in new[] { PrizeLockName, PrizeGlowName, PrizesName, ConfettiName, SparkleName, LockPromptName })
+                foreach (var name in new[] { PrizeLockName, PrizeGlowName, PrizesName, ConfettiName, SparkleName, HaloName, LockPromptName })
                 {
                     var old = root.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == name);
                     if (old != null) Object.DestroyImmediate(old.gameObject);
@@ -72,12 +72,11 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 var prizes = MakeThePrizes(lid.transform, box);
                 var confetti = Confetti(root.transform, new Vector3(box.center.x, box.max.y, box.center.z));
                 var sparkle = Sparkle(root.transform, box.center);
+                var halo = Halo(root.transform, box.center, sparkle);
 
                 var chest = root.AddComponent<PrizeChest>();
                 new Fields(chest).Set("lid", lid).Set("lockPart", lockPart).Set("lockGlow", glow).SetArray("prizes", prizes)
-                    .Set("confetti", confetti).Set("sparkle", sparkle).Set("prompt", prompt)
-                    // The prize's bottom clears the rim, so all of it is seen (user, 2026-11-10: it didn't rise enough)
-                    .Set("riseHeight", box.size.y + PrizeClearsTheRim)
+                    .Set("confetti", confetti).Set("sparkle", sparkle).Set("halo", halo).Set("prompt", prompt)
                     .Set("unlockClip", Sound("World/prize_unlock_01"))
                     .Set("drumRoll", Sound("World/prize_drumroll_01"))
                     .Set("drumRollEnd", Sound("World/prize_drumroll_end_01"))
@@ -177,7 +176,6 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             return holder;
         }
 
-        private const float PrizeClearsTheRim = 0.08f;
         private const string ConfettiName = "Prize Confetti";
         private const string SparkleName = "Prize Sparkle";
         private static readonly Color[] ConfettiColours =
@@ -257,6 +255,36 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 EditorUtility.SetDirty(material);
             }
             system.GetComponent<ParticleSystemRenderer>().sharedMaterial = material;
+            return system;
+        }
+
+        private const string HaloName = "Prize Halo";
+
+        /// One soft gold particle behind the risen prize (user, 2026-11-17: "a subtle glow around it"). PrizeChest moves it
+        /// to the prize's middle and pulses it by scale, so it is local and scales with its transform. Size and colour are
+        /// tuned here on the chest prefab
+        private static ParticleSystem Halo(Transform parent, Vector3 at, ParticleSystem sparkle)
+        {
+            var system = NewParticles(HaloName, parent, at, Quaternion.identity);
+            var main = system.main;
+            main.duration = 1f;
+            main.startLifetime = 100000f;
+            main.startSpeed = 0f;
+            main.startSize = 1.1f;
+            main.startColor = new Color(1f, 0.78f, 0.4f, 0.35f);
+            main.maxParticles = 1;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+
+            var emission = system.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+
+            var shape = system.shape;
+            shape.enabled = false;
+
+            // The sparkle's soft round additive dot, so the two read as one glow
+            system.GetComponent<ParticleSystemRenderer>().sharedMaterial = sparkle.GetComponent<ParticleSystemRenderer>().sharedMaterial;
             return system;
         }
 

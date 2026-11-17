@@ -33,8 +33,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             var root = new GameObject(ClothTestName);
             Undo.RegisterCreatedObjectUndo(root, ClothTestName);
 
-            var canvas = EyeMaterial("SR_ClothTest_Canvas", "CrystalCatch/Cloth Ripple", new Color(0.8f, 0.75f, 0.65f));
-            var banner = EyeMaterial("SR_ClothTest_Banner", "CrystalCatch/Cloth Ripple", new Color(0.55f, 0.08f, 0.06f));
+            var canvas = EyeMaterial("SR_ClothTest_Canvas", ClothShader, new Color(0.8f, 0.75f, 0.65f));
+            var banner = EyeMaterial("SR_ClothTest_Banner", ClothShader, new Color(0.55f, 0.08f, 0.06f));
             if (canvas == null || banner == null) { End(); return; }
             canvas.SetFloat("_Amplitude", CanvasSway);
             canvas.SetFloat("_Speed", 0.8f);

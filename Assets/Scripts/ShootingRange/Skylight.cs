@@ -86,7 +86,9 @@ namespace IntuitiveDesigns.ShootingRange
         private void Burn()
         {
             var movers = TrackMover.Movers;
-            var axis = transform.position;
+            // Measured across the beam, which may lean from its window onto the rows below (step 35b, 2026-11-17)
+            var axis = beam != null ? beam.transform.position : transform.position;
+            var along = beam != null ? beam.transform.up : Vector3.up;
 
             for (int i = 0; i < movers.Count; i++)
             {
@@ -94,7 +96,7 @@ namespace IntuitiveDesigns.ShootingRange
                 if (!mover.Exposed || mover.Target == null) continue;
 
                 var offset = mover.TargetPoint - axis;
-                offset.y = 0f;
+                offset -= Vector3.Dot(offset, along) * along;
                 float reach = radius + catchMargin;
                 if (offset.sqrMagnitude > reach * reach || !mover.Target.IsVampire) continue;
 

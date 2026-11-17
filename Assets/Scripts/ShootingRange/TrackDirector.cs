@@ -26,7 +26,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Pace (data, round 1)")]
         [SerializeField] private float waveInterval = 2.2f;
-        [SerializeField, Tooltip("Seconds from the last sign up going to the next batch, when that beats the wave interval")]
+        [SerializeField]
         private float clearBeatSeconds = 0.4f;
         [SerializeField] private float minSpeed = 0.7f;
         [SerializeField] private float maxSpeed = 1.3f;
@@ -43,11 +43,11 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)] private float stationaryShare = 0.4f;
 
         [Header("Special power-up signs (data): how many each round, round 1 first, spread through it, never two out at once")]
-        [SerializeField, Tooltip("A shorter list repeats its last entry. 0 is a round with no power-ups")]
+        [SerializeField]
         private int[] specialsPerRound = { 0, 0, 2, 2, 3 };
-        [SerializeField, Range(0f, 0.5f), Tooltip("How far each can wander from its even spacing, as a share of the gap between them")]
+        [SerializeField, Range(0f, 0.5f)]
         private float specialJitter = 0.3f;
-        [SerializeField, Tooltip("A special's speed over an ordinary sign's, round 1 first. Falls as the rounds speed up, so late specials stay hittable")]
+        [SerializeField]
         private float[] specialSpeedPerRound = { 1.6f, 1.5f, 1.4f, 1.3f, 1.2f };
 
         [Header("Refusals (data)")]

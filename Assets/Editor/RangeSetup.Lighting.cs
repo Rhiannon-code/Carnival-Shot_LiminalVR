@@ -60,6 +60,8 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         // High enough to clear the step in front of the rail: at 1 cm over it, the step took nearly all the light and threw it round
         private const float GlowAboveRail = 0.35f;
         private const float GlowTowardPlayer = 0.25f;
+        private const float GlowLiftStep = 0.05f;
+        private const float GlowMaxLift = 0.3f;
         private const float GlowStripHeight = 0.4f;
         private const float GlowStripBehindRail = 0.12f;
         private const float LevelTolerance = 0.25f;
@@ -314,6 +316,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             glow.SetParent(root, false);
             int count = 0;
             var buried = new List<string>();
+            var lifted = new List<string>();
             foreach (var rail in rails)
             {
                 int lights = Mathf.Max(1, Mathf.RoundToInt(rail.Length / GlowSpacing));
@@ -322,10 +325,16 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                     // In front of the signs' plane, or it only grazes the faces the player sees
                     var at = rail.PointAt((i + 0.5f) * rail.Length / lights) + Vector3.up * GlowAboveRail -
                              AwayFromEye(rail, eye) * GlowTowardPlayer;
+
+                    // A light inside a mesh bakes nothing, and the step art in front of a rail can swallow one
+                    float lift = 0f;
+                    while (Buried(at) && lift < GlowMaxLift) { at += Vector3.up * GlowLiftStep; lift += GlowLiftStep; }
+                    if (lift > 0f && !Buried(at)) lifted.Add(rail.name + " +" + lift.ToString("0.00"));
+
                     BakedLight(glow, "Red", at, GlowColour, GlowIntensity, GlowRange, GlowSoftness).bounceIntensity = GlowBounce;
                     count++;
 
-                    if (Physics.CheckSphere(at, 0.05f, ~0, QueryTriggerInteraction.Ignore)) buried.Add(rail.name);
+                    if (Buried(at)) buried.Add(rail.name);
                 }
 
                 GlowStrip(glow, rail, eye, strip);
@@ -335,9 +344,16 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             Dirty();
             Did("Underglow on the front floor rail of each level (" + string.Join(", ", names) + "): " + count +
                 " red lights and " + rails.Count + " glow strips");
+            if (lifted.Count > 0)
+                Say("   ^ red lights lifted clear of a collider (metres): " + string.Join(", ", lifted.ToArray()));
             if (buried.Count > 0)
-                Say("   ^ some red lights sit inside a collider on " + string.Join(", ", buried.ToArray()) +
-                    ". A light inside a mesh bakes nothing; lift those a little");
+                Say("   ^ some red lights are still inside a collider " + GlowMaxLift + " m up, on " + string.Join(", ", buried.ToArray()) +
+                    ". A light inside a mesh bakes nothing; move those by hand");
+        }
+
+        private static bool Buried(Vector3 at)
+        {
+            return Physics.CheckSphere(at, 0.05f, ~0, QueryTriggerInteraction.Ignore);
         }
 
         private static Light BakedLight(Transform parent, string name, Vector3 position, Color colour,

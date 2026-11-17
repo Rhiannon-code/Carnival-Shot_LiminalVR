@@ -20,7 +20,6 @@ namespace IntuitiveDesigns.ShootingRange
             public Color colour = Color.white;
 
             public bool extendsOnCombo = true;
-            [Tooltip("Longest it can be kept going by hits, seconds. 0 uses seconds x the shared max length multiple")]
             public float maxSeconds;
         }
 

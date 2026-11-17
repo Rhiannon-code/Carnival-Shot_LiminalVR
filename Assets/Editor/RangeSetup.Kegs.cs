@@ -12,6 +12,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
         private const int KegCount = 3;
         private const float KegWide = 0.45f;
         private static readonly Color KegRed = new Color(0.62f, 0.08f, 0.05f);
+        private static readonly Color KegRimRed = new Color(1f, 0.12f, 0.06f);
 
         [MenuItem("Shooting Range/Setup/56 - Powder Kegs Behind The Step Boards", false, 79)]
         public static void PowderKegsMenu()
@@ -35,7 +36,7 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
                 kegs[i] = MakeAKeg(root.transform, "Powder Keg " + (i + 1), barrel, band, blasts);
 
             new Fields(root.AddComponent<PowderKegs>()).Set("game", game).SetArray("kegs", kegs).SetArray("boards", boards).Apply();
-            Did(KegCount + " kegs on " + boards.Length + " step boards, 2-3 up a round");
+            Did(KegCount + " kegs on " + boards.Length + " step boards; how many come up each round is Powder Kegs' Per Round");
             Dirty();
             End();
         }
@@ -61,6 +62,14 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
 
             foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
                 renderer.sharedMaterials = renderer.sharedMaterials.Select(KegMaterial).ToArray();
+
+            var rim = KegRim();
+            if (rim != null)
+                foreach (var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    var shell = Shell(renderer, rim);
+                    if (shell != null) shell.enabled = true;
+                }
 
             foreach (float height in new[] { 0.25f, 0.75f })
             {
@@ -90,6 +99,22 @@ namespace IntuitiveDesigns.ShootingRange.EditorTools
             part.transform.SetParent(parent, false);
             part.GetComponent<Renderer>().sharedMaterial = material;
             return part.transform;
+        }
+
+        /// A subtle steady red edge round the keg, so it stands out from the boards (user, 2026-11-17). The power-up glow's
+        /// shell, made once as SR_KegRim and then left to tune
+        private static Material KegRim()
+        {
+            var material = RangeSetupUtil.Load<Material>("Assets/Materials/SR_KegRim.mat");
+            if (material != null) return material;
+
+            material = EyeMaterial("SR_KegRim", "CrystalCatch/Power-Up Glow", KegRimRed);
+            if (material == null) return null;
+
+            material.SetFloat("_Strength", 0.8f);
+            material.SetFloat("_PulseDepth", 0f);
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         /// The barrel's own material painted red, as SR_PowderKegRed, made once and then left to tune

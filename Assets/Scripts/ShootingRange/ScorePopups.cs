@@ -16,8 +16,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Color colour = new Color(1f, 0.85f, 0.47f);
         [SerializeField] private float riseMetres = 0.35f;
         [SerializeField] private float seconds = 0.8f;
-        [SerializeField, Tooltip("Seconds it takes to grow to full size")] private float popSeconds = 0.12f;
-        [SerializeField, Tooltip("Metres toward the player it starts, so the sign doesn't cover it")] private float lead = 0.2f;
+        [SerializeField] private float popSeconds = 0.12f;
+        [SerializeField] private float lead = 0.2f;
 
         private TextMeshPro[] _texts;
         private Vector3[] _from;

@@ -5,8 +5,6 @@ namespace IntuitiveDesigns.ShootingRange
 {
     public enum DebrisKind { None, Splinters, Sparks, Chips, Embers, Stuffing, Chunks, ImpactStar, ImpactRing, Dust }
 
-    /// What flies off whatever a round hits. One particle system a kind, in world space, that moves to each hit and emits,
-    /// so a burst costs no pooled object and each kind shares one draw. ImpactFX picks the kind by surface (ADR 0064)
     public class Debris : MonoBehaviour
     {
         [Serializable]
@@ -21,7 +19,7 @@ namespace IntuitiveDesigns.ShootingRange
         public static Debris Instance { get; private set; }
 
         [SerializeField] private Kind[] kinds;
-        [SerializeField, Tooltip("Times the usual splinters off a sign, which should hit hardest of all")] private int signTimes = 2;
+        [SerializeField] private int signTimes = 2;
         [SerializeField] private DebrisKind[] alsoOnSign = { DebrisKind.Chunks, DebrisKind.ImpactStar, DebrisKind.ImpactRing, DebrisKind.Dust };
 
         private void Awake() { Instance = this; }
