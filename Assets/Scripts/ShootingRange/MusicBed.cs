@@ -26,6 +26,9 @@ namespace IntuitiveDesigns.ShootingRange
         /// Finished winding up, or had nothing to wind up. The guns stay dead until then (RangeGame)
         public bool WoundUp { get; private set; }
         public float Pitch { get { return _audio != null ? _audio.pitch : 1f; } }
+        public bool Playing { get { return _audio != null && _audio.isPlaying; } }
+        /// How loud it is now against its full volume: low while it winds up, lower when ducked at the end
+        public float Level { get { return _audio != null ? Mathf.Clamp01(_audio.volume / Mathf.Max(0.001f, volume)) : 1f; } }
 
         private AudioSource _audio;
         private AudioSource _crank;
