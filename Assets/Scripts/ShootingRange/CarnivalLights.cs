@@ -38,7 +38,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float celebrateSeconds = 6f;
         [SerializeField] private float marqueeStepsPerSecond = 6f;
 
-        [Header("Start-up (data, seconds): dark, the coin goes in, then the strings stutter on one after another, each bringing its share of the room's light")]
+        [Header("Start up (data, seconds): dark until the opening's logo drops (or a plain wait), the coin goes in, then the strings stutter on one after another, each bringing its share of the room's light")]
+        [SerializeField] private OpeningTitle opening;
         [SerializeField] private float darkHoldSeconds = 3f;
         [SerializeField] private AudioClip coinClip;
         [SerializeField] private float[] stringComingOn = { 0.06f, 0.09f, 0.04f, 0.12f };
@@ -53,10 +54,11 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] clunkClips;
+        [Header("Light sounds stay under the music below the music at all times\"): set about 10 dB under the music at full, then they follow its volume as it winds up or ducks")]
         [SerializeField] private AudioClip[] buzzClips;
-        [SerializeField, Range(0f, 1f)] private float buzzVolume = 0.15f;
+        [SerializeField, Range(0f, 1f)] private float buzzVolume = 0.05f;
         [SerializeField] private AudioClip litHum;
-        [SerializeField, Range(0f, 1f)] private float litHumVolume = 0.08f;
+        [SerializeField, Range(0f, 1f)] private float litHumVolume = 0.06f;
         [SerializeField] private AudioClip[] popClips;
         [SerializeField] private AudioClip humClip;
         [SerializeField, Range(0f, 1f)] private float humVolume = 0.25f;
@@ -79,6 +81,7 @@ namespace IntuitiveDesigns.ShootingRange
         private Coroutine _flicker;
         private bool _on = true;
         private bool _headedOn = true;
+        private float _litShare;
 
         private void Awake()
         {
@@ -132,6 +135,21 @@ namespace IntuitiveDesigns.ShootingRange
             StartCoroutine(StartUp());
         }
 
+        /// The hums follow the music every frame, since it changes volume as it winds up and ducks
+        private void Update()
+        {
+            float under = UnderTheMusic();
+            _hum.volume = humVolume * under;
+            _litHum.volume = litHumVolume * _litShare * under;
+        }
+
+        /// What the light sounds are scaled by so they stay under the music: its volume against its full volume while it
+        /// plays. Before it starts (the dark opening) they keep their set levels, so the quiet dark hum stays (user's pick)
+        private float UnderTheMusic()
+        {
+            return _music != null && _music.Playing ? _music.Level : 1f;
+        }
+
         private void OnDestroy()
         {
             if (game != null) game.RoundStarted -= OnRoundStarted;
@@ -156,11 +174,12 @@ namespace IntuitiveDesigns.ShootingRange
             _flicker = null;
         }
 
-        /// The player sits in the dark with the red and the hum, then a coin drops and the carnival starts up: the
-        /// barker, the music and the strings together. Grabbing a gun in the dark cuts the wait short
+        /// The player sits in the dark with the red and the hum until the opening's logo drops in, then a coin drops and the
+        /// carnival starts up under the logo: the barker, the music and the strings together
         private IEnumerator StartUp()
         {
-            for (float t = 0f; t < darkHoldSeconds && StillWelcoming(); t += Time.unscaledDeltaTime) yield return null;
+            if (opening != null) while (!opening.LogoDropped) yield return null;
+            else for (float t = 0f; t < darkHoldSeconds && StillWelcoming(); t += Time.unscaledDeltaTime) yield return null;
 
             if (coinClip != null)
             {
@@ -215,7 +234,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private IEnumerator Flicker(bool target, float[] steps)
         {
-            Play(buzzClips, buzzVolume);
+            Play(buzzClips, buzzVolume * UnderTheMusic());
             foreach (var wait in Steps(target, steps)) yield return wait;
 
             Set(target);
@@ -225,7 +244,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private IEnumerator Stuttering(float[] steps)
         {
-            Play(buzzClips, buzzVolume);
+            Play(buzzClips, buzzVolume * UnderTheMusic());
             foreach (var wait in Steps(false, steps)) yield return wait;
 
             Set(true);
@@ -234,7 +253,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private IEnumerator OutAndBack(float seconds)
         {
-            Play(buzzClips, buzzVolume);
+            Play(buzzClips, buzzVolume * UnderTheMusic());
             foreach (var wait in Steps(false, blackoutLeadIn)) yield return wait;
 
             Set(false);
@@ -242,7 +261,7 @@ namespace IntuitiveDesigns.ShootingRange
             yield return new WaitForSecondsRealtime(seconds);
 
             _headedOn = true;
-            Play(buzzClips, buzzVolume);
+            Play(buzzClips, buzzVolume * UnderTheMusic());
             foreach (var wait in Steps(true, comingOn)) yield return wait;
 
             Set(true);
@@ -316,7 +335,8 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (litHum == null) return;
 
-            _litHum.volume = litHumVolume * share;
+            _litShare = share;
+            _litHum.volume = litHumVolume * share * UnderTheMusic();
             if (share > 0f && !_litHum.isPlaying) _litHum.Play();
         }
 
