@@ -3,8 +3,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Parts that sit still until shot, then fall to physics: swords toppling off their stand, a plushie
-    /// knocked off its perch. The part nearest the hit takes the shot; the rest get a nudge so they go too
     public class ReleaseOnShot : RoomReaction
     {
         [SerializeField] private Rigidbody[] pieces;
@@ -15,8 +13,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float nudge = 0.3f;
         [SerializeField, Range(0f, 1f)] private float lift = 0.3f;
         [SerializeField] private float unstickSpeed = 0.5f;
-        [SerializeField, Tooltip("Each hit lets go of the nearest piece still held, instead of all of them at once")]
-        private bool oneAtATime;
+        [SerializeField] private bool oneAtATime;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] hitClips;
@@ -27,7 +24,6 @@ namespace IntuitiveDesigns.ShootingRange
         private bool _released;
         private bool[] _loose;
 
-        /// The last piece still held has just been let go
         public event Action AllLoose;
 
         private void Awake()
@@ -92,8 +88,6 @@ namespace IntuitiveDesigns.ShootingRange
             PlayOne(hitClips, point, hitVolume);
         }
 
-        /// The boards over a skylight: each hit knocks the nearest one still nailed on free, and a loose one
-        /// that is hit again only gets pushed
         private void LetOneGo(Vector3 point, Vector3 direction)
         {
             int nearest = -1;
@@ -128,6 +122,17 @@ namespace IntuitiveDesigns.ShootingRange
             PlayOne(hitClips, point, hitVolume);
 
             if (held && Array.IndexOf(_loose, false) < 0 && AllLoose != null) AllLoose();
+        }
+
+        public override void Rehome()
+        {
+            if (_restPositions == null) return;
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                if (pieces[i] == null) continue;
+                _restPositions[i] = pieces[i].transform.localPosition;
+                _restRotations[i] = pieces[i].transform.localRotation;
+            }
         }
 
         protected override void Restore()

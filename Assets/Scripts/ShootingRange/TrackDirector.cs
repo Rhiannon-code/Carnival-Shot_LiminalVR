@@ -76,7 +76,6 @@ namespace IntuitiveDesigns.ShootingRange
         public int Killed { get { return _killed; } }
         public int TargetsLeft { get { return Mathf.Max(0, _waveSize - _resolved); } }
 
-        /// Every sign of the round has been out and is off the range again, shot or escaped, reactions finished
         public bool RoundOver { get { return _launched >= _waveSize && ActiveCount() == 0; } }
 
         private struct Pending
@@ -166,15 +165,8 @@ namespace IntuitiveDesigns.ShootingRange
                           ? specialSpeedPerRound[Mathf.Min(steps, specialSpeedPerRound.Length - 1)]
                           : 1f;
             RaiseTargetsLeft();
-
-            if (Debug.isDebugBuild)
-                Debug.Log("[TrackDirector] Round " + round + ": " + _waveSize + " targets, wave every " +
-                          _waveInterval.ToString("0.00") + " s, speed x" + _speedScale.ToString("0.00") +
-                          ", up to " + _concurrency + " at once, " + _unlocked.Count + " patterns over " +
-                          _available.Count + " of " + grid.Rails.Length + " rails.");
         }
 
-        /// Which launches carry a power-up: evenly through the round, each nudged a little
         private void SpreadTheSpecials(int steps)
         {
             _specialAt.Clear();
@@ -378,7 +370,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             _resolved++;
             if (shot) _killed++;
-            // A missed power-up comes back on the next free launch rather than being lost (user, 2026-11-10)
+            // A missed power-up comes back on the next free launch rather than being lost
             else if (mover.WasSpecial) _owedSpecials++;
             RaiseTargetsLeft();
             if (TargetResolved != null) TargetResolved(shot);

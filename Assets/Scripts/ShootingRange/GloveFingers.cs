@@ -4,9 +4,6 @@ using Liminal.SDK.VR.Avatars;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Curls a SteamVR glove's fingers. On a pistol it grips, pulls the trigger as the player does and
-    /// loosens through the reload. With no pistol it is a ghost hand: it idles, closes when the grip
-    /// is held, and folds into the gun glove's own grip as it reaches the gun
     public class GloveFingers : MonoBehaviour
     {
         public enum Finger { Thumb, Index, Middle, Ring, Pinky }
@@ -18,13 +15,9 @@ namespace IntuitiveDesigns.ShootingRange
             public Finger finger;
             public Quaternion rest;
             public Vector3 axis;
-
-            /// This joint's share of the finger's curl. A trigger finger bends little at the knuckle and
-            /// most at the middle joint; 1 everywhere bends a finger evenly
             public float weight = 1f;
         }
 
-        [Header("Measured by setup step 16")]
         [SerializeField] private Joint[] joints;
 
         [Header("Grip, degrees per joint (tweak live in Play mode)")]
@@ -34,9 +27,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float ring = 75f;
         [SerializeField] private float pinky = 80f;
 
-        [Header("Hand on a pistol (tweak live in Play mode, then copy the values out)")]
-        [SerializeField, Tooltip("Degrees about the glove's own axes, turned about the wrist")] private Vector3 wristTurn;
-        [SerializeField, Tooltip("Metres along the gun: x to its right, y up, z toward the muzzle")] private Vector3 wristShift;
+        [Header("Hand on a pistol")]
+        [SerializeField] private Vector3 wristTurn;
+        [SerializeField] private Vector3 wristShift;
+        [SerializeField] private Vector3 thumbTurn;
 
         [Header("On a pistol (empty = idle)")]
         [SerializeField] private Pistol pistol;
@@ -75,7 +69,6 @@ namespace IntuitiveDesigns.ShootingRange
             pinky = grip[4];
         }
 
-        /// The pose step 16 fitted, and the wrist bone to turn it about
         private void Awake()
         {
             _fitted = transform.localRotation;
@@ -89,8 +82,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Ghost hands only. close is how far the hand has shut, 0 to 1; with a glove to fold into,
-        /// shut means that glove's grip on its gun, otherwise a fist
         public void Hold(float close, float trigger, GloveFingers foldInto)
         {
             _closeTarget = Mathf.Clamp01(close);
@@ -147,6 +138,7 @@ namespace IntuitiveDesigns.ShootingRange
             float swap = pistol != null ? pistol.MagSwap : 0f;
             float press = pistol != null ? pistol.ReleasePress : 0f;
 
+            bool thumbTurned = false;
             for (int i = 0; i < joints.Length; i++)
             {
                 var joint = joints[i];
@@ -162,7 +154,13 @@ namespace IntuitiveDesigns.ShootingRange
                 else
                     angle -= reloadLoosen * swap;
 
-                joint.bone.localRotation = joint.rest * Quaternion.AngleAxis(angle * joint.weight, joint.axis);
+                var pose = joint.rest * Quaternion.AngleAxis(angle * joint.weight, joint.axis);
+                if (joint.finger == Finger.Thumb && !thumbTurned)
+                {
+                    pose *= Quaternion.Euler(thumbTurn);
+                    thumbTurned = true;
+                }
+                joint.bone.localRotation = pose;
             }
         }
 

@@ -59,7 +59,7 @@ namespace IntuitiveDesigns.ShootingRange
             PrizeChest.Opened -= OnChestOpened;
         }
 
-        /// Silent in the dark until the start-up calls this. A scene with no carnival lights winds up straight away
+        /// Silent in the dark until the start up calls this. A scene with no carnival lights winds up straight away
         private void Start()
         {
             if (FindObjectOfType<CarnivalLights>() == null) WindUp();
@@ -98,7 +98,6 @@ namespace IntuitiveDesigns.ShootingRange
             WoundUp = true;
         }
 
-        /// The chest is open: the victory music takes over, or with none the bed comes back up
         private void OnChestOpened()
         {
             if (victoryClip == null) { Fade(volume); return; }

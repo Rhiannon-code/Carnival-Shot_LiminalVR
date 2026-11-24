@@ -22,16 +22,12 @@ namespace IntuitiveDesigns.CrystalCatch
         [Header("Both hands (data)")]
         [SerializeField, Range(0f, 1f)] private float offHandShare = 0.75f;
 
-        [Header("Diagnostics")]
-        [SerializeField] private bool logDeviceStateOnce = false;
-
         private float _leftStopAt;
         private float _rightStopAt;
         private float _leftTailAt;
         private float _rightTailAt;
         private float _leftTail;
         private float _rightTail;
-        private bool _logged;
 
         private void Awake()
         {
@@ -98,9 +94,7 @@ namespace IntuitiveDesigns.CrystalCatch
             if (left) { _leftStopAt = stopAt; _leftTailAt = 0f; }
             else { _rightStopAt = stopAt; _rightTailAt = 0f; }
 
-            LogDeviceState();
             Vibrate(controller, frequency, Mathf.Clamp01(amplitude));
-            LogPulse(controller, amplitude, seconds);
         }
 
         /// One check a frame instead of a coroutine per shot
@@ -131,24 +125,6 @@ namespace IntuitiveDesigns.CrystalCatch
                 OVRPlugin.SetControllerVibration((uint)controller, freq, amp);
             else
                 OVRInput.SetControllerVibration(freq, amp, controller);
-        }
-
-        private void LogDeviceState()
-        {
-            if (!logDeviceStateOnce || _logged) return;
-            _logged = true;
-            Debug.Log("[Haptic] OVRPlugin.initialized=" + OVRPlugin.initialized +
-                      " loadedXRDevice=" + OVRManager.loadedXRDevice +
-                      " connected=" + OVRInput.GetConnectedControllers() +
-                      " active=" + OVRInput.GetActiveController());
-        }
-
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
-        private void LogPulse(OVRInput.Controller controller, float amplitude, float seconds)
-        {
-            Debug.Log("[Haptic] " + controller + " amp=" + amplitude.ToString("0.00") +
-                      " for " + seconds.ToString("0.000") + "s");
         }
 
         [ContextMenu("Stop all vibration")]

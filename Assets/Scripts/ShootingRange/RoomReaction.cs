@@ -3,7 +3,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Something in the room that does a thing when shot and puts itself back at the start of every round.
     /// Worth no points: it is there for fun, so it never touches the score or the combo
     public abstract class RoomReaction : MonoBehaviour, IShootable
     {
@@ -11,7 +10,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private static readonly List<RoomReaction> All = new List<RoomReaction>();
 
-        /// Something big went off here, a sign shattering: whatever is close enough gives a start
         public static void JoltAround(Vector3 at, float radius)
         {
             for (int i = 0; i < All.Count; i++)
@@ -41,6 +39,9 @@ namespace IntuitiveDesigns.ShootingRange
         public abstract void OnShot(Vector3 point, Vector3 direction, float impulse);
 
         protected abstract void Restore();
+
+        /// It has been moved (the round's shuffle): where it stands now is where it rests and swings from
+        public virtual void Rehome() { }
 
         /// Whole and out of the way of rounds while protected: its colliders are off, so a shot goes straight through
         /// without a mark. The countdown skulls are protected while they count

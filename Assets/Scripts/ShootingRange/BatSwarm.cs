@@ -38,14 +38,16 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] deathClips;
         [SerializeField, Range(0f, 1f)] private float volume = 0.9f;
 
-        /// A bat has left its sign and is on its way to the player
-        public event Action Launched;
+        /// A bat is due. A listener that warns the player first holds it back with Hold for as long as the warning runs
+        public event Action Coming;
 
         private Bat[] _pool;
         private float _nextRelease;
         private float _interval;
         private float _speed;
         private int _cap;
+        private float _hold;
+        private float _dueAt = -1f;
 
         private void Awake()
         {
@@ -92,17 +94,27 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnRoundEnded(int round, int roundScore)
         {
+            _dueAt = -1f;
             for (int i = 0; i < _pool.Length; i++) _pool[i].Stop();
         }
 
         private void Update()
         {
             if (game == null || game.Current != RangeGame.State.Playing || game.RoundNumber < firstRound) return;
+            // Real seconds: a warning runs at its own speed through slow motion
+            if (_dueAt >= 0f) { if (Time.unscaledTime >= _dueAt) { _dueAt = -1f; Release(); } return; }
             if (Time.time < _nextRelease) return;
 
             _nextRelease = Time.time + _interval;
-            if (InFlight() < _cap) Release();
+            if (InFlight() >= _cap) return;
+
+            _hold = 0f;
+            if (Coming != null) Coming();
+            if (_hold > 0f) _dueAt = Time.unscaledTime + _hold;
+            else Release();
         }
+
+        public void Hold(float seconds) { _hold = Mathf.Max(_hold, seconds); }
 
         public void Return(Bat bat)
         {
@@ -136,7 +148,6 @@ namespace IntuitiveDesigns.ShootingRange
 
                 bat.Launch(this, mover.TargetPoint, head, _speed);
                 PlayAt(launchClips, mover.TargetPoint);
-                if (Launched != null) Launched();
                 return;
             }
         }

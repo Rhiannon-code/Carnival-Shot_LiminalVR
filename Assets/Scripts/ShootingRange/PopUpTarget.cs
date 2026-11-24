@@ -15,10 +15,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Transform figure;
         [SerializeField] private Collider hitBox;
 
-        [Header("Signs (one is picked per launch; each brings its own collider)")]
+        [Header("Signs (one is picked per launch, each brings its own collider)")]
         [SerializeField] private Transform[] variants;
 
-        [Header("Stand (optional: a sibling of the Figure, never under it, or the setup tool takes it for a sign)")]
+        [Header("Stand")]
         [SerializeField] private Transform stand;
 
         [Header("Shape (data, metres)")]
@@ -105,7 +105,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)] private float clipVolume = 0.6f;
         [SerializeField, Range(0f, 1f)] private float voiceVolume = 0.55f;
 
-        /// Shootable, swinging into view, settling, or up
         public bool Live
         {
             get { return _phase == Phase.Rising || _phase == Phase.Settling || _phase == Phase.Up; }
@@ -114,7 +113,6 @@ namespace IntuitiveDesigns.ShootingRange
         /// Far enough round to start travelling
         public bool Presented { get { return _phase == Phase.Settling || _phase == Phase.Up; } }
 
-        /// Shot or done with, and on its way down
         public bool Leaving
         {
             get { return _phase == Phase.Stunned || _phase == Phase.Burning || _phase == Phase.Spinning || _phase == Phase.Falling || _phase == Phase.Reacting || _phase == Phase.Taunting; }
@@ -124,7 +122,7 @@ namespace IntuitiveDesigns.ShootingRange
         public float TimeToRise { get { return riseDelay + riseSeconds; } }
         public float TimeToFall { get { return tauntSeconds + fallSeconds; } }
 
-        /// The middle of the sign that is actually up, which is not a fixed spot: the signs are
+        /// The middle of the sign that is actually up, which is not a fixed spot, the signs are
         /// different sizes and only the top of one shows over its cover
         public Vector3 HitCentre
         {
@@ -217,9 +215,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// The rail's shown offset is how far above the carriage the sign's hinge edge sits. The hinge
-        /// decides which edge that is, a floor sign tips up off its feet, a roof sign hangs upside down
-        /// by its feet, a side sign opens like a door from the corner of its pillar
         public void Present(TrackRail rail)
         {
             if (_hole != null) _hole.Clear();
@@ -282,7 +277,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             if (_hinge == Hinge.None || shatter) { Burst(point, direction); Finish(); return; }
 
-            // Where the round struck picks what happens (SignReactions); without one it spins and falls, as it used to
+            // Where the round struck picks what happens (SignReactions); without one it spins and falls
             var reaction = _reactions != null ? _reactions.Pick(this, point) : SignReaction.Spin;
             if (reaction == SignReaction.Shatter) { Burst(point, direction); Finish(); return; }
 
@@ -351,21 +346,15 @@ namespace IntuitiveDesigns.ShootingRange
             Place(swing);
         }
 
-        /// Folds away from wherever it has swung to, as a plain fall does
         internal void Fold() { Begin(Phase.Falling); }
 
         internal void Done() { Finish(); }
-
-        /// An outline round the sign that was picked, in the power-up's colour, or off for null. It is
-        /// the sign's own shape, grown in its flat plane and set just behind it, so only the border
-        /// that sticks out past the edge shows. One per carriage, moved onto whichever sign is up
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         private static readonly int InflateId = Shader.PropertyToID("_Inflate");
         private static readonly int EdgeId = Shader.PropertyToID("_Edge");
         private static readonly int StrengthId = Shader.PropertyToID("_Strength");
         private static readonly int PulseDepthId = Shader.PropertyToID("_PulseDepth");
 
-        /// The ordinary sign's outline: same border as a special's, fainter, cream and steady. It holds in a blackout
         public void Rim()
         {
             Outline(rimColour, rimBorder, rimStrength, false);
@@ -454,7 +443,6 @@ namespace IntuitiveDesigns.ShootingRange
             t.localPosition = box.center - Vector3.Scale(scale, box.center) + back;
         }
 
-        /// Done with, but not shot, swings back the way it came, no spin and no shatter
         public void Lower()
         {
             Glow(null);
@@ -602,8 +590,6 @@ namespace IntuitiveDesigns.ShootingRange
             _rollSpeed = 0f;
         }
 
-        /// Leans against the carriage speeding up and slowing down, and rocks as it rolls, on a spring, so it
-        /// tips on past upright when the carriage stops
         private void Ride()
         {
             float dt = Time.deltaTime;
@@ -626,7 +612,6 @@ namespace IntuitiveDesigns.ShootingRange
             Place(_swing);
         }
 
-        /// A round went close: a twitch on the same spring it rides on
         public void Flinch(float kick)
         {
             if (_phase == Phase.Up) _rollSpeed += kick;
@@ -646,7 +631,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Caught in the sun: it goes up in flames, chars where it stands, then collapses
         public void BurnUp()
         {
             SetHitBox(false);
@@ -685,7 +669,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (t >= 1f) Begin(Phase.Falling);
         }
 
-        /// Got away: waggles at the player, then drops out of sight as Lower does
         public void Escape()
         {
             Glow(null);
@@ -766,9 +749,6 @@ namespace IntuitiveDesigns.ShootingRange
             return rest + Vector3.up * _shown + _signOffset;
         }
 
-        /// The mount's upright edge nearest the player, stood off both faces by gap. A side sign hinged
-        /// there opens out square to the player and folds back flat along the mount's side. Public and
-        /// static so the setup tool's preview uses these very sums
         public static Vector3 DoorEdge(Bounds mount, Vector3 player, float gap)
         {
             float x = Mathf.Abs(player.x - mount.min.x) < Mathf.Abs(player.x - mount.max.x)
@@ -781,10 +761,6 @@ namespace IntuitiveDesigns.ShootingRange
             return new Vector3(x, 0f, z);
         }
 
-        /// Puts the sign's hinge edge on home and swings the sign about it. Rotating a transform only
-        /// ever turns it about its own origin, so the position is corrected by hand. Public and static so
-        /// the setup tool can lay a preview out with these very sums rather than keep a second copy of
-        /// them that would drift
         public static void PlaceFigure(Transform figure, Vector3 home, Quaternion facing,
                                        HingeShape shape, float swing, float spin)
         {
@@ -837,7 +813,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// A random sign no taller than tallest (0 = any), or the shortest there is when none fits
-        /// Bat signs are too small for the rails (user, 2026-11-02), so none is ever picked
+        /// Bat signs are too small for the rails, so none is ever picked
         private int PickUnder(float tallest)
         {
             int shortest = -1;
@@ -864,9 +840,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private bool IsBat(int i) { return variants[i] != null && variants[i].name.ToLowerInvariant().Contains("bat"); }
 
-        /// The stand sits in the middle of the sign's feet with its top against them, so it tips up and
-        /// folds away with the sign. A side sign has none: folded flat against its pillar, a post on its
-        /// edge would stick straight out at the player
         private void MountStand(float feet)
         {
             if (stand == null) return;
@@ -924,9 +897,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (float.IsInfinity(low)) low = high = 0f;
         }
 
-        /// The sign stays behind its cover and shows only its top edge. Every sign is a different
-        /// height and the line over the cover depends on where the player is standing, so the offset is
-        /// worked out for the sign that was picked, at the moment it is asked to pop up
         private float ShowJustOver(Renderer cover, float fallback)
         {
             if (cover == null || !_measured || _signTop <= 0f) return fallback;
@@ -945,10 +915,6 @@ namespace IntuitiveDesigns.ShootingRange
             return SightLineOver(cover.bounds, RestWorld(), head.position, nearestCover);
         }
 
-        /// How high the eye can see at a point, looking over a cover. Below that line the sign is out of
-        /// sight; a sliver above it is all the warning the player gets. Public and static because the
-        /// setup tool measures the rails with these very same sums, from an assumed eye rather than a
-        /// real one, and the two answers have to agree
         public static float SightLineOver(Bounds cover, Vector3 point, Vector3 eye, float nearest)
         {
             Vector3 toPoint = point - eye;
@@ -963,16 +929,10 @@ namespace IntuitiveDesigns.ShootingRange
             // Nothing in the player's face is cover, and neither is anything reaching past the sign
             if (near <= nearest || far >= reach) return float.NegativeInfinity;
 
-            // Which edge of the cover blocks the view depends on whether its top is above the eye or
-            // below it: looking up, the near edge is in the way, looking down, the far one. Rather than
-            // ask which, both are worked out and the one that hides less wins
             return Mathf.Max(eye.y + (cover.max.y - eye.y) * reach / near,
                              eye.y + (cover.max.y - eye.y) * reach / far);
         }
 
-        /// Where the level line of sight enters and leaves the cover. Only the two level axes count:
-        /// the question is how far along the ground the cover lies, not how tall it stands. Measuring
-        /// the whole box against the line instead would call a wide wall seen at an angle metres thick
         private static bool Crosses(Bounds box, Vector3 eye, Vector3 direction,
                                     out float near, out float far)
         {
@@ -1033,11 +993,7 @@ namespace IntuitiveDesigns.ShootingRange
                     };
 
                 case Hinge.Sideways:
-                    // Hinged on its outer edge so it opens inward, which mirrors the two walls without
-                    // either of them needing to know it is the left one or the right one. Facing the
-                    // player, a sign's own +x points to the player's left, so the right-hand wall's outer
-                    // edge is its low x. The hinge is on the back face, low z, so folded the sign's back
-                    // lies flat against the side of its pillar
+
                     return new HingeShape
                     {
                         Pivot = new Vector3(side >= 0f ? low.x : high.x, 0f, low.z),

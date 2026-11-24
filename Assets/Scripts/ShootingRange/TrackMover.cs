@@ -42,13 +42,10 @@ namespace IntuitiveDesigns.ShootingRange
             return target != null && hinge != Hinge.None ? target.TimeToRise : 0f;
         }
 
-        /// How long the sign takes to drop out of sight once it stops
         public float FallSeconds { get { return target != null ? target.TimeToFall : 0f; } }
 
-        /// How long one that is not going to travel would stand there
         public float RollHold() { return UnityEngine.Random.Range(minHold, maxHold); }
 
-        /// Riding a rail with its figure in view, shootable, and worth launching a bat from
         public bool Exposed { get { return _running && (target == null || target.Live); } }
 
         /// Where the figure is, which is not where the carriage is once it has popped up
@@ -78,13 +75,11 @@ namespace IntuitiveDesigns.ShootingRange
 
         public PopUpTarget Target { get { return target; } }
 
-        /// Up, and handing over a power-up if it's shot
         public bool CarriesPowerUp { get { return _special.HasValue; } }
 
         /// Launched carrying a power-up, still true after it is resolved
         public bool WasSpecial { get; private set; }
 
-        /// A round struck the room at this point: every sign up close enough to it flinches
         public static void NearMiss(Vector3 at)
         {
             for (int i = 0; i < All.Count; i++) All[i].Flinch(at);
@@ -109,10 +104,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (target != null) target.Spent -= Retire;
         }
 
-        /// holdSeconds above zero is one that stands still instead of travelling, for that long. The
-        /// booking is made from the same number, so it cannot be told one thing and the mover another
-        /// special is the power up a glowing sign hands over when it is shot, or null for an ordinary one.
-        /// spot is where along the rail it comes up, which only one that stands still moves off the origin
         public void Launch(TrackRail rail, float speed, float holdSeconds, PowerUpKind? special, float spot)
         {
             _special = special;
@@ -155,7 +146,6 @@ namespace IntuitiveDesigns.ShootingRange
             // Nothing moves until its sign is up, and every sign takes the same time to get there
             if (target != null && !target.Presented) return;
 
-            // Some of them never travel at all, up, a few seconds in the open, then back down
             if (_stationary)
             {
                 _held += Time.fixedDeltaTime;
@@ -182,7 +172,6 @@ namespace IntuitiveDesigns.ShootingRange
             var offset = TargetPoint - at;
             if (offset.sqrMagnitude > flinchRadius * flinchRadius) return;
 
-            // Away from where the round struck
             float away = Vector3.Dot(offset, target.Facing * Vector3.right) >= 0f ? 1f : -1f;
             target.Flinch(away * flinchKick);
         }

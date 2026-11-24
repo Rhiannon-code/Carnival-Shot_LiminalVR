@@ -10,6 +10,8 @@ Shader "CrystalCatch/Ground Fog"
         _DriftA ("Pattern A drift, metres per second (x, z)", Vector) = (0.06, 0.025, 0, 0)
         _DriftB ("Pattern B drift, metres per second (x, z)", Vector) = (-0.035, 0.045, 0, 0)
         _EdgeMetres ("Edge fade, metres", Float) = 0.5
+        _EdgeWobble ("How far the edge wanders in and out, metres", Float) = 0.6
+        _CarpetBoost ("Extra density where the mask's green says (the carpet)", Float) = 1.8
         _WispLow ("Wisps: noise below this is clear", Range(0, 1)) = 0.2
         _WispHigh ("Wisps: noise above this is full", Range(0, 2)) = 1
         _Stand ("Where the player stands, x and z: set by step 18", Vector) = (0, 0, 0, 0)
@@ -18,6 +20,8 @@ Shader "CrystalCatch/Ground Fog"
         _Hole2 ("Clear round a prop: x, z, radius, softness (step 18)", Vector) = (0, 0, 0, 0.2)
         _Hole3 ("Clear round a prop: x, z, radius, softness (step 18)", Vector) = (0, 0, 0, 0.2)
         _ClearLine ("Clear past a line: direction x, z, distance, softness (step 51)", Vector) = (0, 0, 0, 0.4)
+        _FogMask ("Open floor, seen from above (red: white is fog, black is clear)", 2D) = "white" {}
+        _FogMaskRect ("Mask covers: x min, z min, 1 / width, 1 / depth", Vector) = (0, 0, 0, 0)
         _NearFade ("Gone by this close, metres", Float) = 0.6
         _NearFadeRange ("Fully there this much further, metres", Float) = 2
     }
@@ -66,6 +70,8 @@ Shader "CrystalCatch/Ground Fog"
             float4 _DriftA;
             float4 _DriftB;
             float _EdgeMetres;
+            float _EdgeWobble;
+            float _CarpetBoost;
             float _WispLow;
             float _WispHigh;
             float _NearFade;
@@ -102,11 +108,14 @@ Shader "CrystalCatch/Ground Fog"
             {
                 fixed fog = smoothstep(_WispLow, _WispHigh, tex2D(_Noise, i.a).r * tex2D(_Noise, i.b).r * 2);
                 float edgeFade = max(_EdgeMetres, 0.01);
-                float2 edge = smoothstep(0, edgeFade, i.uv * i.size) * smoothstep(0, edgeFade, (1 - i.uv) * i.size);
+                // The edge wanders with the fog's own noise, so it never runs in a straight line
+                float wander = (tex2D(_Noise, i.a * 0.37).r - 0.5) * _EdgeWobble;
+                float2 edge = smoothstep(0, edgeFade, i.uv * i.size + wander) * smoothstep(0, edgeFade, (1 - i.uv) * i.size + wander);
                 float near = saturate((distance(i.world.xz, _Stand.xy) - _NearFade) / max(_NearFadeRange, 0.01));
                 float holes = FogHoles(i.world.xz);
                 float stirred = Stir(i.world.xz, _FogStir0) * Stir(i.world.xz, _FogStir1);
-                return fixed4(_Color.rgb, fog * _Density * edge.x * edge.y * near * stirred * holes);
+                float thick = 1 + _CarpetBoost * Thick(i.world.xz);
+                return fixed4(_Color.rgb, saturate(fog * _Density * thick) * edge.x * edge.y * near * stirred * holes);
             }
             ENDCG
         }

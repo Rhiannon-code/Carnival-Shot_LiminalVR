@@ -3,15 +3,11 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// The air a round pushes as it passes stirs this piece of cloth: no holes, nothing in the round's way (user, 2026-11-02).
-    /// The CrystalCatch/Cloth Ripple shader does the moving, from the last few passes, which this hands it as globals.
-    /// One on each piece, so a copy of a banner stirs too
     [RequireComponent(typeof(Renderer))]
     public class ClothAir : MonoBehaviour
     {
-        [SerializeField, Tooltip("Metres from the cloth that a passing round still stirs it")] private float reach = 0.6f;
-        [SerializeField, Tooltip("Seconds between pushes on one piece, so full auto doesn't flatten the wave into noise")]
-        private float gap = 0.05f;
+        [SerializeField] private float reach = 0.6f;
+        [SerializeField] private float gap = 0.05f;
 
         private const int Remembered = 4;
         private static readonly int AirId = Shader.PropertyToID("_ClothAir");

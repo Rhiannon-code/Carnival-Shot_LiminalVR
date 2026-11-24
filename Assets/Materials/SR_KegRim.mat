@@ -22,9 +22,9 @@ Material:
     m_Floats:
     - _Edge: 0.45
     - _Inflate: 0.004
-    - _PulseDepth: 0
+    - _PulseDepth: 0.5
     - _PulseSpeed: 5
     - _Softness: 0.15
-    - _Strength: 0.8
+    - _Strength: 1.6
     m_Colors:
     - _Color: {r: 1, g: 0.12, b: 0.06, a: 1}

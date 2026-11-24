@@ -2,10 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A boarded skylight. Once its last board is shot off, a beam of daylight falls for a few seconds, then a
-    /// cloud passes, once a round. Vampire signs caught under it burst into flames and burn up, which counts as a kill
-    /// (ADR 0064). The boards are a ReleaseOnShot on the same object,
-    /// set to one at a time
     public class Skylight : RoomReaction
     {
         [SerializeField] private Renderer beam;
@@ -13,11 +9,10 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Beam (data, seconds and metres)")]
         [SerializeField] private float beamSeconds = 5f;
         [SerializeField] private float fadeInSeconds = 0.3f;
-        [SerializeField, Tooltip("How long the cloud takes to cover it")] private float fadeOutSeconds = 1f;
+        [SerializeField] private float fadeOutSeconds = 1f;
         [SerializeField] private float strength = 0.6f;
         [SerializeField] private float radius = 0.5f;
-        [SerializeField, Tooltip("Metres past the beam's edge that still burns: about half a sign, so one that visibly touches the beam catches")]
-        private float catchMargin = 0.35f;
+        [SerializeField] private float catchMargin = 0.35f;
 
 
         [Header("Audio")]
@@ -86,7 +81,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Burn()
         {
             var movers = TrackMover.Movers;
-            // Measured across the beam, which may lean from its window onto the rows below (step 35b, 2026-11-17)
+            // Measured across the beam, which may lean from its window onto the rows below
             var axis = beam != null ? beam.transform.position : transform.position;
             var along = beam != null ? beam.transform.up : Vector3.up;
 

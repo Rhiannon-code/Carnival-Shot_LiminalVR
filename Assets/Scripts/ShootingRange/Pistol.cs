@@ -176,7 +176,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (PowerUps.Instance != null) PowerUps.Instance.Granted -= OnPowerUpGranted;
         }
 
-        /// Any power-up tops the magazine up, so the gun comes out of it full rather than dry (user, 2026-11-10)
+        /// Any power up tops the magazine up, so the gun comes out of it full rather than dry
         private void OnPowerUpGranted(PowerUpKind kind, float seconds, bool stacked)
         {
             Refill();
@@ -261,7 +261,7 @@ namespace IntuitiveDesigns.ShootingRange
             MoveTheMagazine();
         }
 
-        /// Up the grip, along its rake, in the gun's own space. Setup step 16 fits the glove to it
+        /// Up the grip, along its rake, in the gun's own space
         public Vector3 GripUp { get { return -magazineSlide.normalized; } }
 
         /// 0 to 1: the grip slackens once the magazine is falling and clamps again as the new one seats
@@ -276,7 +276,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// 0 to 1 and back: the thumb pressing the magazine release, just as the magazine lets go
+        /// 0 to 1 and back, the thumb pressing the magazine release, just as the magazine lets go
         public float ReleasePress { get { return Hump(Through, magazineFalls.x - 0.06f, magazineFalls.x + 0.05f); } }
 
         /// 0 up to 1 and back, starting and stopping at rest so nothing lurches into or out of it
@@ -298,7 +298,6 @@ namespace IntuitiveDesigns.ShootingRange
             return Mathf.Clamp01((through - window.x) / Mathf.Max(0.01f, window.y - window.x));
         }
 
-        /// Falls out of the grip, shrinking away as it goes, then a fresh one grows in as it slides up into place
         private void MoveTheMagazine()
         {
             if (_magazine == null) return;
@@ -324,8 +323,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// The muzzle was placed for the old stand-in gun. It moves to the middle of the fitted model's barrel
-        /// mouth, so the laser, the bullets and the flash (a child of it) all leave from the bore
         private void MuzzleOnTheBarrel()
         {
             if (muzzle == null || muzzle == transform) return;
@@ -353,7 +350,6 @@ namespace IntuitiveDesigns.ShootingRange
             muzzle.position = transform.TransformPoint(new Vector3((low.x + high.x) * 0.5f, (low.y + high.y) * 0.5f, high.z));
         }
 
-        /// The fitted model's magazine part, found by name as setup step 16 finds it
         private void FindTheMagazine()
         {
             foreach (var part in visual.GetComponentsInChildren<Transform>(true))
@@ -388,7 +384,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Kicks back on every shot and stays locked back for the whole reload, as an empty pistol does
         private void MoveTheSlide()
         {
             if (slide == null) return;
@@ -486,7 +481,6 @@ namespace IntuitiveDesigns.ShootingRange
             Cue(magazineOutClip, magazineFalls.x, before, after);
             Cue(reloadClip, magazineRises.x, before, after);
 
-            // The fresh magazine slapped home jolts the gun, and the hand riding it
             if (before < magazineRises.y && after >= magazineRises.y)
             {
                 _recoil += recoilKick * insertKick;
@@ -514,7 +508,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (RangeGame.Instance != null && !RangeGame.Instance.TriggersLive) return;
 
             var powerUps = PowerUps.Instance;
-            // Shots before the game starts, at the controls card, are free (user, 2026-11-10)
+            // Shots before the game starts, at the controls card, are free
             bool bottomless = (powerUps != null && powerUps.BottomlessMagazine) ||
                               (RangeGame.Instance != null && RangeGame.Instance.Current == RangeGame.State.HowToPlay);
 

@@ -3,8 +3,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Rocks back and forth on its base, away from the shot first, and settles where it started. Hit faster
-    /// than it can settle, every hit rocks it further, and enough of them tip it over until the next round
     public class WobbleOnShot : RoomReaction
     {
         [Header("Feel (data)")]
@@ -14,30 +12,34 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Pushed over (data): this many hits inside the window tip it")]
         [SerializeField] private int hitsToTip = 8;
-        [SerializeField, Tooltip("Seconds")] private float tipWindow = 2f;
-        [SerializeField, Tooltip("Extra rock per recent hit, as a share of Wobble Degrees")] private float leanPerHit = 0.15f;
+        [SerializeField] private float tipWindow = 2f;
+        [SerializeField] private float leanPerHit = 0.15f;
         [SerializeField] private float fallDegrees = 85f;
         [SerializeField] private float fallSeconds = 0.5f;
-        [SerializeField, Range(0f, 1f), Tooltip("A nearby shatter's rock, as a share of Wobble Degrees. Never tips it")]
-        private float joltShare = 0.5f;
+        [SerializeField, Range(0f, 1f)] private float joltShare = 0.5f;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] hitClips;
         [SerializeField, Range(0f, 1f)] private float hitVolume = 0.6f;
         [SerializeField] private AudioClip[] fallClips;
         [SerializeField, Range(0f, 1f)] private float fallVolume = 0.8f;
+        [SerializeField] private DebrisKind fallDebris = DebrisKind.None;
+        [SerializeField] private int fallDebrisTimes = 3;
 
         private readonly Queue<float> _recent = new Queue<float>();
         private Vector3 _restPosition;
         private Quaternion _restRotation;
         private Vector3 _base;
+        private float _height;
         private Vector3 _axis;
         private float _amplitude;
         private float _timer = -1f;
         private float _falling = -1f;
         private bool _down;
 
-        private void Awake()
+        private void Awake() { Rehome(); }
+
+        public override void Rehome()
         {
             _restPosition = transform.localPosition;
             _restRotation = transform.localRotation;
@@ -48,6 +50,7 @@ namespace IntuitiveDesigns.ShootingRange
             var all = renderers[0].bounds;
             foreach (var item in renderers) all.Encapsulate(item.bounds);
             _base = new Vector3(all.center.x, all.min.y, all.center.z);
+            _height = all.size.y;
         }
 
         public override void OnShot(Vector3 point, Vector3 direction, float impulse)
@@ -104,7 +107,6 @@ namespace IntuitiveDesigns.ShootingRange
             transform.RotateAround(_base, _axis, angle);
         }
 
-        /// Gathers speed as it goes, like something toppling, and stays where it lands
         private void Fall()
         {
             _falling += Time.deltaTime;
@@ -116,6 +118,10 @@ namespace IntuitiveDesigns.ShootingRange
 
             _falling = -1f;
             PlayOne(fallClips, _base, fallVolume);
+
+            // The fall turns the top toward axis x up, so that is where it hits the floor
+            if (fallDebris != DebrisKind.None && Debris.Instance != null)
+                Debris.Instance.Play(fallDebris, _base + Vector3.Cross(_axis, Vector3.up) * _height * 0.8f, Vector3.up, fallDebrisTimes);
         }
 
         protected override void Restore()

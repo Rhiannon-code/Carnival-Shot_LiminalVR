@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    public enum DebrisKind { None, Splinters, Sparks, Chips, Embers, Stuffing, Chunks, ImpactStar, ImpactRing, Dust }
+    public enum DebrisKind { None, Splinters, Sparks, Chips, Embers, Stuffing, Chunks, ImpactStar, ImpactRing, Dust, Blood, BloodSplash, PotionSplash, Glints }
 
     public class Debris : MonoBehaviour
     {

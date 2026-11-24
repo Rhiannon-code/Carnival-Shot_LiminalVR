@@ -5,9 +5,6 @@ namespace IntuitiveDesigns.ShootingRange
 {
     public enum SignReaction { Spin, Fold, Shatter, Flip, Boing, KnockedOff, Bats, SwingAndDrop }
 
-    /// What a shot sign does, picked by where the round struck it, and the reactions PopUpTarget hands over to
-    /// this: the knock-down flip, the springy stand, the roof sign that swings on one corner and lets go,
-    /// knocked clean off the rail, and bursting into bats (ADR 0063). Scoring never waits for any of it
     [RequireComponent(typeof(PopUpTarget))]
     public class SignReactions : MonoBehaviour
     {
@@ -25,10 +22,8 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         [Header("Where it was hit (data, shares of the sign)")]
-        [SerializeField, Range(0f, 1f), Tooltip("The top this share of its height counts as the head")]
-        private float headShare = 0.25f;
-        [SerializeField, Range(0f, 1f), Tooltip("Further from the middle than this share of its half-width counts as the edge")]
-        private float edgeShare = 0.6f;
+        [SerializeField, Range(0f, 1f)] private float headShare = 0.25f;
+        [SerializeField, Range(0f, 1f)] private float edgeShare = 0.6f;
 
         [Header("What each part does (data, relative odds; ones a sign can't do are skipped)")]
         [SerializeField] private Odds[] head =
@@ -60,7 +55,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float hangCycles = 1.5f;
         [SerializeField] private float hangSeconds = 0.5f;
         [SerializeField] private float dropSeconds = 0.6f;
-        [SerializeField, Tooltip("Degrees a second it tumbles as it drops")] private float dropSpin = 90f;
+        [SerializeField] private float dropSpin = 90f;
 
         [Header("Knocked off the rail (data, metres and degrees a second)")]
         [SerializeField] private float throwSpeed = 2.5f;
@@ -154,7 +149,6 @@ namespace IntuitiveDesigns.ShootingRange
 
                 case SignReaction.SwingAndDrop:
                 {
-                    // It hangs on by the top corner away from the hit, and the side that was hit drops
                     var box = sign.SignBounds;
                     Vector3 right = sign.Facing * Vector3.right;
                     float half = Mathf.Abs(right.x) * box.extents.x + Mathf.Abs(right.z) * box.extents.z;
@@ -187,7 +181,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Slapped flat on its back faster than a fold, with one bounce off the deck
         private void Flip()
         {
             float folded = _sign.Folded;
@@ -210,7 +203,6 @@ namespace IntuitiveDesigns.ShootingRange
             _sign.Pose(folded - Mathf.Sign(folded) * bounceDegrees * Mathf.Sin(b * Mathf.PI));
         }
 
-        /// Whipped back and forth on its stand like a door stop, then folds away as usual
         private void Boing()
         {
             float t = _timer / Mathf.Max(0.01f, boingSeconds);
@@ -255,7 +247,6 @@ namespace IntuitiveDesigns.ShootingRange
             figure.position += fallen;
         }
 
-        /// Torn off its stand and thrown to the back of the booth; the stand stays on the carriage
         private void KnockedOff()
         {
             if (_timer >= throwSeconds) { End(); return; }

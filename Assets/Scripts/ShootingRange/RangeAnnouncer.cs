@@ -100,14 +100,14 @@ namespace IntuitiveDesigns.ShootingRange
             Show(RoundResult());
         }
 
-        /// The score stays a surprise until the chest is shot open (user, 2026-11-10); with no chest it shows straight away
+        /// The score stays a surprise until the chest is shot open; with no chest it shows straight away
         private void OnFinalScore(int total)
         {
             _total = total;
             if (PrizeChest.Instance == null) ShowTheScore();
         }
 
-        /// Not before the barker has said to shoot it (user, 2026-11-17)
+        /// Not before the barker has said to shoot it
         private void OnLockOffered()
         {
             Show(shootTheLock);
@@ -118,7 +118,6 @@ namespace IntuitiveDesigns.ShootingRange
             StartCoroutine(Tally());
         }
 
-        /// Counts up fast and slows into the total, then the burst
         private System.Collections.IEnumerator Tally()
         {
             for (float t = 0f; t < 1f; t += Time.unscaledDeltaTime / Mathf.Max(0.01f, tallySeconds))

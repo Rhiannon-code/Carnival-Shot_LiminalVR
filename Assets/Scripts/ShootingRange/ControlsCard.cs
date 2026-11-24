@@ -73,7 +73,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnStateChanged(RangeGame.State state) { Refresh(); }
 
-        /// Down as the logo goes up (or once the triggers work, with no opening), away once the game begins
         private void Refresh()
         {
             bool cue = opening != null ? opening.LogoLeaving : game != null && game.TriggersLive;
@@ -113,7 +112,6 @@ namespace IntuitiveDesigns.ShootingRange
             PulseTheBullseye();
         }
 
-        /// The trigger's turn, then the grip's: the button lit and pressed pressesPerTurn times, its label glowing
         private void Demonstrate(float t)
         {
             float press = pressSeconds + pressGapSeconds;
@@ -134,7 +132,6 @@ namespace IntuitiveDesigns.ShootingRange
             SetAlpha(gripPlateGlow, trigger ? 0f : 1f);
         }
 
-        /// Pulsing to be shot; a hit makes it jump
         private void PulseTheBullseye()
         {
             float now = Time.unscaledTime;
@@ -146,7 +143,6 @@ namespace IntuitiveDesigns.ShootingRange
             bullseye.localScale = Vector3.one * scale;
         }
 
-        /// Every bulbSpacing-th bulb is lit and the lit ones step round the edge
         private void Chase(float t)
         {
             int step = Mathf.FloorToInt(t * bulbStepsPerSecond);

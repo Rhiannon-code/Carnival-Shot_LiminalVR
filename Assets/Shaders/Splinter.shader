@@ -1,10 +1,16 @@
-// What flies off a hit (Debris): solid, unlit, tinted by the particle's colour. Solid so it adds nothing to the see-through
-// draws, and no fade: the bits shrink away instead
 Shader "CrystalCatch/Splinter"
 {
+    Properties
+    {
+        _MainTex ("Sheet of shapes (alpha cuts them out)", 2D) = "white" {}
+        _Bright ("Brightness, to make up for the sheet's greys", Float) = 1.4
+        _BlackoutShare ("Brightness left in a blackout (1 = never dims)", Range(0, 1)) = 0.4
+    }
+
     SubShader
     {
-        Tags { "RenderType" = "Opaque" "IgnoreProjector" = "True" }
+        Tags { "Queue" = "AlphaTest" "RenderType" = "TransparentCutout" "IgnoreProjector" = "True" }
+        Cull Off
 
         Pass
         {
@@ -15,17 +21,25 @@ Shader "CrystalCatch/Splinter"
 
             #include "UnityCG.cginc"
 
+            sampler2D _MainTex;
+            half _Bright;
+            fixed _BlackoutShare;
+            // Set by CarnivalLights: 0 with every string of lights off, 1 with them all on
+            half _RoomLight;
+
             struct appdata
             {
                 float4 vertex : POSITION;
                 fixed4 color : COLOR;
+                float2 uv : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct v2f
             {
                 float4 vertex : SV_POSITION;
-                fixed4 color : COLOR;
+                half4 color : COLOR;
+                float2 uv : TEXCOORD0;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -37,13 +51,16 @@ Shader "CrystalCatch/Splinter"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                o.color = v.color;
+                o.color = half4(v.color.rgb * _Bright * lerp(_BlackoutShare, 1, saturate(_RoomLight)), v.color.a);
+                o.uv = v.uv;
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
-                return i.color;
+                fixed4 shape = tex2D(_MainTex, i.uv);
+                clip(shape.a - 0.5);
+                return fixed4(shape.rgb * i.color.rgb, 1);
             }
             ENDCG
         }

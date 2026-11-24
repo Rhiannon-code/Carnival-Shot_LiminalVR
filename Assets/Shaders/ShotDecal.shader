@@ -1,9 +1,3 @@
-// Bullet holes (ShotDecals). Premultiplied (One, OneMinusSrcAlpha), so a hole darkens the wall under it and adds a little
-// raw wood on its torn edge, the wall's own grain and light showing through (user, 2026-11-17; tools/shot-decal-art.py makes
-// the art for this). Vertex colour carries the hue of the light where the hole landed (rgb) and the fade (alpha).
-//
-// Offset pulls the hole forward in the depth test only, so it can sit flat on the wall instead of
-// floating a centimetre off it to stop the two flickering through each other.
 Shader "IntuitiveDesigns/Shot Decal"
 {
     Properties

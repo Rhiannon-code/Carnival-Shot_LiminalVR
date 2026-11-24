@@ -39,8 +39,8 @@ Material:
     - _BumpScale: 1
     - _GlossMapScale: 1
     - _Glossiness: 0.5
-    - _Lift: 0.3
-    - _LiftDark: 0.05
+    - _Lift: 0.1
+    - _LiftDark: 0.02
     - _Metallic: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}

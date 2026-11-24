@@ -9,8 +9,6 @@ namespace IntuitiveDesigns.ShootingRange
     [RequireComponent(typeof(TMP_Text))]
     public class ReloadPrompt : MonoBehaviour
     {
-        [SerializeField] private RangeGame game;
-
         [Header("Copy (data)")]
         [SerializeField] private string headline = "RELOAD";
         [SerializeField] private string leftGrip = "L GRIP";
@@ -41,7 +39,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void Start()
         {
-            if (game == null) game = RangeGame.Instance;
             _guns = FindObjectsOfType<Pistol>();
         }
 
@@ -50,7 +47,8 @@ namespace IntuitiveDesigns.ShootingRange
             bool left = false;
             bool right = false;
 
-            if (game != null && game.Current == RangeGame.State.Playing && _guns != null)
+            // Whenever a gun in hand is dry, not only mid-round: between rounds and at the lock it still has to be reloaded
+            if (_guns != null)
             {
                 for (int i = 0; i < _guns.Length; i++)
                 {

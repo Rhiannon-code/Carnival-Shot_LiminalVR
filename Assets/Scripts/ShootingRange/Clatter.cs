@@ -2,7 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A knock each time this lands on or strikes something, louder the harder it hit
     public class Clatter : MonoBehaviour
     {
         [SerializeField] private AudioClip[] clips;

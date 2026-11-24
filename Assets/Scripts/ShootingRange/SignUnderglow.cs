@@ -2,13 +2,10 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// The red from under a floor rail, fading up the sign that rides it. A sign's baked light is one probe reading,
-    /// which can't change from foot to head, so this is drawn over it as a second material (ADR 0064)
     public class SignUnderglow : MonoBehaviour
     {
         [SerializeField] private Material material;
-        [SerializeField, Range(0f, 1f), Tooltip("How far up the sign the red reaches, as a share of its height")]
-        private float reach = 0.5f;
+        [SerializeField, Range(0f, 1f)] private float reach = 0.5f;
 
         private static readonly int AmountId = Shader.PropertyToID("_Amount");
         private static readonly int FootId = Shader.PropertyToID("_FootY");

@@ -5,7 +5,7 @@ namespace IntuitiveDesigns.ShootingRange
 {
     public class Coffin : MonoBehaviour
     {
-        [Header("Measured by Fit The Lid (right-click the component; runs when it is added)")]
+        [Header("Measured by Fit The Lid")]
         [SerializeField] private Transform lid;
         [SerializeField] private Transform[] ridesTheLid;
         [SerializeField] private Vector3 hingePoint;
@@ -71,7 +71,6 @@ namespace IntuitiveDesigns.ShootingRange
             _base = new Vector3(all.center.x, all.min.y, all.center.z);
         }
 
-        /// Shoved the way push points, rocking on its base and settling, with a thud
         public void Knock(Vector3 push)
         {
             var flat = Vector3.ProjectOnPlane(push, Vector3.up);
@@ -115,7 +114,7 @@ namespace IntuitiveDesigns.ShootingRange
             _haunt = null;
         }
 
-        /// Opened wide and held for the barker, or shut and haunting again. Returns how long the swing takes, so he can wait for it
+        /// Returns how long the swing takes, so he can wait for it
         public float HoldOpen(bool open)
         {
             if (lid == null || !isActiveAndEnabled) return 0f;
@@ -202,7 +201,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Falls shut faster and faster, thuds, and bounces once
         private IEnumerator Slam(float seconds)
         {
             yield return Swing(0f, seconds, Ease.In);
@@ -259,9 +257,6 @@ namespace IntuitiveDesigns.ShootingRange
             FitTheLid();
         }
 
-        /// Measures where the lid sits closed from the meshes, with the lid still in its modelled
-        /// open pose: flat on the bottom's rim, head end over head end, outer face (the cross's side) up,
-        /// hinged on the long edge it leans against. Re-run it after moving the lid by hand
         [ContextMenu("Fit The Lid")]
         private void FitTheLid()
         {
@@ -282,7 +277,7 @@ namespace IntuitiveDesigns.ShootingRange
             var b = new Box(this, bottom);
             var l = new Box(this, lid);
 
-            // Outer face up: the riders sit on the outside
+            // Outer face up, the riders sit on the outside
             Vector3 lidNormal = l.up;
             if (ridesTheLid.Length > 0 && ridesTheLid[0] != null &&
                 Vector3.Dot(Local(ridesTheLid[0].position) - l.centre, lidNormal) < 0f)
@@ -375,7 +370,6 @@ namespace IntuitiveDesigns.ShootingRange
                 up = axes[thinnest];
             }
 
-            /// How far the part reaches from its centre along a direction
             public float Reach(Vector3 direction)
             {
                 float most = 0f;

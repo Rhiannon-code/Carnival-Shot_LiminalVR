@@ -2,16 +2,14 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Fire on whatever is burning. One particle system in world space that any number of burning signs emit into, so
-    /// they share one draw and it needs no pool. Particles, not a light: no realtime lights on Quest (ADR 0064)
     public class Flames : MonoBehaviour
     {
         public static Flames Instance { get; private set; }
 
         [SerializeField] private ParticleSystem system;
         [SerializeField] private int perLick = 1;
-        [SerializeField, Tooltip("Each flame's size, as a share of the burning thing's width")] private float cover = 1.3f;
-        [SerializeField, Tooltip("How far from the middle a flame starts, as a share of the half-width")] private float spread = 0.3f;
+        [SerializeField] private float cover = 1.3f;
+        [SerializeField] private float spread = 0.3f;
 
         private void Awake() { Instance = this; }
 

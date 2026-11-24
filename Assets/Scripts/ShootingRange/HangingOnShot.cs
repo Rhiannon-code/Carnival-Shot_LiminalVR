@@ -2,8 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Something hung on a wall by one nail, the first hit swings it crooked, the side that was hit dropping,
-    /// and the next knocks it off the wall to fall to physics
     public class HangingOnShot : RoomReaction
     {
         [SerializeField] private Rigidbody body;
@@ -13,6 +11,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float swingCycles = 2f;
         [SerializeField] private float swingSeconds = 0.9f;
         [SerializeField] private float fallImpulse = 0.5f;
+        [SerializeField] private bool swingsBack;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] hitClips;
@@ -41,25 +40,34 @@ namespace IntuitiveDesigns.ShootingRange
             var all = renderers[0].bounds;
             foreach (var item in renderers) all.Encapsulate(item.bounds);
 
-            // Hung flat on a wall, its thinnest level side is the way it faces
-            _facing = all.size.x < all.size.z ? Vector3.right : Vector3.forward;
-            _middle = all.center;
-            _nail = new Vector3(all.center.x, all.max.y, all.center.z);
+            // Hung flat on a wall, its thinnest level side is the way it faces. Kept in the parent's space, so it still
+            // swings from its own nail when what it hangs on moves
+            _facing = ToParent(all.size.x < all.size.z ? Vector3.right : Vector3.forward, true);
+            _middle = ToParent(all.center, false);
+            _nail = ToParent(new Vector3(all.center.x, all.max.y, all.center.z), false);
         }
 
         public override void OnShot(Vector3 point, Vector3 direction, float impulse)
         {
             // Still swinging from the last hit, with a gun in each hand two rounds can land together, and the
             // second would knock it off the wall before it was ever seen hanging crooked
-            if (_state == State.Fallen || _timer >= 0f) return;
+            if (_state == State.Fallen || (_timer >= 0f && !swingsBack)) return;
 
             PlayOne(hitClips, point, hitVolume);
+
+            if (swingsBack)
+            {
+                var side = Vector3.Cross(Vector3.up, InWorld(_facing, true));
+                _target = -Mathf.Sign(Vector3.Dot(point - InWorld(_middle, false), side)) * crookedDegrees;
+                _timer = 0f;
+                return;
+            }
 
             if (_state == State.Straight)
             {
                 // A positive turn about the facing lifts the side across from it, so the hit side drops on a negative
-                var across = Vector3.Cross(Vector3.up, _facing);
-                _target = -Mathf.Sign(Vector3.Dot(point - _middle, across)) * crookedDegrees;
+                var across = Vector3.Cross(Vector3.up, InWorld(_facing, true));
+                _target = -Mathf.Sign(Vector3.Dot(point - InWorld(_middle, false), across)) * crookedDegrees;
                 _timer = 0f;
                 _state = State.Crooked;
                 return;
@@ -80,14 +88,30 @@ namespace IntuitiveDesigns.ShootingRange
             _timer += Time.deltaTime;
             float t = Mathf.Clamp01(_timer / Mathf.Max(0.01f, swingSeconds));
 
-            // Starts level, overshoots and rings down onto the crooked angle
-            float angle = _target - _target * Mathf.Cos(t * swingCycles * 2f * Mathf.PI) * (1f - t) * (1f - t);
+            // Starts level, overshoots and rings down onto the crooked angle, or back to straight for a bell
+            float ring = Mathf.Cos(t * swingCycles * 2f * Mathf.PI) * (1f - t) * (1f - t);
+            float angle = swingsBack ? _target * Mathf.Sin(t * swingCycles * 2f * Mathf.PI) * (1f - t) * (1f - t)
+                                     : _target - _target * ring;
 
             transform.localPosition = _restPosition;
             transform.localRotation = _restRotation;
-            transform.RotateAround(_nail, _facing, angle);
+            transform.RotateAround(InWorld(_nail, false), InWorld(_facing, true), angle);
 
             if (t >= 1f) _timer = -1f;
+        }
+
+        private Vector3 ToParent(Vector3 world, bool direction)
+        {
+            var parent = transform.parent;
+            if (parent == null) return world;
+            return direction ? parent.InverseTransformDirection(world) : parent.InverseTransformPoint(world);
+        }
+
+        private Vector3 InWorld(Vector3 local, bool direction)
+        {
+            var parent = transform.parent;
+            if (parent == null) return local;
+            return direction ? parent.TransformDirection(local) : parent.TransformPoint(local);
         }
 
         protected override void Restore()

@@ -2,8 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Spins a part about the upright through its middle, the way the shot struck it, and lets it run down.
-    /// Every hit adds more spin. It stops wherever it stops and squares up again next round
     public class SpinOnShot : RoomReaction
     {
         [SerializeField] private Renderer spinner;

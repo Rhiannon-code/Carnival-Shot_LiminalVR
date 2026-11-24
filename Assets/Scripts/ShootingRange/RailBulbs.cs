@@ -2,8 +2,7 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A row of bulbs along a rail that lights up in a run toward the launch point as a sign is about to
-    /// come up there. One mesh and one draw call for the whole row; the Rail Bulbs shader does the lighting
+    /// One mesh and one draw call for the whole row; the Rail Bulbs shader does the lighting
     [RequireComponent(typeof(MeshRenderer))]
     public class RailBulbs : MonoBehaviour
     {
@@ -25,7 +24,6 @@ namespace IntuitiveDesigns.ShootingRange
             Set(-1f);
         }
 
-        /// The lit spot runs from the far end to the launch point over seconds
         public void Chase(float seconds)
         {
             _runSeconds = Mathf.Max(0.05f, seconds);

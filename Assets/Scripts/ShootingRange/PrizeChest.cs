@@ -3,10 +3,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// The chest on the bench holds the prize, like a real carnival game (user, 2026-11-02). It stays locked through the
-    /// game; at the end the barker calls for a drum roll and says to shoot the lock, and only then does the lock glow and
-    /// take a shot (user, 2026-11-17). Shot, the lid flies open and the prize for the share of signs hit rises out and
-    /// turns. Nobody shooting it still gets their prize, a little later
     public class PrizeChest : MonoBehaviour
     {
         [SerializeField] private PopOpenOnShot lid;
@@ -14,11 +10,15 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Transform lockGlow;
         [SerializeField] private Transform[] prizes;
 
-        [Header("Which prize (data): the share of all the session's signs hit to earn each prize after the first")]
-        [SerializeField] private float[] tierShares = { 0.2f, 0.4f, 0.6f, 0.75f, 0.9f };
+        [Header("Which prize (data): the session's points to earn each prize after the first")]
+        [SerializeField] private int[] tierScores = { 6000, 12000, 18000, 24000, 30000 };
+        [SerializeField] private Color[] tierGlows =
+        {
+            new Color(1f, 1f, 1f), new Color(0.3f, 1f, 0.35f), new Color(0.3f, 0.55f, 1f),
+            new Color(0.7f, 0.35f, 1f), new Color(1f, 0.55f, 0.15f), new Color(1f, 0.84f, 0.3f),
+        };
 
         [Header("Reveal (data)")]
-        [Tooltip("Metres above the floor (world y 0) the prize's middle rises to, at full size")]
         [SerializeField] private float riseTo = 1.6f;
         [SerializeField] private float riseSeconds = 1.2f;
         [SerializeField]
@@ -48,6 +48,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private ParticleSystem halo;
         [SerializeField, Range(0f, 1f)] private float haloPulse = 0.12f;
         [SerializeField] private float haloPulsesPerSecond = 0.5f;
+        [SerializeField] private float haloBehind = 0.1f;
 
         [Header("Drum roll while the lock waits to be shot")]
         [SerializeField] private AudioClip drumRoll;
@@ -56,10 +57,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         public static PrizeChest Instance { get; private set; }
 
-        /// The lid has flown open: the room celebrates (CarnivalLights, CountdownSkulls)
         public static event Action Opened;
 
-        /// The barker has said to shoot the lock, and it can be shot (RangeAnnouncer)
         public static event Action LockOffered;
 
         /// Asking for the lock, waiting for it to be shot, or still showing the prize
@@ -69,10 +68,10 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         private RangeGame _game;
-        private TrackDirector _director;
         private AudioSource _audio;
         private AudioSource _roll;
         private Transform _prize;
+        private Transform _view;
         private Renderer[] _prizeParts;
         private Vector3 _prizeRest;
         private Vector3 _prizeRisen;
@@ -91,8 +90,6 @@ namespace IntuitiveDesigns.ShootingRange
         private bool _rollUntilTally;
         private bool _rollEnded;
         private float _lineAt;
-        private int _signs;
-        private int _hits;
 
         private void Awake()
         {
@@ -103,7 +100,7 @@ namespace IntuitiveDesigns.ShootingRange
             _roll = gameObject.AddComponent<AudioSource>();
             _roll.playOnAwake = false;
             _roll.loop = true;
-            // Flat, like the barker it answers: half-placed at the chest it was lost under his voice (user, 2026-11-17)
+            // Flat, like the barker it answers: half placed at the chest it was lost under his voice
             _roll.spatialBlend = 0f;
             if (lid != null) lid.Locked = true;
             if (lockGlow != null) { _glowSize = lockGlow.localScale; lockGlow.gameObject.SetActive(false); }
@@ -115,9 +112,7 @@ namespace IntuitiveDesigns.ShootingRange
         private void Start()
         {
             _game = RangeGame.Instance;
-            _director = FindObjectOfType<TrackDirector>();
             if (_game != null) _game.StateChanged += OnStateChanged;
-            if (_director != null) _director.TargetResolved += OnTargetResolved;
             _rollUntilTally = FindObjectOfType<RangeAnnouncer>() != null;
             RangeAnnouncer.TallyFinished += EndTheRoll;
         }
@@ -126,14 +121,7 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (Instance == this) Instance = null;
             if (_game != null) _game.StateChanged -= OnStateChanged;
-            if (_director != null) _director.TargetResolved -= OnTargetResolved;
             RangeAnnouncer.TallyFinished -= EndTheRoll;
-        }
-
-        private void OnTargetResolved(bool shot)
-        {
-            _signs++;
-            if (shot) _hits++;
         }
 
         private void OnStateChanged(RangeGame.State state)
@@ -146,7 +134,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (CarnyVoice.Instance != null) CarnyVoice.Instance.AskForTheLock();
         }
 
-        /// Once he has finished saying to shoot it: before then a shot would skip his line and the roll (user, 2026-11-17)
+        /// Once he has finished saying to shoot it: before then a shot would skip his line and the roll
         private void OfferTheLock()
         {
             _asking = false;
@@ -158,7 +146,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (LockOffered != null) LockOffered();
         }
 
-        /// On his "Drum roll, please!" (user, 2026-11-17), or with the lock if he never says it.
+        /// On his "Drum roll, please!", or with the lock if he never says it.
         /// The clock to open by itself starts here, so the player has the whole roll to shoot
         private void StartTheRoll()
         {
@@ -173,7 +161,6 @@ namespace IntuitiveDesigns.ShootingRange
             _roll.Play();
         }
 
-        /// The lock was shot, or nobody shot it in time
         public void Unlock()
         {
             if (!_waiting) return;
@@ -198,7 +185,13 @@ namespace IntuitiveDesigns.ShootingRange
             _prize.gameObject.SetActive(true);
             _prizeParts = _prize.GetComponentsInChildren<Renderer>();
             _prizeRisen = Risen();
-            if (halo != null) { halo.transform.position = Middle(); halo.transform.localScale = Vector3.zero; halo.Play(true); }
+            if (halo != null)
+            {
+                TintTheGlow(tier);
+                halo.transform.position = BehindThePrize();
+                halo.transform.localScale = Vector3.zero;
+                halo.Play(true);
+            }
             float fanfareSeconds = 0f;
             if (fanfares != null && fanfares.Length > 0)
             {
@@ -213,6 +206,20 @@ namespace IntuitiveDesigns.ShootingRange
             if (Opened != null) Opened();
         }
 
+        private void TintTheGlow(int tier)
+        {
+            if (tierGlows == null || tierGlows.Length == 0) return;
+
+            var colour = tierGlows[Mathf.Clamp(tier, 0, tierGlows.Length - 1)];
+            foreach (var system in halo.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                var main = system.main;
+                var tinted = colour;
+                tinted.a = main.startColor.color.a;
+                main.startColor = tinted;
+            }
+        }
+
         /// Where the prize's pivot ends up, in its parent, for its middle at full size to sit riseTo above the floor. It
         /// grows about its pivot and turns about the vertical, so the middle's height over the pivot just scales by grow
         private Vector3 Risen()
@@ -223,16 +230,33 @@ namespace IntuitiveDesigns.ShootingRange
             return _prize.parent.InverseTransformPoint(risen);
         }
 
-        private Vector3 Middle()
+        private Vector3 Middle() { return Whole().center; }
+
+        private Bounds Whole()
         {
-            if (_prizeParts == null || _prizeParts.Length == 0) return _prize.position;
+            if (_prizeParts == null || _prizeParts.Length == 0) return new Bounds(_prize.position, Vector3.zero);
 
             var bounds = _prizeParts[0].bounds;
             for (int i = 1; i < _prizeParts.Length; i++) bounds.Encapsulate(_prizeParts[i].bounds);
-            return bounds.center;
+            return bounds;
         }
 
-        /// The roll goes on under the score counting up, and the crash lands on the total (user, 2026-11-17); with no board to
+        /// Where the glow goes: past the prize on the player's line of sight. At the prize's middle its flat card cut through
+        /// the prize, so it lay over one half and hid behind the other, and slid about as the prize turned
+        private Vector3 BehindThePrize()
+        {
+            var bounds = Whole();
+            if (_view == null && Camera.main != null) _view = Camera.main.transform;
+            if (_view == null) return bounds.center;
+
+            Vector3 away = bounds.center - _view.position;
+            if (away.sqrMagnitude < 1e-6f) return bounds.center;
+
+            float reach = new Vector2(bounds.extents.x, bounds.extents.z).magnitude;
+            return bounds.center + away.normalized * (reach + haloBehind);
+        }
+
+        /// The roll goes on under the score counting up, and the crash lands on the total; with no board to
         /// count it, on the shot
         private void EndTheRoll()
         {
@@ -245,9 +269,9 @@ namespace IntuitiveDesigns.ShootingRange
 
         private int Tier()
         {
-            float share = _signs > 0 ? (float)_hits / _signs : 0f;
+            int score = _game != null ? _game.TotalScore : 0;
             int tier = 0;
-            for (int i = 0; i < tierShares.Length; i++) if (share >= tierShares[i]) tier = i + 1;
+            for (int i = 0; i < tierScores.Length; i++) if (score >= tierScores[i]) tier = i + 1;
             return tier;
         }
 
@@ -294,7 +318,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (sparkle != null) sparkle.transform.position = _prize.position;
             if (halo != null)
             {
-                halo.transform.position = Middle();
+                halo.transform.position = BehindThePrize();
                 halo.transform.localScale = _haloSize * t * (1f + haloPulse * Mathf.Sin(shown * haloPulsesPerSecond * 2f * Mathf.PI));
             }
         }
