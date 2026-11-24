@@ -104,10 +104,11 @@ namespace IntuitiveDesigns.ShootingRange
             _swingSpeed = Vector2.zero;
             _lastSag = -1f;
             _phase = Phase.Dropping;
-            Shootable(false);
 
             transform.position = anchor + Vector3.down * attachHeight;
             gameObject.SetActive(true);
+            // After it is switched on: the first time, that is when Awake finds its colliders
+            Shootable(false);
             Draw();
             // Or it draws a streak from wherever the last spider was shot
             if (_trail != null) _trail.Clear();
