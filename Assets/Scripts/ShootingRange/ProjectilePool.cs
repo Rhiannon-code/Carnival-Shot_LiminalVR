@@ -40,15 +40,21 @@ namespace IntuitiveDesigns.ShootingRange
 
         public bool Fire(Vector3 origin, Vector3 direction, float speedScale, Color tracer)
         {
-            if (_idle.Count == 0)
-            {
-                if (warnWhenExhausted)
-                    Debug.LogWarning("[ProjectilePool] Exhausted. Raise poolSize above fire rate x round lifetime.");
-                return false;
-            }
+            var round = Take();
+            if (round == null) return false;
 
-            _idle.Dequeue().Fire(origin, direction, speedScale, tracer);
+            round.Fire(origin, direction, speedScale, tracer);
             return true;
+        }
+
+        /// An idle round, or null when every one is in the air or still showing its trail
+        public Projectile Take()
+        {
+            if (_idle.Count > 0) return _idle.Dequeue();
+
+            if (warnWhenExhausted)
+                Debug.LogWarning("[ProjectilePool] Exhausted. Raise poolSize above fire rate x (round lifetime + trail time).");
+            return null;
         }
 
         public void Return(Projectile round)

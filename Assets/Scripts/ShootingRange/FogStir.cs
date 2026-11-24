@@ -2,8 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A round landing low pushes a clear ring through the ground fog, which fills back in. The shader only ever
-    /// knows the two latest, as global vectors, so it stays cheap at any rate of fire (ADR 0064)
     public class FogStir : MonoBehaviour
     {
         public static FogStir Instance { get; private set; }
@@ -13,7 +11,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float endRadius = 1.2f;
         [SerializeField] private float spreadSeconds = 0.6f;
         [SerializeField] private float settleSeconds = 2.5f;
-        [SerializeField, Tooltip("Metres above the floor a hit can be and still stir it")] private float reach = 0.6f;
+        [SerializeField] private float reach = 0.6f;
 
         private static readonly int[] StirIds = { Shader.PropertyToID("_FogStir0"), Shader.PropertyToID("_FogStir1") };
 

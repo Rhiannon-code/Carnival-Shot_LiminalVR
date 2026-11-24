@@ -42,8 +42,8 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip dangleLoop;
         [SerializeField, Range(0f, 1f)] private float dangleVolume = 0.35f;
 
-        /// A spider is on its way down in front of the player
-        public event Action Dropped;
+        /// A spider is due. A listener that warns the player first holds it back with Hold for as long as the warning runs
+        public event Action Coming;
 
         private static readonly RaycastHit[] Hits = new RaycastHit[8];
 
@@ -54,6 +54,8 @@ namespace IntuitiveDesigns.ShootingRange
         private readonly bool[] _swatterSeen = new bool[4];
         private float _nextRelease;
         private float _interval;
+        private float _hold;
+        private float _dueAt = -1f;
 
         private void Awake()
         {
@@ -106,6 +108,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnRoundEnded(int round, int roundScore)
         {
+            _dueAt = -1f;
             _spider.Stop();
         }
 
@@ -117,8 +120,17 @@ namespace IntuitiveDesigns.ShootingRange
             if (game == null || game.Current != RangeGame.State.Playing || game.RoundNumber < firstRound) return;
 
             if (_spider.Active) { _nextRelease = Time.time + _interval; return; }
-            if (Time.time >= _nextRelease) Release();
+            // Real seconds: a warning runs at its own speed through slow motion
+            if (_dueAt >= 0f) { if (Time.unscaledTime >= _dueAt) { _dueAt = -1f; Release(); } return; }
+            if (Time.time < _nextRelease) return;
+
+            _hold = 0f;
+            if (Coming != null) Coming();
+            if (_hold > 0f) _dueAt = Time.unscaledTime + _hold;
+            else Release();
         }
+
+        public void Hold(float seconds) { _hold = Mathf.Max(_hold, seconds); }
 
         public void Popped(Vector3 at, Vector3 direction)
         {
@@ -140,7 +152,6 @@ namespace IntuitiveDesigns.ShootingRange
 
             _spider.Drop(this, anchor, depth, head);
             PlayAt(dropClips, anchor);
-            if (Dropped != null) Dropped();
         }
 
         /// His legs scratch while he is in the way, from a random point in the loop so no two visits

@@ -54,7 +54,6 @@ namespace IntuitiveDesigns.ShootingRange
         public event Action CountdownGo;
         public event Action<int> RoundStarted;
         public event Action<int, int> RoundEnded;
-        /// Every sign in the wave was shot
         public event Action<int> RoundCleared;
         public event Action<int> FinalScore;
         public event Action<Vector3> PlayerHit;

@@ -9,10 +9,8 @@ public class ButtonInputs : MonoBehaviour
     [SerializeField] ParticleSystem particles;
     [SerializeField] TrailRenderer trails;
  
-    // Update is called once per frame
     void Update()
     {
-        //get the primary input
         var primaryInput = VRDevice.Device.PrimaryInputDevice;
 
         if (primaryInput.GetButtonDown(VRButton.One) || Input.GetMouseButtonDown(0))

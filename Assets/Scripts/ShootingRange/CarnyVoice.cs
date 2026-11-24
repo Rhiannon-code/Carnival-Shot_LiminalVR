@@ -24,7 +24,6 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private AudioClip[] nextRound;
         [SerializeField] private AudioClip[] nextRoundThen;
         [SerializeField] private AudioClip[] finalRound;
-        [Tooltip("Element 0 says one, element 1 two, element 2 three")]
         [SerializeField] private AudioClip[] countdown;
         [SerializeField] private AudioClip[] go;
 
@@ -39,7 +38,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("The prize chest at the end: shoot the lock, then what was won, smallest to best")]
         [SerializeField] private AudioClip[] shootTheLock;
-        [Tooltip("Seconds into his shoot-the-lock line where he has said 'Drum roll, please!'; the roll starts there")]
         [SerializeField] private float drumRollCue = 2.1f;
         [SerializeField] private AudioClip[] prizeSmall;
         [SerializeField] private AudioClip[] prizeMedium;
@@ -48,7 +46,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField]
         private AudioClip[] scoreTally;
 
-        [Header("Warnings, the first time each turns up (they cut in: the spider bites, the bat is coming)")]
+        [Header("Warnings, before the first of each turns up: they cut in, and it waits for the line to end")]
         [SerializeField] private AudioClip[] spiderWarning;
         [SerializeField] private AudioClip[] batWarning;
         [SerializeField] private AudioClip[] firstReload;
@@ -66,13 +64,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float quietSeconds = 4f;
         [SerializeField, Range(0f, 1f)] private float volume = 1f;
 
-        /// Mid-line, or with lines still waiting their turn
         public bool Talking { get { return Time.unscaledTime < _busyUntil || _queue.Count > 0 || _upNext.Count > 0; } }
 
-        /// What the skeleton barker's jaw follows
         public AudioSource Speaker { get { return _audio; } }
 
-        /// He has got as far as "Drum roll, please!" in his shoot-the-lock line
         public bool CalledForTheDrumRoll
         {
             get { return _lockLineAt >= 0f && Time.unscaledTime >= _lockLineAt + drumRollCue / Mathf.Max(0.1f, _audio.pitch); }
@@ -130,8 +125,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (director != null) director.TargetResolved += OnTargetResolved;
             if (powerUps != null) powerUps.Granted += OnGranted;
             if (combo != null) combo.Changed += OnComboChanged;
-            if (spiders != null) spiders.Dropped += OnSpiderDropped;
-            if (bats != null) bats.Launched += OnBatLaunched;
+            if (spiders != null) spiders.Coming += OnSpiderComing;
+            if (bats != null) bats.Coming += OnBatComing;
 
             PrizeChest.Opened += OnChestOpened;
             _guns = FindObjectsOfType<Pistol>();
@@ -155,8 +150,8 @@ namespace IntuitiveDesigns.ShootingRange
             if (combo != null) combo.Changed -= OnComboChanged;
             if (_guns != null) foreach (var gun in _guns) if (gun != null) gun.AmmoChanged -= OnAmmoChanged;
             PrizeChest.Opened -= OnChestOpened;
-            if (spiders != null) spiders.Dropped -= OnSpiderDropped;
-            if (bats != null) bats.Launched -= OnBatLaunched;
+            if (spiders != null) spiders.Coming -= OnSpiderComing;
+            if (bats != null) bats.Coming -= OnBatComing;
         }
 
         /// The coin has dropped and the lights are coming up (CarnivalLights), while the controls card is still up
@@ -204,7 +199,6 @@ namespace IntuitiveDesigns.ShootingRange
             _cleared = true;
         }
 
-        /// A clean sweep goes straight to the cheer; anything less hears the bell called first
         private void OnRoundEnded(int round, int roundScore)
         {
             if (!_cleared) Queue(timeUp);
@@ -245,7 +239,6 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// 0 smallest to 3 best
-        /// Small, medium, big and top: how many sets of prize lines he has
         public const int PrizeBands = 4;
 
         public void Prize(int band)
@@ -266,7 +259,6 @@ namespace IntuitiveDesigns.ShootingRange
             React(missStreak);
         }
 
-        /// The score counts up on the board as the lid flies open
         private void OnChestOpened()
         {
             UpNext(Pick(scoreTally));
@@ -280,20 +272,31 @@ namespace IntuitiveDesigns.ShootingRange
             UpNext(Pick(firstReload));
         }
 
-        private void OnSpiderDropped()
+        /// The first of the session is called out before it comes: he cuts in, and it waits until he has finished
+        private void OnSpiderComing()
         {
             if (_warnedOfSpiders) return;
 
             _warnedOfSpiders = true;
-            UpNext(Pick(spiderWarning));
+            spiders.Hold(Warn(spiderWarning));
         }
 
-        private void OnBatLaunched()
+        private void OnBatComing()
         {
             if (_warnedOfBats) return;
 
             _warnedOfBats = true;
-            UpNext(Pick(batWarning));
+            bats.Hold(Warn(batWarning));
+        }
+
+        /// Seconds the warning runs, 0 when there is none
+        private float Warn(AudioClip[] lines)
+        {
+            var clip = Pick(lines);
+            if (clip == null) return 0f;
+
+            Interrupt(clip);
+            return _busyUntil - Time.unscaledTime;
         }
 
         private void OnGranted(PowerUpKind kind, float seconds, bool stack)
@@ -313,7 +316,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (clip != null) _queue.Enqueue(clip);
         }
 
-        /// Heckles and cheers never queue or talk over anything, and are skipped now and then
         private void React(AudioClip[] lines)
         {
             if (Talking || Time.unscaledTime < _quietUntil || Random.value > reactChance) return;
@@ -335,7 +337,6 @@ namespace IntuitiveDesigns.ShootingRange
             Play(clip);
         }
 
-        /// Never cuts him off: it plays the moment the line he is saying ends, ahead of anything queued
         private void UpNext(AudioClip clip)
         {
             if (clip != null) _upNext.Enqueue(clip);
@@ -355,7 +356,7 @@ namespace IntuitiveDesigns.ShootingRange
 
 #if UNITY_EDITOR
         /// Fills each slot from the built clips, named carny_<slot>_<nn>, in number order, so the countdown
-        /// lands one, two, three. Re-run after adding lines; only the slots it finds clips for change
+        /// lands one, two, three. Re-run after adding lines, only the slots it finds clips for change
         [ContextMenu("Fill Lines From Folder")]
         private void FillLinesFromFolder()
         {

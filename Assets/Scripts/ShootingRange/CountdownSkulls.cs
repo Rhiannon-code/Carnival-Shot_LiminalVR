@@ -44,7 +44,6 @@ namespace IntuitiveDesigns.ShootingRange
             _game.CountdownGo -= OnGo;
         }
 
-        /// Red on 3, orange on 2, green on 1. Green stays lit through GO
         private void OnTick(int n)
         {
             Protect(true);

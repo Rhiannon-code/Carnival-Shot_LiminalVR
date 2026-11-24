@@ -13,6 +13,8 @@ Shader "CrystalCatch/Fog Wisp"
         _Hole2 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
         _Hole3 ("Clear round a prop: x, z, radius, softness (step 51)", Vector) = (0, 0, 0, 0.2)
         _ClearLine ("Clear past a line: direction x, z, distance, softness (step 51)", Vector) = (0, 0, 0, 0.4)
+        _FogMask ("Open floor, seen from above (red: white is fog, black is clear)", 2D) = "white" {}
+        _FogMaskRect ("Mask covers: x min, z min, 1 / width, 1 / depth", Vector) = (0, 0, 0, 0)
     }
 
     SubShader

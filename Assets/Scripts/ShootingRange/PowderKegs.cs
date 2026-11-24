@@ -4,19 +4,16 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Puts kegs up at random spots on the step boards each round, as many as perRound says for that round, and takes them down
-    /// at its end (user, 2026-11-02; per-round counts, user, 2026-11-17: there were too many)
     public class PowderKegs : MonoBehaviour
     {
         [SerializeField] private RangeGame game;
         [SerializeField] private PowderKeg[] kegs;
-        [SerializeField, Tooltip("The step boards that face the player, set by setup step 56")] private Renderer[] boards;
+        [SerializeField] private Renderer[] boards;
 
         [Header("Each round (data)")]
-        [SerializeField, Tooltip("How many kegs come up in round 1, round 2 and so on; rounds past the end use the last")]
-        private int[] perRound = { 0, 1, 1, 2, 2 };
-        [SerializeField, Tooltip("Metres a keg keeps from a board's ends and from another keg")] private float apart = 1.2f;
-        [SerializeField, Tooltip("Seconds into the round they come up, at random in this range")] private Vector2 comeUpAfter = new Vector2(1f, 6f);
+        [SerializeField] private int[] perRound = { 0, 1, 1, 2, 2 };
+        [SerializeField] private float apart = 1.2f;
+        [SerializeField] private Vector2 comeUpAfter = new Vector2(1f, 6f);
 
         private readonly List<Vector3> _taken = new List<Vector3>();
 
@@ -64,7 +61,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (!keg.Busy) keg.Raise(spot, Quaternion.LookRotation(Vector3.forward), board.bounds.size.z);
         }
 
-        /// The middle of a board's top, somewhere along it, clear of the ends and of the other kegs. A few tries, then none
         private bool FindASpot(out Vector3 spot, out Renderer board)
         {
             for (int attempt = 0; attempt < 8; attempt++)

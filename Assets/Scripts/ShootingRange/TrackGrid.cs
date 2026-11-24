@@ -11,7 +11,6 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Junctions (data, metres)")]
         [SerializeField] private float crossTolerance = 0.4f;
         [SerializeField] private float junctionClearance = 0.7f;
-        [SerializeField] private bool logJunctionsOnAwake = true;
 
         public TrackRail[] Rails { get { return rails; } }
         public int JunctionCount { get { return _junctions.Count; } }
@@ -40,9 +39,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (rails == null || rails.Length == 0) rails = GetComponentsInChildren<TrackRail>();
 
             FindJunctions();
-
-            if (logJunctionsOnAwake)
-                Debug.Log("[TrackGrid] " + rails.Length + " rails, " + _junctions.Count + " junctions.");
         }
 
         /// Books the rail and every junction on it, or books nothing at all

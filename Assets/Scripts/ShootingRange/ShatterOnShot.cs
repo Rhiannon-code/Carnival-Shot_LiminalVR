@@ -2,7 +2,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Breaks into the pieces cut from its own model, or into plain fragments until those are cut
     public class ShatterOnShot : RoomReaction
     {
         [Header("Pieces (empty = plain fragments)")]
@@ -10,6 +9,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Feel (data)")]
         [SerializeField] private float fragmentImpulse = 1.4f;
+        [SerializeField] private DebrisKind[] breakDebris;
+        [SerializeField] private int breakDebrisTimes = 3;
 
         [Header("Audio (empty = the sign shatter)")]
         [SerializeField] private AudioClip[] shatterClips;
@@ -31,6 +32,12 @@ namespace IntuitiveDesigns.ShootingRange
 
             _broken = true;
             Show(false);
+
+            if (breakDebris != null && Debris.Instance != null)
+            {
+                var outward = (Vector3.up - direction * 0.5f).normalized;
+                foreach (var kind in breakDebris) Debris.Instance.Play(kind, point, outward, breakDebrisTimes);
+            }
 
             // No smoke: a prop that vanished into a puff would read as gone, not broken
             if (ShatterPool.Instance != null)

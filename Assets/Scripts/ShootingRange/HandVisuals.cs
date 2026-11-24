@@ -17,13 +17,7 @@ namespace IntuitiveDesigns.ShootingRange
             public VRAvatarLimbType limb = VRAvatarLimbType.LeftHand;
             public Transform ghost;
             public Transform armed;
-
-            /// The gun this hand picks up. Its ghost stays until that gun is in hand; empty falls back
-            /// to the game state, ghosts until both guns are up
             public Pistol pistol;
-
-            /// Off when the armed visual already rides something that moves, such as a glove parented
-            /// to the pistol it is gripping
             public bool followArmed;
             public Vector3 localPosition;
             public Vector3 localEuler;
@@ -42,7 +36,7 @@ namespace IntuitiveDesigns.ShootingRange
         [Header("Refs")]
         [SerializeField] private RangeGame game;
 
-        [Header("Hands (armed may be empty until the gloves exist)")]
+        [Header("Hands")]
         [SerializeField]
         private Hand[] hands =
         {
@@ -139,7 +133,6 @@ namespace IntuitiveDesigns.ShootingRange
             hand.snap = Mathf.MoveTowards(hand.snap, over ? 1f : 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, snapSeconds));
         }
 
-        /// Away from the gun the grip makes a fist; on it the fingers fold into the very grip the glove has
         private static void Close(Hand hand, IVRAvatarHand rig, bool over)
         {
             if (hand.ghostFingers == null) return;
@@ -156,9 +149,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (hand.tint != null) hand.tint.Shimmer();
         }
 
-        /// The SDK spawns its controller models and laser when a controller connects, which can be
-        /// after the first frame, so this looks again once a second until both are gone, and again
-        /// whenever a controller reconnects. Only active ones are found
         private void HideControllers()
         {
             if (!hideControllers) return;
@@ -191,8 +181,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (_listeningTo != null) _listeningTo.InputDeviceConnected -= OnControllerConnected;
         }
 
-        /// The ghost sits where its glove will be once the gun is in this hand, and slides onto the
-        /// floating gun's grip as the hand comes in reach
         private static void Haunt(Hand hand, Transform rig)
         {
             if (hand.ghost == null) return;

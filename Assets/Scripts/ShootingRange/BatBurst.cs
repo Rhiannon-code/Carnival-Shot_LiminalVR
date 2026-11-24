@@ -3,8 +3,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Bats that burst out of a shot sign and flutter off into the dark. For show only: they hit nothing and
-    /// nothing can hit them. Built once at Awake and pooled
     public class BatBurst : MonoBehaviour
     {
         public static BatBurst Instance { get; private set; }

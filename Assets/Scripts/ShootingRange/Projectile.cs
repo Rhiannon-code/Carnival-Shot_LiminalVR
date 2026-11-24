@@ -22,10 +22,10 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)] private float bounceSpeedKept = 0.6f;
         [SerializeField] private AudioClip[] ricochetClips;
         [SerializeField, Range(0f, 1f)] private float ricochetVolume = 0.3f;
-        [SerializeField, Range(0f, 1f), Tooltip("Share of bounces that whine; every one doing it gets tiresome fast")] private float ricochetWhine = 0.35f;
-        [SerializeField, Range(0f, 1f), Tooltip("How loud a bounced round lands, as a share of a straight hit")] private float bouncedLoudness = 0.4f;
-        [SerializeField, Tooltip("The tracer after a bounce, so a ricochet can be followed by eye")]
-        private Color ricochetTracer = new Color(1f, 0.95f, 0.6f, 1f);
+        [SerializeField, Range(0f, 1f)] private float ricochetWhine = 0.35f;
+        [SerializeField, Range(0f, 1f)] private float bouncedLoudness = 0.4f;
+        [SerializeField] private Color ricochetTracer = new Color(1f, 0.95f, 0.6f, 1f);
+        [SerializeField] private float ricochetTrailSeconds = 0.03f;
 
         public bool Live { get { return _live; } }
         public float Impulse { get { return impulse; } }
@@ -33,6 +33,9 @@ namespace IntuitiveDesigns.ShootingRange
         public float GravityScale { get { return gravityScale; } }
 
         private TrailRenderer _trail;
+        private Renderer _model;
+        private float _retireAt;
+        private float _trailSeconds;
         private Vector3 _velocity;
         private float _distance;
         private float _age;
@@ -49,17 +52,38 @@ namespace IntuitiveDesigns.ShootingRange
         private void Awake()
         {
             _trail = GetComponent<TrailRenderer>();
+            _model = GetComponentInChildren<MeshRenderer>();
+            if (_trail != null) _trailSeconds = _trail.time;
         }
 
         public void Fire(Vector3 origin, Vector3 direction, float speedScale, Color tracer)
         {
-            transform.position = origin;
-            _velocity = direction.normalized * speed * Mathf.Max(0.05f, speedScale);
             _age = 0f;
             _distance = 0f;
             _bounces = 0;
             _passed.Clear();
+            Launch(origin, direction.normalized * speed * Mathf.Max(0.05f, speedScale), tracer, _trailSeconds);
+        }
+
+        /// Takes over a round's flight where it bounced. A second round, because one trail can't both hang along the way
+        /// in and start afresh on the way out: on one trail the bounced round dragged its whole first leg behind it
+        private void ContinueFrom(Projectile bounced, Vector3 origin, Vector3 velocity)
+        {
+            _age = bounced._age;
+            _distance = bounced._distance;
+            _bounces = bounced._bounces + 1;
+            _passed.Clear();
+            _passed.AddRange(bounced._passed);
+            Launch(origin, velocity, ricochetTracer, ricochetTrailSeconds);
+        }
+
+        private void Launch(Vector3 origin, Vector3 velocity, Color tracer, float trailSeconds)
+        {
+            transform.position = origin;
+            _velocity = velocity;
             _live = true;
+            _retireAt = 0f;
+            if (_model != null) _model.enabled = true;
             AimAlongVelocity();
             gameObject.SetActive(true);
 
@@ -67,13 +91,18 @@ namespace IntuitiveDesigns.ShootingRange
 
             // Or it draws a streak from wherever this round last died
             _trail.Clear();
+            _trail.time = trailSeconds;
             _trail.startColor = tracer;
             _trail.endColor = new Color(tracer.r, tracer.g, tracer.b, 0f);
         }
 
         private void FixedUpdate()
         {
-            if (!_live) return;
+            if (!_live)
+            {
+                if (_retireAt > 0f && Time.time >= _retireAt) Retire();
+                return;
+            }
 
             _age += Time.fixedDeltaTime;
             if (_age >= maxLifetime || _distance >= maxRange) { Finish(); return; }
@@ -94,7 +123,7 @@ namespace IntuitiveDesigns.ShootingRange
             {
                 var hit = Hits[i];
 
-                // Already inside it at the start of the step: the single cast this replaced never saw those either
+                // Already inside it at the start of the step
                 if (hit.distance <= 0f && hit.point == Vector3.zero) continue;
 
                 var shootable = hit.collider.GetComponentInParent<IShootable>();
@@ -111,11 +140,12 @@ namespace IntuitiveDesigns.ShootingRange
 
                 if (shootable == null && _bounces < maxBounces)
                 {
-                    _bounces++;
-                    _velocity = Vector3.Reflect(_velocity, hit.normal) * bounceSpeedKept;
                     Ricochet(centre);
-                    transform.position = centre + hit.normal * 0.005f;
-                    AimAlongVelocity();
+                    transform.position = centre;
+                    var onward = ProjectilePool.Instance != null ? ProjectilePool.Instance.Take() : null;
+                    if (onward != null)
+                        onward.ContinueFrom(this, centre + hit.normal * 0.005f, Vector3.Reflect(_velocity, hit.normal) * bounceSpeedKept);
+                    Finish();
                     return;
                 }
 
@@ -174,11 +204,6 @@ namespace IntuitiveDesigns.ShootingRange
         {
             if (ricochetClips != null && ricochetClips.Length > 0 && ImpactFX.Instance != null && Random.value < ricochetWhine)
                 ImpactFX.Instance.PlayClip(ricochetClips[Random.Range(0, ricochetClips.Length)], at, ricochetVolume);
-
-            if (_trail == null) return;
-
-            _trail.startColor = ricochetTracer;
-            _trail.endColor = new Color(ricochetTracer.r, ricochetTracer.g, ricochetTracer.b, 0f);
         }
 
         /// The buffer comes back in no particular order, and it is never more than a handful long
@@ -193,9 +218,20 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
+        /// The round is spent, but its trail hangs where it flew for as long as the trail lasts. Switched off with the round,
+        /// the trail vanished the moment the round hit
         private void Finish()
         {
             _live = false;
+            if (_trail == null || _trail.time <= 0f) { Retire(); return; }
+
+            if (_model != null) _model.enabled = false;
+            _retireAt = Time.time + _trail.time;
+        }
+
+        private void Retire()
+        {
+            _retireAt = 0f;
             gameObject.SetActive(false);
 
             if (ProjectilePool.Instance != null) ProjectilePool.Instance.Return(this);

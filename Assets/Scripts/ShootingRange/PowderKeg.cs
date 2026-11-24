@@ -4,8 +4,6 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// A powder keg on a step board. It waits out of sight in the gap behind the board, rides up, and settles on the
-    /// board's top; shot, it blows and takes every sign near it, each a kill as a shot is (user, 2026-11-02)
     public class PowderKeg : MonoBehaviour, IShootable
     {
         private enum State { Down, Rising, Up, Sinking }
@@ -27,6 +25,12 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField, Range(0f, 1f)] private float rumble = 1f;
         [SerializeField] private float rumbleSeconds = 0.35f;
         [SerializeField, Range(0f, 1f)] private float blastSpatial = 0.4f;
+
+        [Header("What the blast throws (data): how many of each debris kind's own burst")]
+        [SerializeField] private int splinterBursts = 16;
+        [SerializeField] private int chunkBursts = 8;
+        [SerializeField] private int emberBursts = 8;
+        [SerializeField] private int sparkBursts = 10;
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] blastClips;
@@ -62,7 +66,6 @@ namespace IntuitiveDesigns.ShootingRange
             Begin(State.Rising);
         }
 
-        /// Back down behind its board, if it's still there
         public void Lower()
         {
             if (_state == State.Down || _state == State.Sinking) return;
@@ -90,9 +93,10 @@ namespace IntuitiveDesigns.ShootingRange
             }
             if (Debris.Instance != null)
             {
-                Debris.Instance.Play(DebrisKind.Splinters, centre, -direction, 10);
-                Debris.Instance.Play(DebrisKind.Embers, centre, -direction, 8);
-                Debris.Instance.Play(DebrisKind.Sparks, centre, -direction, 6);
+                Debris.Instance.Play(DebrisKind.Splinters, centre, -direction, splinterBursts);
+                Debris.Instance.Play(DebrisKind.Chunks, centre, -direction, chunkBursts);
+                Debris.Instance.Play(DebrisKind.Embers, centre, -direction, emberBursts);
+                Debris.Instance.Play(DebrisKind.Sparks, centre, -direction, sparkBursts);
             }
             if (HapticPulse.Instance != null)
             {
@@ -109,7 +113,6 @@ namespace IntuitiveDesigns.ShootingRange
             Throw(centre);
         }
 
-        /// Loose props fly, and anything near that reacts to a shot gets one from the blast, another keg included
         private void Throw(Vector3 centre)
         {
             int count = Physics.OverlapSphereNonAlloc(centre, throwRadius, Near, ~0, QueryTriggerInteraction.Ignore);

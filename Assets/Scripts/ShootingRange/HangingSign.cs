@@ -30,7 +30,6 @@ namespace IntuitiveDesigns.ShootingRange
         public float ChainLength { get { return chainLength; } }
         public bool IsUp { get { return _phase == Phase.Up; } }
         public bool IsDown { get { return _phase == Phase.Down; } }
-        /// Down and done swinging
         public bool Settled { get { return IsDown && Time.unscaledTime - _since >= swingSettleSeconds; } }
 
         private void Awake()
@@ -80,7 +79,7 @@ namespace IntuitiveDesigns.ShootingRange
                     }
                     break;
                 case Phase.Down:
-                    // Caught by the chains: it swings from their top and dies away
+                    // Caught by the chains, it swings from their top and dies away
                     swing = swingDegrees * Mathf.Exp(-4f * t / Mathf.Max(0.01f, swingSettleSeconds)) *
                             Mathf.Sin(2f * Mathf.PI * swingsPerSecond * t);
                     break;

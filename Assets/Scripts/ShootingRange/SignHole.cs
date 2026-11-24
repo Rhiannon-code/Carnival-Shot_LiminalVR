@@ -3,10 +3,10 @@ using UnityEngine;
 namespace IntuitiveDesigns.ShootingRange
 {
     /// A bullet hole cut through the sign that was just hit, so the room shows through it. The sign's shader clips it, from
-    /// where this says the hole is in each mesh's own space, so it rides along through the reaction (ADR 0064)
+    /// where this says the hole is in each mesh's own space, so it rides along through the reaction
     public class SignHole : MonoBehaviour
     {
-        [Header("Mask size (data, metres): the see-through part is about half of it")]
+        [Header("Mask size (data, metres): the see through part is about half of it")]
         [SerializeField] private float minSize = 0.18f;
         [SerializeField] private float maxSize = 0.24f;
 

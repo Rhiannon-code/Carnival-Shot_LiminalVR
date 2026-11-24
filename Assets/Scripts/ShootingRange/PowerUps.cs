@@ -64,6 +64,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private readonly float[] _remaining = new float[KindCount];
         private readonly float[] _grantedAt = new float[KindCount];
+        private PowerUpKind? _lastCollected;
 
         public static string Label(PowerUpKind kind)
         {
@@ -180,6 +181,7 @@ namespace IntuitiveDesigns.ShootingRange
 
             AddTime((int)kind, seconds);
             _grantedAt[(int)kind] = Time.unscaledTime;
+            _lastCollected = kind;
 
             if (!wasActive) Apply(kind, true);
 
@@ -253,7 +255,10 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void OnStateChanged(RangeGame.State state)
         {
-            if (state == RangeGame.State.Ended) ClearAll();
+            if (state != RangeGame.State.Ended) return;
+
+            ClearAll();
+            _lastCollected = null;
         }
 
         private void Apply(PowerUpKind kind, bool on)
@@ -264,11 +269,13 @@ namespace IntuitiveDesigns.ShootingRange
             else slowMotion.Exit();
         }
 
-        /// What the next special sign carries. Full Auto and Scattershot are even; slow motion is rarer,
-        /// and only on offer with enough signs up for it to buy the player something
         public PowerUpKind RollSpecial()
         {
-            if (UnityEngine.Random.value < slowMotionOdds && LiveTargets() >= minTargetsForSlowMotion) return PowerUpKind.SlowMotion;
+            bool slowMotionOnOffer = _lastCollected != PowerUpKind.SlowMotion && LiveTargets() >= minTargetsForSlowMotion;
+            if (slowMotionOnOffer && UnityEngine.Random.value < slowMotionOdds) return PowerUpKind.SlowMotion;
+
+            if (_lastCollected == PowerUpKind.FullAuto) return PowerUpKind.Scattershot;
+            if (_lastCollected == PowerUpKind.Scattershot) return PowerUpKind.FullAuto;
             return UnityEngine.Random.value < 0.5f ? PowerUpKind.FullAuto : PowerUpKind.Scattershot;
         }
 

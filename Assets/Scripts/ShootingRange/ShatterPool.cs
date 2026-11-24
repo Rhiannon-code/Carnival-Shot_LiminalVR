@@ -101,10 +101,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (Instance == this) Instance = null;
         }
 
-        /// The broken pieces of the sign that was actually hit. They arrive where the sign was, so they
-        /// line up with what vanished, and are thrown from the hole the round made
-        /// clips and volume replace the pool's own shatter sound, for things that are not wooden signs.
-        /// popScale sizes the smoke puff, none by default: only the flying bat still has one (user, 2026-11-02)
         public void Burst(GameObject set, Transform sign, Vector3 at, Vector3 direction, float impulse,
                           AudioClip[] clips = null, float volume = -1f, float popScale = 0f)
         {
@@ -236,7 +232,7 @@ namespace IntuitiveDesigns.ShootingRange
             _popping.Add(new Popping { Pop = pop, Until = Time.time + popLifetime });
         }
 
-        /// One sweep for everything thrown; a coroutine per fragment is 8 to 16 of them per sign
+        /// One sweep for everything thrown, a coroutine per fragment is 8 to 16 of them per sign
         private void Update()
         {
             float now = Time.time;

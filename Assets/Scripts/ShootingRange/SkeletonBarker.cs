@@ -10,7 +10,6 @@ namespace IntuitiveDesigns.ShootingRange
 {
     public class SkeletonBarker : RoomReaction
     {
-        [Header("Laid out by setup steps 64 and 65")]
         [SerializeField] private RangeGame game;
         [SerializeField] private TrackDirector director;
         [SerializeField] private Coffin coffin;
@@ -25,6 +24,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float besidePlayer = 1.1f;
         [SerializeField] private float aheadOfPlayer = 1f;
         [SerializeField] private float aboveEyes = 0.15f;
+        [SerializeField] private float feetAboveFloor = 0.05f;
         [SerializeField]
         private Vector3 playerFaces = Vector3.forward;
         [SerializeField]
@@ -38,11 +38,12 @@ namespace IntuitiveDesigns.ShootingRange
         private float boingHeight = 0.15f;
         [SerializeField] private int boingWobbles = 3;
         [SerializeField] private float engageSeconds = 0.5f;
+        [SerializeField] private float homeEngageSeconds = 0.2f;
         [SerializeField] private float holdStrength = 150f;
         [SerializeField] private float holdDamping = 18f;
         [SerializeField] private float leanDegrees = 8f;
 
-        [Header("Cartoon servo (data): a wind-up the other way, a snap, a springy overshoot that wobbles to rest")]
+        [Header("Cartoon servo")]
         [SerializeField, Range(0f, 0.3f)] private float anticipation = 0.12f;
         [SerializeField, Range(0f, 0.5f)] private float overshoot = 0.25f;
         [SerializeField] private int wobbles = 2;
@@ -95,15 +96,19 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float fullOpenLoudness = 0.12f;
         [SerializeField, Tooltip("Seconds")] private float jawSmoothing = 0.05f;
 
+        [Header("Eye glow (data): steady in his sockets, brighter with each word")]
+        [SerializeField] private Renderer[] eyeGlows;
+        [SerializeField] private float eyeGlowQuiet = 0.9f;
+        [SerializeField] private float eyeGlowLoud = 2.4f;
+
         [Header("Shot (data)")]
         [SerializeField] private float shotImpulse = 0.8f;
         [SerializeField] private float joltDegrees = 6f;
         [SerializeField] private float joltSeconds = 0.25f;
-        [Header("Shot while out on his stand: snapped back away from the shot, then eased upright (user, 2026-11-17)")]
+        [Header("Shot while out on his stand: snapped back away from the shot, then eased upright")]
         [SerializeField] private float recoilDegrees = 25f;
         [SerializeField] private float recoilSeconds = 0.6f;
-        [SerializeField, Range(0.05f, 0.5f), Tooltip("Share of recoilSeconds spent snapping back; the rest eases him upright")]
-        private float recoilSnapShare = 0.15f;
+        [SerializeField, Range(0.05f, 0.5f)] private float recoilSnapShare = 0.15f;
         [SerializeField] private AudioClip[] hitClips;
         [SerializeField, Range(0f, 1f)] private float hitVolume = 0.6f;
 
@@ -121,8 +126,7 @@ namespace IntuitiveDesigns.ShootingRange
             public float Side;
             /// Where the wrist is in the built pose this frame: set each frame before the arm is posed
             public Vector3 RestWrist;
-            /// The palm's facing and the fingers' direction, in the wrist's own space. In the built pose the hands hang along
-            /// the forearm with their palms to his body, turned a little toward his back (skeleton.fbx hand meshes, 2026-11-13)
+            /// The palm's facing and the fingers' direction, in the wrist's own space. In the built pose the hands hang along the forearm with their palms to his body, turned a little toward his back
             public Vector3 PalmInWrist, FingersInWrist;
         }
 
@@ -144,8 +148,9 @@ namespace IntuitiveDesigns.ShootingRange
         private Quaternion _waistRest, _neckRest, _jawRest;
         private Vector3 _faceInNeck, _faceInSkull;
         // The middle of the skull mesh, in the skull's space: its pivot is down at his feet, so aiming from skull.position
-        // looked up at the player's chin and he gazed straight ahead (user, 2026-11-13)
+        // looked up at the player's chin and he gazed straight ahead
         private Vector3 _headInSkull;
+        private float _headAboveFeet;
         private Arm _tipArm, _waveArm;
         private Vector3 _brimInSkull;
         private Vector3 _hatPosition;
@@ -163,6 +168,8 @@ namespace IntuitiveDesigns.ShootingRange
         private float _joltAt = -1f;
         private bool _recoil;
         private float _mouth, _mouthSpeed;
+        private MaterialPropertyBlock _eyeGlow;
+        private static readonly int EyeStrengthId = Shader.PropertyToID("_Strength");
         private bool _out, _limp, _didWell, _waving;
         private Transform _head;
         private Coroutine _act;
@@ -174,7 +181,7 @@ namespace IntuitiveDesigns.ShootingRange
             _neck = Marker("Neck");
             if (stand == null || skull == null || hat == null || jaw == null || _body == null || _waist == null || _neck == null)
             {
-                Debug.LogWarning("[SkeletonBarker] Missing his stand, skull, hat, jaw or joint markers. Run setup steps 64 and 65", this);
+                Debug.LogWarning("[SkeletonBarker] Missing his stand, skull, hat, jaw or joint markers", this);
                 enabled = false;
                 return;
             }
@@ -186,7 +193,7 @@ namespace IntuitiveDesigns.ShootingRange
             _engageFromPositions = new Vector3[_bones.Count];
             _engageFromRotations = new Quaternion[_bones.Count];
 
-            // Every joint marker step 64 made, to put back when he's shut away
+            // Every joint marker, to put back when he's shut away
             _markers = new[] { "Waist", "Neck", "Shoulder L", "Elbow L", "Wrist L", "Shoulder R", "Elbow R", "Wrist R" }
                        .Select(Marker).Where(m => m != null).ToArray();
             _markerRest = _markers.Select(m => m.localRotation).ToArray();
@@ -201,6 +208,7 @@ namespace IntuitiveDesigns.ShootingRange
             _faceInSkull = skull.transform.InverseTransformDirection(transform.forward);
             var skullMesh = skull.GetComponent<Renderer>();
             _headInSkull = skull.transform.InverseTransformPoint(skullMesh != null ? skullMesh.bounds.center : _neck.position);
+            _headAboveFeet = Vector3.Distance(HeadCentre(), _body.position);
             _hatPosition = hat.transform.localPosition;
             _hatRotation = hat.transform.localRotation;
             WearTheHat();
@@ -269,7 +277,6 @@ namespace IntuitiveDesigns.ShootingRange
             return (a.Wrist.position - point).sqrMagnitude <= (b.Wrist.position - point).sqrMagnitude ? a : b;
         }
 
-        /// The hat's rim on the tipping hand's side, at the bottom of the brim
         private Vector3 BrimAtRest()
         {
             var filter = hat.GetComponentInChildren<MeshFilter>();
@@ -315,7 +322,6 @@ namespace IntuitiveDesigns.ShootingRange
             if (!_out && _waveArm != null && Random.value < waveChance) Run(Wave());
         }
 
-        /// Holds the lid open while his arm reaches out sideways through the gap, waves, and goes back in
         private IEnumerator Wave()
         {
             _waving = true;
@@ -365,7 +371,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// Limp, shoved out fast but slowing into the stop, so he sways to a halt beside the player instead of flopping on into
-        /// them (user, 2026-11-13: a 3 m lunge stopped dead slammed him into the player); then his servos catch him
+        /// them (a 3 m lunge stopped dead slammed him into the player); then his servos catch him
         private IEnumerator ComeOut()
         {
             StopWaving();
@@ -383,8 +389,6 @@ namespace IntuitiveDesigns.ShootingRange
             _act = null;
         }
 
-        /// Limp again and yanked in from wherever the stand got to, the coffin rocking with the knock. Stiffened once the lid
-        /// hides him
         private IEnumerator GoBack()
         {
             if (_hatInHand) WearTheHat();
@@ -393,9 +397,10 @@ namespace IntuitiveDesigns.ShootingRange
 
             GoLimp();
             float from = _shove;
-            // Leans further out first, then the yank
             yield return Shove(yankSeconds, t => _shove = from * (t < WindUp ? 1f + lungeWindUp * Mathf.Sin(t / WindUp * Mathf.PI)
                                                                              : 1f - Squared((t - WindUp) / (1f - WindUp))));
+            // Home: the ignored coffin colliders would let his swinging limbs carry on through its walls
+            yield return Engage(homeEngageSeconds);
 
             if (coffin != null)
             {
@@ -408,8 +413,9 @@ namespace IntuitiveDesigns.ShootingRange
             _act = null;
         }
 
-        /// The servos take him back from wherever the flop left each piece to his pose, with a clunk
-        private IEnumerator Engage()
+        private IEnumerator Engage() { return Engage(engageSeconds); }
+
+        private IEnumerator Engage(float seconds)
         {
             for (int i = 0; i < _bones.Count; i++)
             {
@@ -424,7 +430,7 @@ namespace IntuitiveDesigns.ShootingRange
             _engage = 0f;
             _look = _lookFrom = _lookTarget = Quaternion.identity;
             PlayOne(clunkClips, stand.position, clunkVolume);
-            yield return Tween(engageSeconds, t => _engage = t);
+            yield return Tween(seconds, t => _engage = t);
             _engage = 1f;
             for (int i = 0; i < _bones.Count; i++)
             {
@@ -433,8 +439,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Out to his side, up past the outside of the brim, in to it; the hat comes off and is held out with a bow; then
-        /// the same way back. A hat shot off on the way ends it
         private IEnumerator TipTheHat()
         {
             yield return Reach(SideOf, reachSeconds);
@@ -463,7 +467,6 @@ namespace IntuitiveDesigns.ShootingRange
             _bow = 0f;
         }
 
-        /// The hand goes from wherever it is to target on the servo
         private IEnumerator Reach(Func<Vector3> target, float seconds)
         {
             Vector3 from = _handTo != null ? _handTo() : _tipArm.RestWrist;
@@ -490,8 +493,6 @@ namespace IntuitiveDesigns.ShootingRange
             apply(1f);
         }
 
-        /// A servo move from 0 to 1: steady motor speed, a dead stop that overshoots a little and settles, a shake while it
-        /// runs, and now and then a catch with a clunk
         private IEnumerator Tween(float seconds, Action<float> apply)
         {
             var hitches = new float[Random.Range(hitchesPerMove.x, hitchesPerMove.y + 1)];
@@ -534,7 +535,6 @@ namespace IntuitiveDesigns.ShootingRange
 
         private static float Squared(float t) { return t * t; }
 
-        /// The cartoon servo, 0 to 1: back a little, snap past the end, wobble in. Shakes while the motor runs
         private float Servo(float t)
         {
             float shake = Random.Range(-motorShake, motorShake);
@@ -550,7 +550,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// The trip out: ducks back into the coffin, then out fast, slowing into the stop so he never flies on at the player
-        /// (user, 2026-11-13: a lunge stopped dead slammed him into them). The bounce on arrival is up and down only
+        /// (a lunge stopped dead slammed him into them). The bounce on arrival is up and down only
         private float Lunge(float t)
         {
             if (t < WindUp) return -lungeWindUp * Mathf.Sin(t / WindUp * Mathf.PI);
@@ -574,8 +574,6 @@ namespace IntuitiveDesigns.ShootingRange
             return skull.position + Side * sweepTo.x + Vector3.up * sweepTo.y + outward * sweepTo.z;
         }
 
-        /// While he's limp the physics has him: the stand moves so the joints feel how fast it went and how hard it stopped,
-        /// each joint is pulled toward his pose, and the head turns to the player
         private void FixedUpdate()
         {
             if (!_limp) return;
@@ -585,23 +583,20 @@ namespace IntuitiveDesigns.ShootingRange
             LookLimp();
         }
 
-        // The stand's bar, carried out with him, and a copy of it stretched from its back end to where that end sat in the
-        // coffin, so the bar always reaches back in (user, 2026-11-13: "his stand is too short"; chose a stretching bar). The
-        // stand itself isn't stretched: his joints hang from it
+        // The stand's bar, carried out with him, and a copy of it stretched from its back end to where that end sat in the coffin, so the bar always reaches back in. The stand itself isn't stretched: his joints hang from it
         private Transform _reach, _reachBar;
         private Vector3 _reachAnchor, _reachBackInStand, _reachAxis, _reachMiddle;
         private float _reachLength;
 
         private void BuildTheReach()
         {
-            // The biggest mesh is the bar; the first found was one of its bolts, stretched into a thin rod (user, 2026-11-13)
+            // The biggest mesh is the bar; the first found was one of its bolts, stretched into a thin rod
             var filter = stand.GetComponentsInChildren<MeshFilter>().Where(m => m.sharedMesh != null)
                               .OrderByDescending(m => Vector3.Scale(m.sharedMesh.bounds.size, m.transform.lossyScale).sqrMagnitude)
                               .FirstOrDefault();
             var bar = filter != null ? filter.GetComponent<MeshRenderer>() : null;
             if (bar == null || filter.sharedMesh == null) return;
 
-            // Its long axis: the mesh's longest side once scaled
             var bounds = filter.sharedMesh.bounds;
             var scaled = Vector3.Scale(bounds.size, filter.transform.lossyScale);
             int longest = scaled.x >= scaled.y && scaled.x >= scaled.z ? 0 : scaled.y >= scaled.z ? 1 : 2;
@@ -643,7 +638,6 @@ namespace IntuitiveDesigns.ShootingRange
             _reach.position = (back + _reachAnchor) * 0.5f - _reach.TransformVector(_reachMiddle);
         }
 
-        /// How far the stand has carried him out of the coffin so far
         private Vector3 ShoveOffset() { return _carry * _shove + Vector3.up * _boing; }
 
         /// From where his head is now, in the coffin, to beside the player's head as it is now. Falls back to the measured carry
@@ -653,16 +647,14 @@ namespace IntuitiveDesigns.ShootingRange
 
             Vector3 eyes = _head.position;
             Vector3 from = HeadCentre();
-            // Where they're looking as he comes out, so he lands in view (user, 2026-11-13: chose front-left, in view); the range
-            // direction only if they're looking straight up or down
+            // Where they're looking as he comes out, so he lands in view; the range direction only if they're looking straight up or down
             Vector3 ahead = Vector3.ProjectOnPlane(_head.forward, Vector3.up);
             ahead = ahead.sqrMagnitude > 0.01f ? ahead.normalized : Vector3.ProjectOnPlane(playerFaces, Vector3.up).normalized;
             Vector3 side = Vector3.Cross(Vector3.up, ahead);
             if (Vector3.Dot(from - eyes, side) < 0f) side = -side;
             Vector3 to = eyes + side * besidePlayer + ahead * aheadOfPlayer + Vector3.up * aboveEyes;
-            Debug.Log("[Barker] Coming out to beside the head '" + _head.name + "' at " + eyes.ToString("0.00") + ", facing " +
-                      ahead.ToString("0.00") + ": from " +
-                      from.ToString("0.00") + " to " + to.ToString("0.00"), this);
+            // He is taller than a short or seated player's eye line: level with them, his feet went through the floor
+            to.y = Mathf.Max(to.y, _headAboveFeet + feetAboveFloor);
             return to - from;
         }
 
@@ -673,7 +665,6 @@ namespace IntuitiveDesigns.ShootingRange
             return Mathf.Min(wanted, SafeStiffness / (Time.fixedDeltaTime * Time.fixedDeltaTime));
         }
 
-        /// Each joint turned back toward his built pose against its parent, damped, so he flops and then hangs as built
         private void Hold()
         {
             float stiffness = Stiffness(holdStrength), damping = Damping(holdDamping);
@@ -716,8 +707,6 @@ namespace IntuitiveDesigns.ShootingRange
             jaw.localRotation = _jawRest * Quaternion.AngleAxis(jawOpenDegrees * _mouth, Vector3.right);
         }
 
-        /// His servos have him: stand and body out together, the lean and any knock at the waist, the head, the arms, and
-        /// while they're catching him, each piece pulled from where the flop left it
         private void Pose()
         {
             Vector3 offset = ShoveOffset();
@@ -760,12 +749,10 @@ namespace IntuitiveDesigns.ShootingRange
                 return Quaternion.AngleAxis(recoilDegrees * back, _joltAxis);
             }
 
-            // Out and back in two hard ticks, not a spring
             float amount = t < 0.3f ? 1f : t < 0.6f ? -0.4f : 0f;
             return Quaternion.AngleAxis(joltDegrees * amount, _joltAxis);
         }
 
-        /// Every so often the head turns to a fresh aim at the player on the cartoon servo, cocked to one side
         private void Look()
         {
             if (_head == null && !FindTheHead()) return;
@@ -815,7 +802,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (wristShare != 0f) arm.Wrist.rotation = Quaternion.AngleAxis(waveDegrees * wristShare, outward) * arm.Wrist.rotation;
         }
 
-        /// The hand as people wave: fingers up, palm to the player's face, set outright as the arm reaches (user, 2026-11-13).
+        /// The hand as people wave: fingers up, palm to the player's face, set outright as the arm reaches.
         /// Twisting it about the forearm failed once the arm came out of the gap pointing at the player
         private void PalmToThePlayer(Arm arm)
         {
@@ -829,11 +816,11 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// Out through the lid's gap, a little toward the player and up, so it's well clear of the coffin and easy to see
-        /// (user, 2026-11-10)
+        ///
         private Vector3 WaveTarget()
         {
             // To the middle of the lid's gap first, then on out the way the gap points from his shoulder, so the arm leaves
-            // through the opening, not through the coffin's side (user, 2026-11-13)
+            // through the opening, not through the coffin's side
             Vector3 rest = _waveArm.RestWrist;
             Vector3 shoulder = _waveArm.Shoulder.position;
             Vector3 gap = coffin != null ? coffin.GapNear(shoulder) : shoulder + transform.right * _waveArm.Side * _waveArm.Upper;
@@ -846,9 +833,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         private Vector3 HeadCentre() { return skull.transform.TransformPoint(_headInSkull); }
 
-        /// The camera the player sees through, else the avatar's head. Camera first: in the editor the avatar's 'Head' stayed
-        /// at its start, (0, 1.70, 1.57), while the view moved, so he aimed beside a spot the player wasn't at (log, 2026-11-13).
-        /// Not ?. on VRAvatar: it's a UnityEngine.Object, and null propagation would sail past a destroyed one
+        /// The camera the player sees through, else the avatar's head. Camera first: in the editor the avatar's 'Head' stayed at its start while the view moved, so he aimed beside a spot the player wasn't at. Not ?. on VRAvatar: it's a UnityEngine.Object, and null propagation would sail past a destroyed one
         private bool FindTheHead()
         {
             var cam = Camera.main;
@@ -863,7 +848,6 @@ namespace IntuitiveDesigns.ShootingRange
             return _head != null;
         }
 
-        /// Limp: every piece on its joints, so the stand's shove and yank fling him about
         private void GoLimp()
         {
             _limp = true;
@@ -876,7 +860,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// Shut away: kinematic, every piece and joint marker back in his built pose, stand home
         private void Stiffen()
         {
             _limp = false;
@@ -946,6 +929,16 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             _mouth = Mathf.SmoothDamp(_mouth, Mathf.Clamp01(loud / fullOpenLoudness), ref _mouthSpeed, jawSmoothing);
+            GlowTheEyes();
+        }
+
+        private void GlowTheEyes()
+        {
+            if (eyeGlows == null || eyeGlows.Length == 0) return;
+
+            if (_eyeGlow == null) _eyeGlow = new MaterialPropertyBlock();
+            _eyeGlow.SetFloat(EyeStrengthId, Mathf.Lerp(eyeGlowQuiet, eyeGlowLoud, _mouth));
+            foreach (var eye in eyeGlows) if (eye != null) eye.SetPropertyBlock(_eyeGlow);
         }
 
         public override void OnShot(Vector3 point, Vector3 direction, float impulse)
@@ -964,8 +957,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
 
             PlayOne(clunkClips, point, clunkVolume);
-            // Out on his stand he used to go limp, and gravity tipped him on toward the player (user, 2026-11-17: he should lean
-            // back). Tipping about up x the shot's line takes the top of him along it, away from whoever fired
+            // Tipping about up x the shot's line takes the top of him along it, away from whoever fired
             _recoil = _out;
             _joltAxis = _waist.parent.InverseTransformDirection(Vector3.Cross(Vector3.up, direction).normalized);
             _joltAt = Time.time;
@@ -990,7 +982,6 @@ namespace IntuitiveDesigns.ShootingRange
             return struck != null ? struck.attachedRigidbody : null;
         }
 
-        /// Hat back on for the round, while he's shut away
         protected override void Restore()
         {
             if (enabled && !_hatOn) WearTheHat();

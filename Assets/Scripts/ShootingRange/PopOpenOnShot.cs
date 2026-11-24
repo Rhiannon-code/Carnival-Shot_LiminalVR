@@ -2,9 +2,7 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Flips a lid open on its hinge with a springy overshoot, and something picked at random springs out. The
-    /// hinge is an empty at the lid's back edge with the lid under it, turned so that opening is a positive turn
-    /// about its own X
+    /// The hinge is an empty at the lid's back edge with the lid under it, turned so that opening is a positive turn about its own X
     public class PopOpenOnShot : RoomReaction
     {
         [SerializeField] private Transform hinge;
@@ -60,7 +58,6 @@ namespace IntuitiveDesigns.ShootingRange
             PlayOne(springClips, point, openVolume);
         }
 
-        /// Flies open with nothing springing out of it
         public void OpenEmpty()
         {
             if (_open || hinge == null) return;
@@ -95,7 +92,6 @@ namespace IntuitiveDesigns.ShootingRange
             hinge.localRotation = _closed * Quaternion.AngleAxis(angle, Vector3.right);
         }
 
-        /// Up out of the box as the lid clears it, overshooting and bobbing on its spring
         private void Spring()
         {
             if (_gag == null) return;

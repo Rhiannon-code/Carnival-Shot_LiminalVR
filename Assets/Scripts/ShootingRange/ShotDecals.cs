@@ -3,9 +3,6 @@ using UnityEngine.Rendering;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// Bullet holes left on the room. Every mark is a quad in one shared mesh, one draw call however
-    /// many there are. Past maxMarks the oldest fades out, and they all fade when a round ends so the
-    /// next starts clean. The art is a 2 x 2 sheet of holes (tools/shot-decal-art.py), step 26 wires it
     public class ShotDecals : MonoBehaviour
     {
         [Header("Refs")]
@@ -19,10 +16,9 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float surfaceGap = 0.002f;
         [SerializeField] private float fadeSeconds = 0.4f;
         [SerializeField] private float lifeSeconds = 10f;
-        [Tooltip("How much a hole takes on the colour of the light where it lands: 0 keeps the art's own colour, 1 the light's full hue. Brightness is never lowered")]
         [SerializeField, Range(0f, 1f)] private float lightHue = 0.5f;
 
-        // A few more slots than marks, so the ones fading out are not taken over mid-fade
+        // A few more slots than marks, so the ones fading out are not taken over mid fade
         private const int FadingSpare = 6;
         private const int SheetCells = 2;
         private const float EdgeProbe = 0.02f;
@@ -107,8 +103,7 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// A hole where a shot hit the room, flat on the surface, a random one of the four at a random
-        /// turn and size. One that would hang off the edge of what it hit floats in the air, so it isn't placed
+        /// One that would hang off the edge of what it hit floats in the air, so it isn't placed
         public void Place(Vector3 point, Vector3 normal, Collider surface)
         {
             if (normal.sqrMagnitude < 1e-6f || surface == null) return;
@@ -171,9 +166,6 @@ namespace IntuitiveDesigns.ShootingRange
             _mesh.colors32 = _colours;
         }
 
-        /// The colour of the baked light where it landed, so a hole on a red-lit wall is red-tinged and sits in the room's light.
-        /// Only its hue: the probes there are far darker than the wall looks, and a hole lit by them was hard to spot (user,
-        /// 2026-11-17). White with no light probes baked
         private Color32 LightAt(Vector3 point, Vector3 normal)
         {
             if (LightmapSettings.lightProbes == null) return new Color32(255, 255, 255, 255);
@@ -198,8 +190,6 @@ namespace IntuitiveDesigns.ShootingRange
             return surface.Raycast(new Ray(corner + normal * EdgeProbe, -normal), out hit, EdgeProbe * 2f);
         }
 
-        /// The mark longest on the wall that is not already going, counting back round the ring from
-        /// the one just taken
         private void FadeOldest(int taken)
         {
             for (int step = 1; step < _fadeFrom.Length; step++)
@@ -215,7 +205,7 @@ namespace IntuitiveDesigns.ShootingRange
             _shown--;
         }
 
-        /// Marks made between rounds miss the end-of-round fade, so each also has a life of its own
+        /// Marks made between rounds miss the end of round fade, so each also has a life of its own
         private void Update()
         {
             bool changed = false;

@@ -17,9 +17,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private float darkBeforeLogo = 1.5f;
         [SerializeField] private float logoHoldSeconds = 3f;
 
-        /// The logo has started to drop: CarnivalLights starts the carnival up
         public bool LogoDropped { get; private set; }
-        /// The logo has started back up: the controls card drops
         public bool LogoLeaving { get; private set; }
         public event Action Leaving;
 

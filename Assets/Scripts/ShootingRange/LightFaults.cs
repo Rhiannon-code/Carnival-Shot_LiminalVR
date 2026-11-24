@@ -98,7 +98,6 @@ namespace IntuitiveDesigns.ShootingRange
             }
         }
 
-        /// A blackout still running comes back on for the tally
         private void OnRoundEnded(int round, int roundScore)
         {
             _due.Clear();

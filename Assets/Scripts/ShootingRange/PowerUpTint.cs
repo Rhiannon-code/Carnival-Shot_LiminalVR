@@ -57,14 +57,13 @@ namespace IntuitiveDesigns.ShootingRange
             Refresh();
         }
 
-        /// A white flash of the glow shells that fades away, as the ghost hand becomes the glove
         public void Shimmer()
         {
             _shimmer = 1f;
             _beckon = 0f;
         }
 
-        /// A soft white glow while the gun waits to be taken, 0 for none
+        /// 0 for none
         public void Beckon(float strength)
         {
             if (strength <= 0f && _beckon > 0f && _shimmer <= 0f) { _beckon = 0f; Refresh(); return; }

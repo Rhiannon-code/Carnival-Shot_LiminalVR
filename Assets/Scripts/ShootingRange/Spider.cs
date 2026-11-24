@@ -51,10 +51,11 @@ namespace IntuitiveDesigns.ShootingRange
 
         public bool Active { get { return _phase != Phase.Off; } }
 
-        /// Still in the player's way: on the way down or hanging there
         public bool InTheWay { get { return _phase == Phase.Dropping || _phase == Phase.Dangling; } }
 
         private Rigidbody _body;
+        private Collider[] _colliders;
+        private TrailRenderer _trail;
         private SpiderNest _nest;
         private Transform _player;
         private Quaternion[] _legRest;
@@ -76,6 +77,8 @@ namespace IntuitiveDesigns.ShootingRange
             _body = GetComponent<Rigidbody>();
             _body.isKinematic = true;
             _body.interpolation = RigidbodyInterpolation.Interpolate;
+            _trail = GetComponentInChildren<TrailRenderer>(true);
+            _colliders = GetComponentsInChildren<Collider>(true);
 
             _legRest = new Quaternion[legs != null ? legs.Length : 0];
             for (int i = 0; i < _legRest.Length; i++) _legRest[i] = legs[i] != null ? legs[i].localRotation : Quaternion.identity;
@@ -101,10 +104,19 @@ namespace IntuitiveDesigns.ShootingRange
             _swingSpeed = Vector2.zero;
             _lastSag = -1f;
             _phase = Phase.Dropping;
+            Shootable(false);
 
             transform.position = anchor + Vector3.down * attachHeight;
             gameObject.SetActive(true);
             Draw();
+            // Or it draws a streak from wherever the last spider was shot
+            if (_trail != null) _trail.Clear();
+        }
+
+        /// Can't be shot until it has finished dropping: rounds pass through it on the way down
+        private void Shootable(bool on)
+        {
+            foreach (var item in _colliders) item.enabled = on;
         }
 
         public void Stop()
@@ -113,8 +125,6 @@ namespace IntuitiveDesigns.ShootingRange
             gameObject.SetActive(false);
         }
 
-        /// Batted aside by a hand or a gun moving at velocity: it swings off on its thread like a
-        /// pendulum and climbs back up out of the way
         public void KnockAway(Vector3 velocity)
         {
             if (!InTheWay) return;
@@ -122,11 +132,12 @@ namespace IntuitiveDesigns.ShootingRange
             float reach = Mathf.Max(0.2f, _length + attachHeight);
             _swingSpeed += new Vector2(-velocity.z, velocity.x) * swipeFling / reach;
             _phase = Phase.Climbing;
+            Shootable(true);
         }
 
         public void OnShot(Vector3 point, Vector3 direction, float impulse)
         {
-            if (!Active) return;
+            if (!Active || _phase == Phase.Dropping) return;
 
             if (RangeGame.Instance != null) RangeGame.Instance.Scored(hitScore, point, false, false);
             Stop();
@@ -153,6 +164,7 @@ namespace IntuitiveDesigns.ShootingRange
             if (_phase == Phase.Dropping && _clock > 1f && Mathf.Abs(_speed) < 0.15f)
             {
                 _phase = Phase.Dangling;
+                Shootable(true);
                 _biteAt = _clock + biteAfterSeconds;
             }
             else if (_phase == Phase.Dangling && _clock >= _biteAt)
@@ -179,7 +191,6 @@ namespace IntuitiveDesigns.ShootingRange
             Twitch();
         }
 
-        /// A pendulum the length of the thread: the swipe's swing dies away as it climbs
         private void Swing(float dt)
         {
             float reach = Mathf.Max(0.2f, _length + attachHeight);
@@ -199,7 +210,6 @@ namespace IntuitiveDesigns.ShootingRange
             return Quaternion.Euler(a + _swing.x * Mathf.Rad2Deg, 0f, b + _swing.y * Mathf.Rad2Deg);
         }
 
-        /// Faces the player, twisting back and forth on the thread the way a hanging spider turns
         private Quaternion Facing()
         {
             Vector3 toPlayer = _player != null ? _player.position - transform.position : Vector3.back;
@@ -210,7 +220,6 @@ namespace IntuitiveDesigns.ShootingRange
             return face * Quaternion.Euler(0f, twist, 0f);
         }
 
-        /// The thread thins as it stretches, and the web's middle is dragged down by the pull on it
         private void Draw()
         {
             float stretch = Mathf.Max(0f, _length - _rest);
@@ -253,7 +262,6 @@ namespace IntuitiveDesigns.ShootingRange
             return _anchor + flat + Vector3.down * sag * (1f - along);
         }
 
-        /// Legs flail while it is falling and bouncing, and only twitch once it is hanging still
         private void Twitch()
         {
             if (legs == null) return;

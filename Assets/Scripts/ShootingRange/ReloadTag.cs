@@ -6,13 +6,11 @@ namespace IntuitiveDesigns.ShootingRange
     public class ReloadTag : MonoBehaviour
     {
         [SerializeField] private Pistol pistol;
-        [SerializeField] private RangeGame game;
         [SerializeField] private GameObject content;
-        [SerializeField, Tooltip("What the arrow points down at: the gun's ammo counter. Empty, the muzzle")]
-        private Transform pointAt;
+        [SerializeField] private Transform pointAt;
 
         [Header("Look (data)")]
-        [SerializeField, Tooltip("Metres from what it points at up to the arrow's middle")] private float above = 0.03f;
+        [SerializeField] private float above = 0.03f;
         [SerializeField]
         private float size = 0.5f;
 
@@ -26,7 +24,8 @@ namespace IntuitiveDesigns.ShootingRange
 
         private void LateUpdate()
         {
-            bool show = pistol != null && pistol.IsHeld && pistol.IsEmpty && game != null && game.Current == RangeGame.State.Playing;
+            // Whenever the gun in hand is dry, not only mid-round: between rounds and at the lock it still has to be reloaded
+            bool show = pistol != null && pistol.IsHeld && pistol.IsEmpty;
             if (show != _showing)
             {
                 _showing = show;

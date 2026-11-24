@@ -25,12 +25,14 @@ namespace IntuitiveDesigns.ShootingRange
         private float _travelled;
         private float _range;
         private bool _flying;
+        private TrailRenderer _trail;
 
         private void Awake()
         {
             _body = GetComponent<Rigidbody>();
             _body.isKinematic = true;
             _body.interpolation = RigidbodyInterpolation.Interpolate;
+            _trail = GetComponentInChildren<TrailRenderer>(true);
         }
 
         public void Launch(BatSwarm swarm, Vector3 from, Transform head, float speed)
@@ -48,6 +50,8 @@ namespace IntuitiveDesigns.ShootingRange
             transform.position = from;
             transform.rotation = Quaternion.LookRotation(_velocity);
             gameObject.SetActive(true);
+            // Or it draws a streak from wherever this bat last died
+            if (_trail != null) _trail.Clear();
 
             // Out of step with the rest of the swarm
             if (flapper != null && flapper.clip != null)

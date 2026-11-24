@@ -20,7 +20,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private Renderer[] bulbs;
         [SerializeField] private ParticleSystem[] gnats;
 
-        [Header("The two bakes (filled by setup step 39)")]
+        [Header("The two bakes")]
         [SerializeField] private Texture2D[] litColour;
         [SerializeField] private Texture2D[] litDirection;
         [SerializeField] private LightProbes litProbes;
@@ -29,23 +29,23 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private LightProbes darkProbes;
         [SerializeField] private Stage[] stages;
 
-        [Header("Flicker (data, seconds): each step swaps between on and off, and it ends where it was headed")]
+        [Header("Flicker (data, seconds)")]
         [SerializeField] private float[] comingOn = { 0.12f, 0.2f, 0.08f, 0.35f, 0.1f, 0.15f };
         [SerializeField] private float[] goingOut = { 0.25f, 0.1f, 0.15f, 0.08f, 0.4f, 0.06f };
         [SerializeField] private float[] blackoutLeadIn = { 0.1f, 0.2f, 0.06f, 0.3f, 0.08f, 0.15f, 0.05f, 0.4f };
         [SerializeField, Range(0f, 1f)] private float darkGlow = 0.04f;
-        [Header("When the prize chest opens: the strings blink in turn, like a theatre marquee (data)")]
+        [Header("When the prize chest opens")]
         [SerializeField] private float celebrateSeconds = 6f;
         [SerializeField] private float marqueeStepsPerSecond = 6f;
 
-        [Header("Start up (data, seconds): dark until the opening's logo drops (or a plain wait), the coin goes in, then the strings stutter on one after another, each bringing its share of the room's light")]
+        [Header("Start up (data, seconds)")]
         [SerializeField] private OpeningTitle opening;
         [SerializeField] private float darkHoldSeconds = 3f;
         [SerializeField] private AudioClip coinClip;
         [SerializeField] private float[] stringComingOn = { 0.06f, 0.09f, 0.04f, 0.12f };
         [SerializeField] private float stringGap = 0.09f;
 
-        [Header("What a bake can't darken (data): unlit fog and sky reflections would glow in a dark room")]
+        [Header("What a bake can't darken (data)")]
         [SerializeField] private Renderer[] fog;
         [SerializeField] private Color fogLit = new Color(0.45f, 0.42f, 0.5f);
         [SerializeField] private Color fogDark = new Color(0.1f, 0.025f, 0.025f);
@@ -54,7 +54,7 @@ namespace IntuitiveDesigns.ShootingRange
 
         [Header("Audio")]
         [SerializeField] private AudioClip[] clunkClips;
-        [Header("Light sounds stay under the music below the music at all times\"): set about 10 dB under the music at full, then they follow its volume as it winds up or ducks")]
+        [Header("Light sounds stay under the music below the music at all times")]
         [SerializeField] private AudioClip[] buzzClips;
         [SerializeField, Range(0f, 1f)] private float buzzVolume = 0.05f;
         [SerializeField] private AudioClip litHum;
@@ -108,8 +108,6 @@ namespace IntuitiveDesigns.ShootingRange
             _dark = Maps(darkColour, darkDirection);
             if (_lit == null || _dark == null || _lit.Length != _dark.Length)
             {
-                Debug.LogWarning("[CarnivalLights] The lit and dark bakes are missing or don't match. Run setup step 39. " +
-                                 "Until then only the bulbs flicker; the room's light stays as it was baked");
                 _lit = _dark = null;
             }
 
@@ -143,8 +141,8 @@ namespace IntuitiveDesigns.ShootingRange
             _litHum.volume = litHumVolume * _litShare * under;
         }
 
-        /// What the light sounds are scaled by so they stay under the music: its volume against its full volume while it
-        /// plays. Before it starts (the dark opening) they keep their set levels, so the quiet dark hum stays (user's pick)
+        /// What the light sounds are scaled by so they stay under the music. Its volume against its full volume while it
+        /// plays. Before it starts (the dark opening) they keep their set levels, so the quiet dark hum stays
         private float UnderTheMusic()
         {
             return _music != null && _music.Playing ? _music.Level : 1f;
@@ -174,8 +172,6 @@ namespace IntuitiveDesigns.ShootingRange
             _flicker = null;
         }
 
-        /// The player sits in the dark with the red and the hum until the opening's logo drops in, then a coin drops and the
-        /// carnival starts up under the logo: the barker, the music and the strings together
         private IEnumerator StartUp()
         {
             if (opening != null) while (!opening.LogoDropped) yield return null;
@@ -211,13 +207,12 @@ namespace IntuitiveDesigns.ShootingRange
             Run(Flicker(on, on ? comingOn : goingOut));
         }
 
-        /// A short stutter that ends back on. Skipped if the lights are already doing something
+        /// Skipped if the lights are already doing something
         public void Stutter(float[] steps)
         {
             if (_flicker == null && _on && _headedOn) Run(Stuttering(steps));
         }
 
-        /// Flickers, goes out for seconds, leaving the red, then comes back on
         public void Blackout(float seconds)
         {
             if (!_headedOn) return;
@@ -270,7 +265,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// Each string stutters on, then brings its share of the room's light, which is one bake per string swapped in.
-        /// Only once it settles: swapping the whole room's lightmaps and probes on every flicker made the start-up lag
+        /// Only once it settles. Swapping the whole room's lightmaps and probes on every flicker made the start up lag
         private IEnumerator PowerUp()
         {
             for (int i = 0; bulbs != null && i < bulbs.Length; i++)
@@ -330,7 +325,7 @@ namespace IntuitiveDesigns.ShootingRange
         }
 
         /// The strings hum while they're lit, louder the more of them are on, and fall silent when they go out. Once
-        /// started it runs on and only its volume follows the lights: restarting it on every flicker step chopped it up
+        /// started it runs on and only its volume follows the lights. Restarting it on every flicker step chopped it up
         private void LitHum(float share)
         {
             if (litHum == null) return;

@@ -28,6 +28,8 @@ MonoBehaviour:
   brokenSet: {fileID: 6695145988745695890, guid: 6f2ca682d834408c69e521d72f014bbd,
     type: 3}
   fragmentImpulse: 1.4
+  breakDebris: 0c0000000d000000
+  breakDebrisTimes: 3
   shatterClips:
   - {fileID: 8300000, guid: 2b54decdd6d0b33ae814996de2d0c8d0, type: 3}
   - {fileID: 8300000, guid: 8f91afbbf8b31d0caa7885cd2f400d1b, type: 3}

@@ -3,8 +3,7 @@ using UnityEngine;
 
 namespace IntuitiveDesigns.ShootingRange
 {
-    /// "+150" off each sign that is shot, with the combo in it: it rises, faces the player and fades. A small pool,
-    /// so a burst of hits reuses the oldest
+    /// A small pool, so a burst of hits reuses the oldest
     public class ScorePopups : MonoBehaviour
     {
         [SerializeField] private RangeGame game;
@@ -12,7 +11,7 @@ namespace IntuitiveDesigns.ShootingRange
         [SerializeField] private int poolSize = 8;
 
         [Header("Look (data)")]
-        [SerializeField, Tooltip("About 0.1 m of letter height per 1")] private float fontSize = 1.5f;
+        [SerializeField] private float fontSize = 1.5f;
         [SerializeField] private Color colour = new Color(1f, 0.85f, 0.47f);
         [SerializeField] private float riseMetres = 0.35f;
         [SerializeField] private float seconds = 0.8f;
